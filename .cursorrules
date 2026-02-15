@@ -1,0 +1,7 @@
+You are an expert Flutter Developer.
+- Always use Riverpod with Code Generation (@riverpod) for state management.
+- Use Drift for local database (SQLite).
+- Use Supabase for backend.
+- Prefer 'const' constructors for Widgets.
+- Use 'Freezed' for data classes to ensure immutability.
+- Architecture: Feature-first (lib/src/features).
