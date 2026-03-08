@@ -19,7 +19,7 @@ on:
         required: true
         type: string
       build_number:
-        description: 'Build number (integer, must be greater than current)'
+        description: 'Build number (1–2100000000, must be greater than current)'
         required: true
         type: number
       message_es:
@@ -60,15 +60,18 @@ jobs:
       - name: Resolve VERSION and BUILD
         id: vars
         run: |
+          MAX_BUILD=2100000000
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "build=${{ github.event.inputs.build_number }}" >> $GITHUB_OUTPUT
+            BUILD="${{ github.event.inputs.build_number }}"
             echo "message_es=${{ github.event.inputs.message_es }}" >> $GITHUB_OUTPUT
           else
             echo "version=${{ steps.tag_version.outputs.version }}" >> $GITHUB_OUTPUT
-            echo "build=${{ github.run_number }}" >> $GITHUB_OUTPUT
+            BUILD="${{ github.run_number }}"
             echo "message_es=Nueva versión disponible." >> $GITHUB_OUTPUT
           fi
+          if [ "$BUILD" -gt "$MAX_BUILD" ]; then BUILD=$MAX_BUILD; fi
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
