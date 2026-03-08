@@ -32,8 +32,8 @@ on:
       - 'v*'
 
 env:
-  # Flutter 3.29 = Dart 3.7 (requerido por riverpod_generator ^4 y freezed 3.1)
-  FLUTTER_VERSION: '3.29.0'
+  # Flutter 3.32 = Dart 3.8 (freezed 3.2 + riverpod_generator 4 comparten source_gen 3.x)
+  FLUTTER_VERSION: '3.32.0'
 
 jobs:
   build-and-release:
@@ -80,7 +80,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-          cache: true
+          cache: false
 
       - name: Get dependencies
         working-directory: ice_pos
