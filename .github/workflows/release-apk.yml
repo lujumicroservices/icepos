@@ -32,7 +32,8 @@ on:
       - 'v*'
 
 env:
-  FLUTTER_VERSION: '3.24.x'
+  # Flutter 3.27+ brings Dart 3.6+ (required by freezed ^3.x and other deps)
+  FLUTTER_VERSION: '3.27.1'
 
 jobs:
   build-and-release:
