@@ -109,7 +109,8 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
                 : _notesController.text.trim(),
           );
       if (mounted) {
-        await ref.read(posRepositoryProvider).startShift(0);
+        // El siguiente turno inicia con el efectivo que quedó en caja en el corte anterior.
+        await ref.read(posRepositoryProvider).startShift(_declaredCash);
       }
       if (mounted) {
         setState(() {
