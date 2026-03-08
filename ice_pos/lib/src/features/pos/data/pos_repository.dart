@@ -986,12 +986,18 @@ class PosRepository {
   }
 
   /// Starts a new shift with the given starting fund.
+  /// Envía el turno a la nube automáticamente si Supabase está configurado.
   Future<Shift> startShift(double startingFund) async {
     final id = await _db.into(_db.shifts).insert(
           ShiftsCompanion.insert(startingFund: Value(startingFund)),
         );
-    return await (_db.select(_db.shifts)..where((s) => s.id.equals(id)))
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(id)))
         .getSingle();
+    if (CloudSyncService.isEnabled) {
+      final err = await CloudSyncService.writeShiftToCloud(shift);
+      if (err != null) debugPrint('Cloud write shift: $err');
+    }
+    return shift;
   }
 
   /// Closes a shift with blind count reconciliation.
@@ -1001,7 +1007,7 @@ class PosRepository {
     required double declaredCash,
     String? notes,
   }) async {
-    return _db.transaction(() async {
+    final result = await _db.transaction(() async {
       final shift = await (_db.select(_db.shifts)
             ..where((s) => s.id.equals(shiftId)))
           .getSingleOrNull();
@@ -1084,6 +1090,17 @@ class PosRepository {
         expenses: expensesAbs,
       );
     });
+    if (CloudSyncService.isEnabled) {
+      final updatedShift = await (_db.select(_db.shifts)
+            ..where((s) => s.id.equals(shiftId)))
+          .getSingle();
+      final err = await CloudSyncService.writeShiftClosureToCloud(
+        updatedShift,
+        result.closure,
+      );
+      if (err != null) debugPrint('Cloud write shift closure: $err');
+    }
+    return result;
   }
 
   /// Totals for closure form (expected in drawer, sales by payment type). Does not close the shift.

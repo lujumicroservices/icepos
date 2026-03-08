@@ -19,6 +19,21 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// Fix: blue_thermal_printer (and other plugins) sin namespace requerido por AGP 8+
+subprojects {
+    afterEvaluate {
+        if (project.name != "blue_thermal_printer") return@afterEvaluate
+        val androidExt = project.extensions.findByName("android") ?: return@afterEvaluate
+        try {
+            val setNamespace = androidExt.javaClass.getMethod("setNamespace", String::class.java)
+            val currentNs = androidExt.javaClass.methods.find { it.name == "getNamespace" }?.invoke(androidExt)
+            if (currentNs == null || (currentNs as? String).isNullOrEmpty()) {
+                setNamespace.invoke(androidExt, "id.kakzaki.blue_thermal_printer")
+            }
+        } catch (_: Exception) { /* plugin ya tiene namespace */ }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

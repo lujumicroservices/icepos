@@ -258,6 +258,52 @@ class CloudSyncService {
     }
   }
 
+  /// Envía el turno a la nube (al iniciar turno). Upsert por id para alinear con local.
+  static Future<String?> writeShiftToCloud(Shift shift) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final client = SupabaseService.instance.client;
+      await client.from('shifts').upsert({
+        'id': shift.id,
+        'start_time': shift.startTime.toUtc().toIso8601String(),
+        'end_time': shift.endTime?.toUtc().toIso8601String(),
+        'starting_fund': shift.startingFund,
+      }, onConflict: 'id');
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.writeShiftToCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Envía el cierre de caja a la nube (al cerrar turno). Actualiza shift con end_time e inserta shift_closures.
+  static Future<String?> writeShiftClosureToCloud(Shift shiftWithEndTime, ShiftClosure closure) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final client = SupabaseService.instance.client;
+      await client.from('shifts').upsert({
+        'id': shiftWithEndTime.id,
+        'start_time': shiftWithEndTime.startTime.toUtc().toIso8601String(),
+        'end_time': shiftWithEndTime.endTime?.toUtc().toIso8601String(),
+        'starting_fund': shiftWithEndTime.startingFund,
+      }, onConflict: 'id');
+      await client.from('shift_closures').insert({
+        'shift_id': closure.shiftId,
+        'closing_time': closure.closingTime.toUtc().toIso8601String(),
+        'system_expected_cash': closure.systemExpectedCash,
+        'declared_cash': closure.declaredCash,
+        'difference': closure.difference,
+        'notes': closure.notes,
+      });
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.writeShiftClosureToCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
   static List<dynamic> _list(dynamic v) {
     if (v == null) return [];
     return v is List ? v : [];
