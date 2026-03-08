@@ -1,0 +1,156 @@
+{
+  "categories": [
+    { "name": "Baguettes de reyes", "parentId": null, "color": "#8B4513" },
+    { "name": "Bebidas Fit y Barra Caliente", "parentId": null, "color": "#CD853F" },
+    { "name": "Nieves de Garrafa y Paquetes", "parentId": null, "color": "#87CEEB" },
+    { "name": "Conos", "parentName": "Nieves de Garrafa y Paquetes", "color": "#B0E0E6" },
+    { "name": "Vasos", "parentName": "Nieves de Garrafa y Paquetes", "color": "#ADD8E6" },
+    { "name": "Canastas", "parentName": "Nieves de Garrafa y Paquetes", "color": "#87CEFA" },
+    { "name": "Bolis y Paletas", "parentId": null, "color": "#DDA0DD" },
+    { "name": "Bebidas frías y shakes", "parentId": null, "color": "#98FB98" },
+    { "name": "Mineral Signature Reyes", "parentId": null, "color": "#F0E68C" },
+    { "name": "Para el Antojo", "parentId": null, "color": "#FFB6C1" }
+  ],
+  "products": [
+    {
+      "category": "Baguettes de reyes",
+      "items": [
+        { "name": "Italiano", "price": 129 },
+        { "name": "Español", "price": 119 },
+        { "name": "Pollo Crunch", "price": 119 },
+        { "name": "Pollo Fit", "price": 119 },
+        { "name": "Light", "price": 99 },
+        { "name": "Alemán", "price": 99 },
+        { "name": "Lomo Canadiense", "price": 99 },
+        { "name": "Jamón de Pechuga de Pavo", "price": 89 },
+        { "name": "Pizza", "price": 89 },
+        { "name": "Vegetariano", "price": 89 },
+        { "name": "croissant de jamon y queso", "price": 60 },
+        { "name": "croissant de nutella", "price": 60 }
+        
+      ]
+    },
+    {
+      "category": "Bebidas Fit y Barra Caliente",
+      "items": [
+        { "name": "Mango & Ginger Power", "price": 85 },
+        { "name": "Matcha Paradise", "price": 85 },
+        { "name": "Coco Lover", "price": 85 },
+        { "name": "Coffee Energy", "price": 89 },
+        { "name": "Berry Special", "price": 89 },
+        { "name": "Chocolate Caliente Mediano", "price": 58 },
+        { "name": "Chocolate Caliente Grande", "price": 62 },
+        { "name": "Moka Mediano", "price": 58 },
+        { "name": "Moka Grande", "price": 62 },
+        { "name": "Matcha (Barra) Mediano", "price": 58 },
+        { "name": "Matcha (Barra) Grande", "price": 62 },
+        { "name": "Capuccino Mediano", "price": 54 },
+        { "name": "Capuccino Grande", "price": 58 },
+        { "name": "Latte Mediano", "price": 54 },
+        { "name": "Latte Grande", "price": 58 },
+        { "name": "Chai Mediano", "price": 56 },
+        { "name": "Chai Grande", "price": 60 },
+        { "name": "Taro (Barra) Mediano", "price": 56 },
+        { "name": "Taro (Barra) Grande", "price": 60 },
+        { "name": "Tisana Mediano", "price": 46 },
+        { "name": "Tisana Grande", "price": 48 },
+        { "name": "Americano Mediano", "price": 38 },
+        { "name": "Americano Grande", "price": 42 },
+        { "name": "Espresso Sencillo", "price": 36 },
+        { "name": "Espresso Doble", "price": 42 },
+        { "name": "Espresso Cortado", "price": 45 }
+      ]
+    },
+    {
+      "category": "Nieves de Garrafa y Paquetes",
+      "_comment": "Conos, Vasos y Canastas (con sabores) se cargan desde nieves_modifiers.json. Nieve 1/2 L, Nieve Litro y Paquetes también (con modificador de sabores).",
+      "items": []
+    },
+    {
+      "category": "Conos",
+      "_comment": "Productos (Cono Mini, Cono Chico) definidos en nieves_modifiers.json",
+      "items": []
+    },
+    {
+      "category": "Vasos",
+      "_comment": "Productos (Vaso Mini, Chico, Mediano, Grande) definidos en nieves_modifiers.json",
+      "items": []
+    },
+    {
+      "category": "Canastas",
+      "_comment": "Productos (Canasta Mediana, Grande) definidos en nieves_modifiers.json",
+      "items": []
+    },
+    {
+      "category": "Bolis y Paletas",
+      "items": []
+    },
+    {
+      "category": "Bebidas frías y shakes",
+      "items": [
+        { "name": "Agua", "price": 13 },
+        { "name": "Agua mineral", "price": 25 },
+        { "name": "Té verde", "price": 19 },
+        { "name": "Té helado mediano", "price": 46 },
+        { "name": "Té helado grande", "price": 56 },
+        { "name": "Shake Taro Mediano", "price": 69 },
+        { "name": "Shake Taro Grande", "price": 78 },
+        { "name": "Shake Matcha Mediano", "price": 69 },
+        { "name": "Shake Matcha Grande", "price": 78 },
+        { "name": "Shake Pink Flamingo Mediano", "price": 69 },
+        { "name": "Shake Pink Flamingo Grande", "price": 78 },
+        { "name": "Shake Carbón Activado Mediano", "price": 72 },
+        { "name": "Shake Carbón Activado Grande", "price": 79 },
+        { "name": "Shake Mango Spicy Hot Mediano", "price": 72 },
+        { "name": "Shake Mango Spicy Hot Grande", "price": 79 },
+        { "name": "Cold Chai Mediano", "price": 64 },
+        { "name": "Cold Chai Grande", "price": 72 },
+        { "name": "Frapuccino Mediano", "price": 64 },
+        { "name": "Frapuccino Grande", "price": 72 },
+        { "name": "Americano Helado Mediano", "price": 44 },
+        { "name": "Americano Helado Grande", "price": 48 },
+        { "name": "Latte Frío Mediano", "price": 59 },
+        { "name": "Latte Frío Grande", "price": 68 },
+        { "name": "Soda Orgánica Regular Mediano", "price": 48 },
+        { "name": "Soda Orgánica Regular Grande", "price": 59 },
+        { "name": "Soda Orgánica con Nieve Mediano", "price": 56 },
+        { "name": "Soda Orgánica con Nieve Grande", "price": 64 },
+        { "name": "Malteada Mediano", "price": 79 },
+        { "name": "Malteada Grande", "price": 87 }
+      ]
+    },
+    {
+      "category": "Mineral Signature Reyes",
+      "items": [
+        { "name": "Mojito Botánico Mediano", "price": 59 },
+        { "name": "Mojito Botánico Grande", "price": 65 },
+        { "name": "Sunset Mandarina Mediano", "price": 59 },
+        { "name": "Sunset Mandarina Grande", "price": 65 },
+        { "name": "Brisa de Coco Mediano", "price": 59 },
+        { "name": "Brisa de Coco Grande", "price": 65 },
+        { "name": "Berry Spritz Mediano", "price": 59 },
+        { "name": "Berry Spritz Grande", "price": 65 },
+        { "name": "Mango Tropical Mediano", "price": 59 },
+        { "name": "Mango Tropical Grande", "price": 65 }
+      ]
+    },
+    {
+      "category": "Para el Antojo",
+      "items": [
+        { "name": "Croissant Helado Monchis", "price": 97 },
+        { "name": "Croissant Helado Sencillo", "price": 85 },
+        { "name": "Reyes Waffle", "price": 75 },
+        { "name": "Sándwich Rey", "price": 69 },
+        { "name": "Paletas para Perritos Chica", "price": 28 },
+        { "name": "Paletas para Perritos Grande", "price": 38 }
+      ]
+    }
+  ],
+  "_notes": {
+    "baguettes": "Extra aderezo +$10. Acompañamiento: chips de plátano y jalapeños.",
+    "bebidas_fit": "Cambio leche por Almendra, Soya o Coco +$10.",
+    "nieves": "Sabores: agua (limón, mango, guanábana, ciruela amarilla, frutos rojos, panditas, picafresa), light (café, coco, nuez, pepino-limón-chía, hierbabuena), crema (fresas, mango, guayaba), leche (chocolate, chongos, comegalletas, elote, ferrero, mamey, mazapán, nutella, oreo, red velvet, taro, vainilla). Considerar modifiers en POS.",
+    "bolis_paletas": "Precios Boli/Paleta son referenciales; ajustar según tienda. Sabores boli: café, coco, chongos, chocolate, rompope, pistache, piñón, vainilla, fresa, nuez, uva, jamaica, tejuino, limón-hierbabuena, chicle, tamarindo, mango con chile.",
+    "malteadas": "Sabores: oreo, chocolate, vainilla, fresa, mazapán, nutella, caramel, marshmellow, rol de canela."
+  }
+}

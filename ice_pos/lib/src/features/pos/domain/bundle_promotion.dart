@@ -88,13 +88,14 @@ BundleAdjustedCart checkForBundles(
         ));
       }
 
-      // Allocate bundle price proportionally for display
+      // Allocate bundle price proportionally for display (use item.subtotal for per-modifier pricing)
       double sumOrig = 0;
       for (final e in reqMap.entries) {
         final entry = productToEntries[e.key]?.firstOrNull;
         if (entry != null) {
-          final up = entry.item.product.price +
-              entry.item.selectedModifiers.fold(0.0, (s, m) => s + m.priceExtra);
+          final up = entry.item.quantity > 0
+              ? entry.item.subtotal / entry.item.quantity
+              : entry.item.product.price;
           sumOrig += e.value * up;
         }
       }
@@ -108,8 +109,9 @@ BundleAdjustedCart checkForBundles(
 
         final entry = productToEntries[pid]?.firstOrNull;
         final up = entry != null
-            ? entry.item.product.price +
-                entry.item.selectedModifiers.fold(0.0, (s, m) => s + m.priceExtra)
+            ? (entry.item.quantity > 0
+                ? entry.item.subtotal / entry.item.quantity
+                : entry.item.product.price)
             : 0.0;
         final share = sumOrig > 0 ? (e.value * up) / sumOrig : 0.0;
         final productValue = bundle.price * share;
@@ -137,8 +139,9 @@ BundleAdjustedCart checkForBundles(
   for (var i = 0; i < items.length; i++) {
     final item = items[i];
     final pid = item.product.id;
-    final origUp = item.product.price +
-        item.selectedModifiers.fold<double>(0.0, (s, m) => s + m.priceExtra);
+    final origUp = item.quantity > 0
+        ? item.subtotal / item.quantity
+        : item.product.price;
     final totalPidQty = originalQty[pid] ?? item.quantity;
     final remainingQty = workingInventory[pid] ?? 0;
     final bundledQty = totalPidQty - remainingQty;

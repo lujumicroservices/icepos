@@ -11,6 +11,14 @@ class Supplies extends Table {
   RealColumn get reorderPoint => real().withDefault(const Constant(0.0))(); // Alert threshold
 }
 
+// 1.5 CATEGORIES (Menu navigation: Bebidas, Barra Fría, etc.)
+class Categories extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 100)();
+  IntColumn get parentId => integer().nullable().references(Categories, #id)();
+  TextColumn get color => text().nullable()();
+}
+
 // 2. PRODUCTS (Menu Items)
 // e.g., "Latte Medium". It has NO direct stock; availability is calculated from supplies.
 class Products extends Table {
@@ -19,6 +27,7 @@ class Products extends Table {
   RealColumn get price => real()();
   TextColumn get imageUrl => text().nullable()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  IntColumn get categoryId => integer().nullable().references(Categories, #id)();
 }
 
 // 3. RECIPES (The Logic Core)
@@ -36,7 +45,10 @@ class Sales extends Table {
   IntColumn get id => integer().autoIncrement()();
   DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
   RealColumn get totalAmount => real()();
-  TextColumn get paymentMethod => text().withDefault(const Constant('CASH'))(); 
+  /// CASH, CARD_DEBIT, CARD_CREDIT, TRANSFER
+  TextColumn get paymentMethod => text().withDefault(const Constant('CASH'))();
+  RealColumn get amountTendered => real().withDefault(const Constant(0.0))();
+  RealColumn get changeGiven => real().withDefault(const Constant(0.0))();
 }
 
 // 5. SALE ITEMS (Details)
@@ -108,6 +120,7 @@ class Bundles extends Table {
   TextColumn get name => text().withLength(min: 1, max: 100)();
   RealColumn get price => real()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  IntColumn get categoryId => integer().nullable().references(Categories, #id)();
 }
 
 // 13. BUNDLE ITEMS (Products that compose a bundle)

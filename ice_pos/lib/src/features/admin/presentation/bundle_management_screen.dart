@@ -3,10 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/admin/presentation/bundle_editor_screen.dart';
 
 final _bundlesProvider = FutureProvider<List<({Bundle bundle, List<BundleItem> bundleItems})>>((ref) async {
   return ref.read(posRepositoryProvider).getBundlesWithItems();
+});
+
+final _categoriesForBundlesProvider = FutureProvider<List<domain_cat.Category>>((ref) async {
+  return ref.read(posRepositoryProvider).getAllCategories();
 });
 
 class BundleManagementScreen extends ConsumerWidget {
@@ -69,74 +74,12 @@ class BundleManagementScreen extends ConsumerWidget {
               ),
             );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: bundles.length,
-            itemBuilder: (context, index) {
-              final bw = bundles[index];
-              return ListTile(
-                onTap: () async {
-                  await Navigator.push<bool>(
-                    context,
-                    MaterialPageRoute<bool>(
-                      builder: (_) => BundleEditorScreen(
-                        bundleId: bw.bundle.id,
-                        initialName: bw.bundle.name,
-                        initialPrice: bw.bundle.price,
-                        initialProductIds: bw.bundleItems
-                            .map((bi) => (productId: bi.productId, quantity: bi.quantityRequired))
-                            .toList(),
-                      ),
-                    ),
-                  );
-                  ref.invalidate(_bundlesProvider);
-                },
-                title: Text(
-                  bw.bundle.name,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
-                ),
-                subtitle: Text(
-                  '\$${bw.bundle.price.toStringAsFixed(2)} • ${bw.bundleItems.length} product(s)',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Delete Bundle'),
-                        content: Text(
-                          'Delete "${bw.bundle.name}"?',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Theme.of(context).colorScheme.error,
-                            ),
-                            child: const Text('Delete'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      await ref.read(posRepositoryProvider).deleteBundle(bw.bundle.id);
-                      ref.invalidate(_bundlesProvider);
-                    }
-                  },
-                ),
-              );
+          return ref.watch(_categoriesForBundlesProvider).when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, __) => _buildBundleList(context, ref, bundles, null),
+            data: (categories) {
+              final catNames = {for (final c in categories) c.id: c.name};
+              return _buildBundleList(context, ref, bundles, catNames);
             },
           );
         },
@@ -153,6 +96,91 @@ class BundleManagementScreen extends ConsumerWidget {
         },
         child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Widget _buildBundleList(
+    BuildContext context,
+    WidgetRef ref,
+    List<({Bundle bundle, List<BundleItem> bundleItems})> bundles,
+    Map<int, String>? categoryNames,
+  ) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: bundles.length,
+      itemBuilder: (context, index) {
+        final bw = bundles[index];
+        final categoryLabel = bw.bundle.categoryId != null && categoryNames != null
+            ? categoryNames[bw.bundle.categoryId] ?? 'Category #${bw.bundle.categoryId}'
+            : null;
+        return ListTile(
+          onTap: () async {
+            await Navigator.push<bool>(
+              context,
+              MaterialPageRoute<bool>(
+                builder: (_) => BundleEditorScreen(
+                  bundleId: bw.bundle.id,
+                  initialName: bw.bundle.name,
+                  initialPrice: bw.bundle.price,
+                  initialCategoryId: bw.bundle.categoryId,
+                  initialProductIds: bw.bundleItems
+                      .map((bi) => (productId: bi.productId, quantity: bi.quantityRequired))
+                      .toList(),
+                ),
+              ),
+            );
+            ref.invalidate(_bundlesProvider);
+          },
+          title: Text(
+            bw.bundle.name,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+            ),
+          ),
+          subtitle: Text(
+            [
+              if (categoryLabel != null) categoryLabel,
+              '\$${bw.bundle.price.toStringAsFixed(2)} • ${bw.bundleItems.length} product(s)',
+            ].join(' • '),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Delete Bundle'),
+                  content: Text(
+                    'Delete "${bw.bundle.name}"?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await ref.read(posRepositoryProvider).deleteBundle(bw.bundle.id);
+                ref.invalidate(_bundlesProvider);
+              }
+            },
+          ),
+        );
+      },
     );
   }
 }

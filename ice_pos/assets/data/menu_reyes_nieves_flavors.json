@@ -1,0 +1,8 @@
+{
+  "nieves_sabores_agua": ["limon", "mango", "guanabana", "ciruela amarilla", "frutos rojos", "panditas", "picafresa"],
+  "nieves_sabores_light": ["cafe", "coco", "nuez", "pepino limon chia", "hiervabuena"],
+  "nieves_sabores_crema": ["crema de fresas", "crema de mango", "crema de guayaba"],
+  "nieves_sabores_leche": ["chocolate", "chongos", "comegalletas", "elote", "ferrero", "mamey", "mazapan", "nutella", "oreo", "red velvet", "taro", "vainilla"],
+  "bolis_sabores": ["cafe", "coco", "chongos", "chocolate", "rompope", "pistache", "pinon", "vainilla", "fresa", "nuez", "uva", "jamaica", "tejuino", "limon-hiervabuena", "chicle", "tamarindo", "mango con chile"],
+  "malteadas_sabores": ["oreo", "chocolate", "vainilla", "fresa", "mazapan", "nutella", "caramel", "marshmellow", "rol de canela"]
+}

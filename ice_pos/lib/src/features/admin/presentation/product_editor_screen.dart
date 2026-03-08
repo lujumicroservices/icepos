@@ -3,9 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 
 final _suppliesStreamProvider = StreamProvider<List<Supply>>((ref) {
   return ref.watch(posRepositoryProvider).watchSupplies();
+});
+
+final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
+  return ref.read(posRepositoryProvider).getAllCategories();
 });
 
 /// Recipe item for editing (supply + quantity).
@@ -56,9 +61,11 @@ class _ModifierGroupItem {
 }
 
 class ProductEditorScreen extends ConsumerStatefulWidget {
-  const ProductEditorScreen({super.key, this.productId});
+  const ProductEditorScreen({super.key, this.productId, this.initialCategoryId});
 
   final int? productId;
+  /// When adding a new product from Category Management, pre-select this category.
+  final int? initialCategoryId;
 
   @override
   ConsumerState<ProductEditorScreen> createState() =>
@@ -73,6 +80,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
 
   List<_RecipeItem> _recipeItems = [];
   List<_ModifierGroupItem> _modifierGroups = [];
+  int? _selectedCategoryId;
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -93,6 +101,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
 
   Future<void> _loadProduct() async {
     if (widget.productId == null) {
+      _selectedCategoryId = widget.initialCategoryId;
       setState(() => _isLoading = false);
       return;
     }
@@ -102,6 +111,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
 
     _nameController.text = product.name;
     _priceController.text = product.price.toStringAsFixed(2);
+    _selectedCategoryId = product.categoryId;
 
     final recipes = await repo.getRecipesForProduct(widget.productId!);
     _recipeItems = recipes
@@ -173,6 +183,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
             productId: widget.productId,
             name: name,
             price: price,
+            categoryId: _selectedCategoryId,
             recipeItems: _recipeItems
                 .map((r) => (supplyId: r.supplyId, quantityRequired: r.quantity))
                 .toList(),
@@ -248,6 +259,9 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
           _BasicInfoTab(
             nameController: _nameController,
             priceController: _priceController,
+            selectedCategoryId: _selectedCategoryId,
+            categoriesAsync: ref.watch(_categoriesProvider),
+            onCategoryChanged: (id) => setState(() => _selectedCategoryId = id),
           ),
           _FixedRecipeTab(
             recipeItems: _recipeItems,
@@ -590,14 +604,20 @@ class _BasicInfoTab extends StatelessWidget {
   const _BasicInfoTab({
     required this.nameController,
     required this.priceController,
+    required this.selectedCategoryId,
+    required this.categoriesAsync,
+    required this.onCategoryChanged,
   });
 
   final TextEditingController nameController;
   final TextEditingController priceController;
+  final int? selectedCategoryId;
+  final AsyncValue<List<domain_cat.Category>> categoriesAsync;
+  final ValueChanged<int?> onCategoryChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -619,6 +639,41 @@ class _BasicInfoTab extends StatelessWidget {
               prefixText: '\$ ',
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 20),
+          categoriesAsync.when(
+            data: (categories) {
+              return InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int?>(
+                    value: selectedCategoryId,
+                    isExpanded: true,
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('No category'),
+                      ),
+                      ...categories.map(
+                        (c) => DropdownMenuItem<int?>(
+                          value: c.id,
+                          child: Text(c.name),
+                        ),
+                      ),
+                    ],
+                    onChanged: onCategoryChanged,
+                  ),
+                ),
+              );
+            },
+            loading: () => const SizedBox(
+              height: 56,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, __) => const SizedBox.shrink(),
           ),
         ],
       ),

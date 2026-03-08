@@ -1,0 +1,55 @@
+{
+  "_comment": "Malteada Mediano/Grande: elegir un sabor. Sin costo extra.",
+  "products": [
+    {
+      "product": {
+        "name": "Malteada Mediano",
+        "price": 79,
+        "categoryName": "Bebidas frías y shakes"
+      },
+      "modifierGroups": [
+        {
+          "name": "Sabor",
+          "minSelection": 1,
+          "maxSelection": 1,
+          "options": [
+            { "supplyName": "Malteada - Oreo", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Chocolate", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Vainilla", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Fresa", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Mazapán", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Nutella", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Caramelo", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Bombón", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Rol de canela", "quantityDeducted": 0, "priceExtra": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "product": {
+        "name": "Malteada Grande",
+        "price": 87,
+        "categoryName": "Bebidas frías y shakes"
+      },
+      "modifierGroups": [
+        {
+          "name": "Sabor",
+          "minSelection": 1,
+          "maxSelection": 1,
+          "options": [
+            { "supplyName": "Malteada - Oreo", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Chocolate", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Vainilla", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Fresa", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Mazapán", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Nutella", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Caramelo", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Bombón", "quantityDeducted": 0, "priceExtra": 0 },
+            { "supplyName": "Malteada - Rol de canela", "quantityDeducted": 0, "priceExtra": 0 }
+          ]
+        }
+      ]
+    }
+  ]
+}

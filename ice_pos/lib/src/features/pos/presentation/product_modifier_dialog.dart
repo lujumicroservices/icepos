@@ -3,16 +3,29 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
-/// Dialog for selecting product modifiers (e.g., ice cream flavors).
+/// Result of the modifier dialog: selected modifiers and quantity (e.g. piezas for bolis).
+class ModifierDialogResult {
+  const ModifierDialogResult({
+    required this.modifiers,
+    this.quantity = 1,
+  });
+  final List<ModifierOption> modifiers;
+  final double quantity;
+}
+
+/// Dialog for selecting product modifiers (e.g., ice cream flavors) and optional quantity.
 class ProductModifierDialog extends StatefulWidget {
   const ProductModifierDialog({
     super.key,
     required this.product,
     required this.modifierGroups,
+    this.showQuantitySelector = true,
   });
 
   final Product product;
   final List<ModifierGroupWithOptions> modifierGroups;
+  /// When true, shows a "Cantidad (piezas)" stepper so operator can add multiple units at once.
+  final bool showQuantitySelector;
 
   @override
   State<ProductModifierDialog> createState() => _ProductModifierDialogState();
@@ -21,6 +34,7 @@ class ProductModifierDialog extends StatefulWidget {
 class _ProductModifierDialogState extends State<ProductModifierDialog> {
   /// Per-group: list of selected ModifierOptions (duplicates allowed for count).
   late List<List<ModifierOption>> _selections;
+  double _quantity = 1;
 
   @override
   void initState() {
@@ -69,6 +83,93 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
 
   int _count(int groupIndex, int optionId) =>
       _selections[groupIndex].where((o) => o.id == optionId).length;
+
+  /// Derives subgroup (e.g. "Regular", "Light") and short display name from supply name.
+  static ({String? subgroup, String displayName}) _subgroupAndName(String supplyName) {
+    if (supplyName.startsWith('Boli Regular - ')) {
+      return (subgroup: 'Regular', displayName: supplyName.replaceFirst('Boli Regular - ', ''));
+    }
+    if (supplyName.startsWith('Boli Light - ')) {
+      return (subgroup: 'Light', displayName: supplyName.replaceFirst('Boli Light - ', ''));
+    }
+    if (supplyName.startsWith('Paleta Agua - ')) {
+      return (subgroup: null, displayName: supplyName.replaceFirst('Paleta Agua - ', ''));
+    }
+    if (supplyName.startsWith('Paleta Forrada - ')) {
+      return (subgroup: null, displayName: supplyName.replaceFirst('Paleta Forrada - ', ''));
+    }
+    if (supplyName.startsWith('Nieve AGUA - ')) {
+      return (subgroup: 'AGUA', displayName: supplyName.replaceFirst('Nieve AGUA - ', ''));
+    }
+    if (supplyName.startsWith('Nieve LECHE - ')) {
+      return (subgroup: 'LECHE', displayName: supplyName.replaceFirst('Nieve LECHE - ', ''));
+    }
+    if (supplyName.startsWith('Nieve CREMA - ')) {
+      return (subgroup: 'CREMA', displayName: supplyName.replaceFirst('Nieve CREMA - ', ''));
+    }
+    if (supplyName.startsWith('Nieve LIGHT - ')) {
+      return (subgroup: 'LIGHT', displayName: supplyName.replaceFirst('Nieve LIGHT - ', ''));
+    }
+    if (supplyName.startsWith('Malteada - ')) {
+      return (subgroup: null, displayName: supplyName.replaceFirst('Malteada - ', ''));
+    }
+    return (subgroup: null, displayName: supplyName);
+  }
+
+  String _buttonLabel() {
+    if (widget.modifierGroups.length == 1 &&
+        widget.modifierGroups.first.group.maxSelection > 1) {
+      final n = _allSelectedModifiers.length;
+      return n > 0 ? 'Agregar ($n)' : 'Add to Cart';
+    }
+    if (widget.showQuantitySelector && _quantity > 1) {
+      return 'Agregar al carrito (${_quantity.round()})';
+    }
+    return 'Add to Cart';
+  }
+
+  List<Widget> _buildOptionsWithSubgroups(
+    int groupIndex,
+    List<ModifierOptionWithSupply> options,
+    int maxSelection,
+  ) {
+    final selections = _selections[groupIndex];
+    final currentTotal = selections.length;
+    final widgets = <Widget>[];
+    String? lastSubgroup;
+    for (final opt in options) {
+      final parsed = _subgroupAndName(opt.supplyName);
+      if (parsed.subgroup != null && parsed.subgroup != lastSubgroup) {
+        lastSubgroup = parsed.subgroup;
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 6),
+            child: Text(
+              parsed.subgroup!,
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        );
+      } else if (parsed.subgroup == null && lastSubgroup != null) {
+        lastSubgroup = null;
+      }
+      widgets.add(
+        _OptionRow(
+          supplyName: parsed.displayName,
+          priceExtra: opt.option.priceExtra,
+          count: _count(groupIndex, opt.option.id),
+          maxCount: maxSelection - currentTotal + _count(groupIndex, opt.option.id),
+          onIncrement: () => _increment(groupIndex, opt),
+          onDecrement: () => _decrement(groupIndex, opt),
+        ),
+      );
+    }
+    return widgets;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -164,19 +265,10 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            ...groupWithOptions.options.map(
-                              (opt) => _OptionRow(
-                                supplyName: opt.supplyName,
-                                priceExtra: opt.option.priceExtra,
-                                count: _count(groupIndex, opt.option.id),
-                                maxCount: group.maxSelection -
-                                    _selections[groupIndex].length +
-                                    _count(groupIndex, opt.option.id),
-                                onIncrement: () =>
-                                    _increment(groupIndex, opt),
-                                onDecrement: () =>
-                                    _decrement(groupIndex, opt),
-                              ),
+                            ..._buildOptionsWithSubgroups(
+                              groupIndex,
+                              groupWithOptions.options,
+                              group.maxSelection,
                             ),
                           ],
                         ),
@@ -185,6 +277,61 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
                   },
                 ),
               ),
+              if (widget.showQuantitySelector &&
+                  !(widget.modifierGroups.length == 1 &&
+                      widget.modifierGroups.first.group.maxSelection > 1)) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Cantidad (piezas)',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton.filled(
+                            onPressed: _quantity > 1
+                                ? () => setState(() => _quantity -= 1)
+                                : null,
+                            icon: const Icon(Icons.remove, size: 20),
+                            style: IconButton.styleFrom(
+                              padding: const EdgeInsets.all(10),
+                              minimumSize: const Size(44, 44),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              _quantity.toInt().toString(),
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          IconButton.filled(
+                            onPressed: _quantity < 99
+                                ? () => setState(() => _quantity += 1)
+                                : null,
+                            icon: const Icon(Icons.add, size: 20),
+                            style: IconButton.styleFrom(
+                              padding: const EdgeInsets.all(10),
+                              minimumSize: const Size(44, 44),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -192,7 +339,25 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: _isValid
-                          ? () => Navigator.of(context).pop(_allSelectedModifiers)
+                          ? () {
+                              // Boli-style: each selected modifier = one piece (min != max).
+                              // Nieves-style: N selections = one item with N flavor choices (min == max).
+                              final g = widget.modifierGroups.length == 1
+                                  ? widget.modifierGroups.first.group
+                                  : null;
+                              final quantityIsPiezas = g != null &&
+                                  g.maxSelection > 1 &&
+                                  g.minSelection != g.maxSelection;
+                              final totalPiezas = quantityIsPiezas
+                                  ? _allSelectedModifiers.length.toDouble()
+                                  : _quantity;
+                              Navigator.of(context).pop(
+                                ModifierDialogResult(
+                                  modifiers: _allSelectedModifiers,
+                                  quantity: totalPiezas,
+                                ),
+                              );
+                            }
                           : null,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -201,7 +366,7 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
                         ),
                       ),
                       child: Text(
-                        'Add to Cart',
+                        _buttonLabel(),
                         style: GoogleFonts.inter(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,

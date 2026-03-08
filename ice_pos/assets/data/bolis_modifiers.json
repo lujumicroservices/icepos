@@ -1,0 +1,39 @@
+{
+  "product": {
+    "name": "Boli",
+    "price": 29,
+    "categoryName": "Bolis y Paletas"
+  },
+  "modifierGroups": [
+    {
+      "name": "Sabor (elige cantidad por sabor)",
+      "minSelection": 1,
+      "maxSelection": 50,
+      "options": [
+        { "supplyName": "Boli Regular - café", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - coco", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - chongos", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - chocolate", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - rompope", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - pistache", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - piñón", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - vainilla", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - fresa", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - nuez", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - uva", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - jamaica", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - tejuino", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - limón-hierbabuena", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - chicle", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - tamarindo", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Regular - mango con chile", "quantityDeducted": 1, "priceExtra": 0 },
+        { "supplyName": "Boli Light - café", "quantityDeducted": 1, "priceExtra": 1 },
+        { "supplyName": "Boli Light - coco", "quantityDeducted": 1, "priceExtra": 1 },
+        { "supplyName": "Boli Light - chocolate", "quantityDeducted": 1, "priceExtra": 1 },
+        { "supplyName": "Boli Light - vainilla", "quantityDeducted": 1, "priceExtra": 1 },
+        { "supplyName": "Boli Light - nuez", "quantityDeducted": 1, "priceExtra": 1 },
+        { "supplyName": "Boli Light - jamaica", "quantityDeducted": 1, "priceExtra": 1 }
+      ]
+    }
+  ]
+}

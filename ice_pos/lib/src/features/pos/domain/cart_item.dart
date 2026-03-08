@@ -75,10 +75,26 @@ class CartItem {
     return v is String ? v : v.toString();
   }
 
-  double get subtotal =>
-      quantity *
-      (product.price +
-          selectedModifiers.fold(0.0, (sum, m) => sum + m.priceExtra));
+  /// Pricing: (1) No modifiers: quantity * price.
+  /// (2) Boli-style (each modifier = one piece): quantity == selectedModifiers.length → sum over modifiers of (base + priceExtra).
+  /// (3) Nieves-style (modifiers = flavor choices for one item): e.g. 3 sabores for 1 Cono Chico → quantity * price (no per-scoop charge).
+  double get subtotal {
+    if (selectedModifiers.isEmpty) {
+      return quantity * product.price;
+    }
+    final q = quantity;
+    final n = selectedModifiers.length;
+    if (q > 0 && n == q) {
+      // Each modifier is one piece (Boli: 2 flavors = 2 pieces).
+      return selectedModifiers.fold<double>(
+        0.0,
+        (sum, m) => sum + product.price + m.priceExtra,
+      );
+    }
+    // Modifiers are choices for the item(s), not extra units (Nieves: 3 sabores = 1 cono at 49).
+    return q * product.price +
+        selectedModifiers.fold<double>(0.0, (sum, m) => sum + m.priceExtra);
+  }
 
   CartItem copyWith({
     Product? product,

@@ -1,0 +1,113 @@
+{
+  "_comment": "Nieves: Conos (mini 2, chico 3), Vasos (mini 2, chico 3, mediano 4, grande 5), Canastas (mediana 4, grande 5). SupplyName 'Nieve TIPO - Sabor' permite agrupar en UI por AGUA/LECHE/CREMA/LIGHT.",
+  "flavorOptions": [
+    { "supplyName": "Nieve AGUA - Limón", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve AGUA - Mango", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve AGUA - Guanábana", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve AGUA - Ciruela Amarilla", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve AGUA - Frutos Rojos", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve AGUA - Panditas", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve AGUA - Picafresa", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Chocolate", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Chongos", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Comegalletas", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Elote", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Ferrero", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Mamey", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Mazapán", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Nutella", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Oreo", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Red Velvet", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Taro", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LECHE - Vainilla", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve CREMA - Crema de Fresas", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve CREMA - Crema de Mango", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve CREMA - Crema de Guayaba", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LIGHT - Café Light", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LIGHT - Coco Light", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LIGHT - Hierbabuena Light", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LIGHT - Nuez Light", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LIGHT - Pepino Limón Chía", "quantityDeducted": 0.05, "priceExtra": 0 },
+    { "supplyName": "Nieve LIGHT - Vainilla light", "quantityDeducted": 0.05, "priceExtra": 0 }
+  ],
+  "products": [
+    {
+      "product": { "name": "Cono Mini", "price": 40, "categoryName": "Conos" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 2 bolas)", "minSelection": 2, "maxSelection": 2, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Cono Chico", "price": 49, "categoryName": "Conos" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 3 bolas)", "minSelection": 3, "maxSelection": 3, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Vaso Mini", "price": 40, "categoryName": "Vasos" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 2 bolas)", "minSelection": 2, "maxSelection": 2, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Vaso Chico", "price": 49, "categoryName": "Vasos" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 3 bolas)", "minSelection": 3, "maxSelection": 3, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Vaso Mediano", "price": 56, "categoryName": "Vasos" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 4 bolas)", "minSelection": 4, "maxSelection": 4, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Vaso Grande", "price": 62, "categoryName": "Vasos" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 5 bolas)", "minSelection": 5, "maxSelection": 5, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Canasta Mediana", "price": 56, "categoryName": "Canastas" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 4 bolas)", "minSelection": 4, "maxSelection": 4, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Canasta Grande", "price": 62, "categoryName": "Canastas" },
+      "modifierGroups": [
+        { "name": "Sabores (Elige 5 bolas)", "minSelection": 5, "maxSelection": 5, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Nieve 1/2 Litro", "price": 98, "categoryName": "Nieves de Garrafa y Paquetes" },
+      "modifierGroups": [
+        { "name": "Elige 1 sabor", "minSelection": 1, "maxSelection": 1, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Nieve Litro", "price": 188, "categoryName": "Nieves de Garrafa y Paquetes" },
+      "modifierGroups": [
+        { "name": "Elige 1 sabor", "minSelection": 1, "maxSelection": 1, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Paquete Amigos (3 Medios Litros)", "price": 259, "categoryName": "Nieves de Garrafa y Paquetes" },
+      "modifierGroups": [
+        { "name": "Elige 3 sabores", "minSelection": 3, "maxSelection": 3, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Paquete Familiar (4 Medios Litros)", "price": 349, "categoryName": "Nieves de Garrafa y Paquetes" },
+      "modifierGroups": [
+        { "name": "Elige 4 sabores", "minSelection": 4, "maxSelection": 4, "optionsRef": "flavorOptions" }
+      ]
+    },
+    {
+      "product": { "name": "Paquete Rey (6 Medios Litros)", "price": 539, "categoryName": "Nieves de Garrafa y Paquetes" },
+      "modifierGroups": [
+        { "name": "Elige 6 sabores", "minSelection": 6, "maxSelection": 6, "optionsRef": "flavorOptions" }
+      ]
+    }
+  ]
+}

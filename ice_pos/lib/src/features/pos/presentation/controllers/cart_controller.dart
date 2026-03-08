@@ -59,7 +59,9 @@ class CartController extends _$CartController {
   void addToCart(
     Product product, {
     List<ModifierOption> selectedModifiers = const [],
+    double quantity = 1,
   }) {
+    final double qty = quantity > 0 ? quantity : 1.0;
     final index = state.items.indexWhere(
       (item) =>
           item.product.id == product.id &&
@@ -68,17 +70,17 @@ class CartController extends _$CartController {
     if (index >= 0) {
       final existing = state.items[index];
       final updated = [...state.items];
-      updated[index] = existing.copyWith(quantity: existing.quantity + 1);
+      updated[index] = existing.copyWith(quantity: existing.quantity + qty);
       state = state.copyWith(items: updated);
     } else {
       state = state.copyWith(
         items: [
           ...state.items,
           CartItem(
-          product: product,
-          quantity: 1,
-          selectedModifiers: selectedModifiers,
-        ),
+            product: product,
+            quantity: qty,
+            selectedModifiers: selectedModifiers,
+          ),
         ],
       );
     }
@@ -140,10 +142,22 @@ class CartController extends _$CartController {
     await ref.read(pos_data.posRepositoryProvider).deleteParkedOrder(order.id);
   }
 
-  Future<void> checkout() async {
+  /// Completes the sale and clears the cart.
+  /// [paymentData] map from CheckoutDialog: 'method' (cash/card/transfer),
+  /// 'amountTendered' (double), 'cardType' (debit/credit or null).
+  Future<void> completeSale(Map<String, dynamic> paymentData) async {
     if (state.items.isEmpty) return;
 
+    final method = paymentData['method'] as String? ?? 'cash';
+    final amountTendered = (paymentData['amountTendered'] as num?)?.toDouble() ?? 0.0;
+    final cardType = paymentData['cardType'] as String?;
+
     final receipt = await currentReceipt;
+    final paymentMethod = _paymentMethodFromDialog(method, cardType);
+    final changeGiven = method == 'cash'
+        ? (amountTendered - receipt.total).clamp(0.0, double.infinity)
+        : 0.0;
+
     final bundles =
         await ref.read(pos_data.posRepositoryProvider).getBundlesWithItems();
     final adjusted = checkForBundles(state.items, bundles);
@@ -160,10 +174,26 @@ class CartController extends _$CartController {
         )
         .toList();
 
-    await ref.read(pos_data.posRepositoryProvider).processSale(
+    final payload = await ref.read(pos_data.posRepositoryProvider).processSale(
           items,
           totalAmount: receipt.total,
+          paymentMethod: paymentMethod,
+          amountTendered: amountTendered,
+          changeGiven: changeGiven,
         );
     clearCart();
+  }
+
+  static String _paymentMethodFromDialog(String method, String? cardType) {
+    switch (method) {
+      case 'cash':
+        return 'CASH';
+      case 'card':
+        return cardType == 'credit' ? 'CARD_CREDIT' : 'CARD_DEBIT';
+      case 'transfer':
+        return 'TRANSFER';
+      default:
+        return 'CASH';
+    }
   }
 }

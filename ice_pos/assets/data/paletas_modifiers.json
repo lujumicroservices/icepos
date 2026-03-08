@@ -1,0 +1,42 @@
+{
+  "products": [
+    {
+      "product": {
+        "name": "Paleta Agua",
+        "price": 25,
+        "categoryName": "Bolis y Paletas"
+      },
+      "modifierGroups": [
+        {
+          "name": "Sabor (elige cantidad por sabor)",
+          "minSelection": 1,
+          "maxSelection": 50,
+          "options": [
+            { "supplyName": "Paleta Agua - limón", "quantityDeducted": 1, "priceExtra": 0 },
+            { "supplyName": "Paleta Agua - fresa", "quantityDeducted": 1, "priceExtra": 0 },
+            { "supplyName": "Paleta Agua - mango", "quantityDeducted": 1, "priceExtra": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "product": {
+        "name": "Paleta Forrada",
+        "price": 40,
+        "categoryName": "Bolis y Paletas"
+      },
+      "modifierGroups": [
+        {
+          "name": "Sabor (elige cantidad por sabor)",
+          "minSelection": 1,
+          "maxSelection": 50,
+          "options": [
+            { "supplyName": "Paleta Forrada - m&m", "quantityDeducted": 1, "priceExtra": 0 },
+            { "supplyName": "Paleta Forrada - nuez", "quantityDeducted": 1, "priceExtra": 0 },
+            { "supplyName": "Paleta Forrada - cookies & cream", "quantityDeducted": 1, "priceExtra": 0 }
+          ]
+        }
+      ]
+    }
+  ]
+}

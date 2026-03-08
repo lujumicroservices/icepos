@@ -20,17 +20,17 @@ ReceiptResult computeReceipt(
     );
   }
 
-  // Step A: Create inventory Map<productId, quantity>
+  // Step A: Inventory (quantity) and subtotal per product (so modifiers priced per piece are correct)
   final inventory = <int, double>{};
-  final productInfo = <int, ({String name, double unitPrice})>{};
+  final productInfo = <int, ({String name, double subtotal})>{};
   for (final item in items) {
     final pid = item.product.id;
     inventory[pid] = (inventory[pid] ?? 0) + item.quantity;
-    if (!productInfo.containsKey(pid)) {
-      final up = item.product.price +
-          item.selectedModifiers.fold<double>(0.0, (s, m) => s + m.priceExtra);
-      productInfo[pid] = (name: item.product.name, unitPrice: up);
-    }
+    final prev = productInfo[pid];
+    productInfo[pid] = (
+      name: prev?.name ?? item.product.name,
+      subtotal: (prev?.subtotal ?? 0) + item.subtotal,
+    );
   }
 
   // Step B: Bundle loop - consume from inventory
@@ -74,7 +74,7 @@ ReceiptResult computeReceipt(
     }
   }
 
-  // Step C: Leftovers loop - remaining items at standard price
+  // Step C: Leftovers loop - use actual subtotal per product (correct for per-modifier pricing)
   for (final e in inventory.entries) {
     final pid = e.key;
     final qty = e.value;
@@ -83,7 +83,7 @@ ReceiptResult computeReceipt(
     final info = productInfo[pid];
     if (info == null) continue;
 
-    final amount = qty * info.unitPrice;
+    final amount = info.subtotal;
     standaloneSubtotal += amount;
     lines.add(ReceiptLine(
       description: info.name,

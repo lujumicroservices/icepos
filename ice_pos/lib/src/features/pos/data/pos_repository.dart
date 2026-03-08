@@ -4,7 +4,10 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/sales_sync_service.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart' as domain;
+import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'pos_repository.g.dart';
@@ -99,6 +102,141 @@ class PosRepository {
 
   final AppDatabase _db;
 
+  /// Fetches categories. If [parentId] is null, returns root categories.
+  Future<List<domain_cat.Category>> getCategories({int? parentId}) async {
+    final query = parentId == null
+        ? 'SELECT id, name, parent_id, color FROM categories WHERE parent_id IS NULL'
+        : 'SELECT id, name, parent_id, color FROM categories WHERE parent_id = ?';
+    final rows = await _db.customSelect(
+      query,
+      variables: parentId != null
+          ? [Variable.withInt(parentId)]
+          : [],
+    ).get();
+    return rows
+        .map(
+          (row) => domain_cat.Category(
+            id: row.read<int>('id'),
+            name: row.read<String>('name'),
+            parentId: row.read<int?>('parent_id'),
+            color: row.read<String?>('color'),
+          ),
+        )
+        .toList();
+  }
+
+  /// Returns all categories (root and subcategories) for admin/grouping.
+  /// Order: root first (parent_id IS NULL), then by name.
+  Future<List<domain_cat.Category>> getAllCategories() async {
+    const query = '''
+      SELECT id, name, parent_id, color FROM categories
+      ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, name
+    ''';
+    final rows = await _db.customSelect(query).get();
+    return rows
+        .map(
+          (row) => domain_cat.Category(
+            id: row.read<int>('id'),
+            name: row.read<String>('name'),
+            parentId: row.read<int?>('parent_id'),
+            color: row.read<String?>('color'),
+          ),
+        )
+        .toList();
+  }
+
+  /// Gets a single category by id.
+  Future<domain_cat.Category?> getCategory(int id) async {
+    final row = await (_db.select(_db.categories)..where((c) => c.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return null;
+    return domain_cat.Category(
+      id: row.id,
+      name: row.name,
+      parentId: row.parentId,
+      color: row.color,
+    );
+  }
+
+  /// Inserts a new category. Returns the new id.
+  Future<int> insertCategory({
+    required String name,
+    int? parentId,
+    String? color,
+  }) async {
+    return await _db.into(_db.categories).insert(
+      CategoriesCompanion.insert(
+        name: name.trim(),
+        parentId: Value(parentId),
+        color: Value(color),
+      ),
+    );
+  }
+
+  /// Updates an existing category.
+  Future<void> updateCategory(
+    int id, {
+    String? name,
+    int? parentId,
+    String? color,
+  }) async {
+    await (_db.update(_db.categories)..where((c) => c.id.equals(id))).write(
+      CategoriesCompanion(
+        name: name != null ? Value(name.trim()) : const Value.absent(),
+        parentId: parentId != null ? Value<int?>(parentId) : const Value.absent(),
+        color: color != null ? Value<String?>(color) : const Value.absent(),
+      ),
+    );
+  }
+
+  /// Deletes a category. Fails if it has products or child categories.
+  /// Use [reassignProductCategoryId] first if needed.
+  Future<void> deleteCategory(int id) async {
+    final products = await (_db.select(_db.products)
+          ..where((p) => p.categoryId.equals(id)))
+        .get();
+    if (products.isNotEmpty) {
+      throw StateError(
+        'Cannot delete category: ${products.length} product(s) belong to it. '
+        'Reassign or remove products first.',
+      );
+    }
+    final children = await (_db.select(_db.categories)
+          ..where((c) => c.parentId.equals(id)))
+        .get();
+    if (children.isNotEmpty) {
+      throw StateError(
+        'Cannot delete category: it has ${children.length} subcategory(ies). '
+        'Delete or move them first.',
+      );
+    }
+    await (_db.delete(_db.categories)..where((c) => c.id.equals(id))).go();
+  }
+
+  /// Counts products in a category.
+  Future<int> countProductsInCategory(int categoryId) async {
+    final list = await (_db.select(_db.products)
+          ..where((p) => p.categoryId.equals(categoryId)))
+        .get();
+    return list.length;
+  }
+
+  /// Gets active products that belong to the given category.
+  /// Requires schema v9 (categories table, products.category_id). Run build_runner after schema change.
+  Future<List<Product>> getProductsByCategory(int categoryId) async {
+    return (_db.select(_db.products)
+          ..where((p) =>
+              p.isActive.equals(true) & p.categoryId.equals(categoryId)))
+        .get();
+  }
+
+  /// Gets all active products (e.g. when at root with no categories).
+  Future<List<Product>> getProducts() async {
+    return (_db.select(_db.products)
+          ..where((p) => p.isActive.equals(true)))
+        .get();
+  }
+
   /// Observes active products (isActive == true).
   Stream<List<Product>> watchProducts() {
     return (_db.select(_db.products)
@@ -144,6 +282,7 @@ class PosRepository {
     required int? productId,
     required String name,
     required double price,
+    int? categoryId,
     required List<({int supplyId, double quantityRequired})> recipeItems,
     required List<({
       String name,
@@ -156,7 +295,11 @@ class PosRepository {
       int id;
       if (productId == null) {
         id = await _db.into(_db.products).insert(
-              ProductsCompanion.insert(name: name, price: price),
+              ProductsCompanion.insert(
+                name: name,
+                price: price,
+                categoryId: Value(categoryId),
+              ),
             );
       } else {
         id = productId;
@@ -164,6 +307,7 @@ class PosRepository {
           ProductsCompanion(
             name: Value(name),
             price: Value(price),
+            categoryId: Value(categoryId),
           ),
         );
       }
@@ -258,12 +402,17 @@ class PosRepository {
     int? id,
     required String name,
     required double price,
+    int? categoryId,
     required List<({int productId, double quantity})> productItems,
   }) async {
     await _db.transaction(() async {
       if (id == null) {
         final bundleId = await _db.into(_db.bundles).insert(
-          BundlesCompanion.insert(name: name, price: price),
+          BundlesCompanion.insert(
+            name: name,
+            price: price,
+            categoryId: Value(categoryId),
+          ),
         );
         for (final item in productItems) {
           await _db.into(_db.bundleItems).insert(
@@ -276,7 +425,11 @@ class PosRepository {
         }
       } else {
         await (_db.update(_db.bundles)..where((b) => b.id.equals(id))).write(
-          BundlesCompanion(name: Value(name), price: Value(price)),
+          BundlesCompanion(
+            name: Value(name),
+            price: Value(price),
+            categoryId: Value(categoryId),
+          ),
         );
         await (_db.delete(_db.bundleItems)
               ..where((bi) => bi.bundleId.equals(id)))
@@ -375,6 +528,39 @@ class PosRepository {
 
   /// Gets modifier groups for a product (with options and supply names).
   Future<List<ModifierGroupWithOptions>> getModifierGroupsForProduct(
+    int productId,
+  ) async {
+    return _getModifierGroupsForProductId(productId);
+  }
+
+  /// When [getModifierGroupsForProduct] returns empty, use this to find a product
+  /// with the same name that has modifiers (e.g. avoid duplicate "Boli" without modifiers).
+  /// Returns the product that has modifiers and its groups, or null if none.
+  /// Tries first with [categoryId], then without category so modifiers are found even if category differs.
+  Future<({Product product, List<ModifierGroupWithOptions> groups})?>
+      getProductWithModifiersByName(String productName, {int? categoryId}) async {
+    final name = productName.trim();
+    if (name.isEmpty) return null;
+    final query = _db.select(_db.products)..where((p) => p.name.equals(name));
+    final products = await query.get();
+    // Prefer same category, then any product with that name that has modifiers
+    for (final product in products) {
+      if (categoryId != null && product.categoryId != categoryId) continue;
+      final groups = await _getModifierGroupsForProductId(product.id);
+      if (groups.isNotEmpty) {
+        return (product: product, groups: groups);
+      }
+    }
+    for (final product in products) {
+      final groups = await _getModifierGroupsForProductId(product.id);
+      if (groups.isNotEmpty) {
+        return (product: product, groups: groups);
+      }
+    }
+    return null;
+  }
+
+  Future<List<ModifierGroupWithOptions>> _getModifierGroupsForProductId(
     int productId,
   ) async {
     final productModifiers = await (_db.select(_db.productModifiers)
@@ -497,22 +683,38 @@ class PosRepository {
   }
 
   /// Processes a sale in a single Drift transaction.
-  /// Creates sale record, sale items, deducts inventory, and logs changes.
-  /// If [totalAmount] is provided, uses it (e.g. bundle-adjusted + discount on standalone).
-  /// Otherwise computes from items and applies [discount] to full total.
-  Future<void> processSale(
+  /// Creates sale record (with payment method, amount tendered, change), sale items, deducts inventory.
+  /// Returns a [SaleSyncPayload] for syncing to Supabase (cloud); null if sync not needed.
+  /// [paymentMethod] should be CASH, CARD_DEBIT, CARD_CREDIT, or TRANSFER.
+  /// [amountTendered] and [changeGiven] are stored on the sale record.
+  Future<SaleSyncPayload?> processSale(
     List<CartItem> items, {
     Discount? discount,
     double? totalAmount,
+    String paymentMethod = 'CASH',
+    double amountTendered = 0.0,
+    double changeGiven = 0.0,
   }) async {
-    if (items.isEmpty) return;
+    if (items.isEmpty) return null;
 
+    var amount = totalAmount ?? items.fold<double>(0.0, (sum, item) => sum + item.subtotal);
+    if (totalAmount == null && discount != null) {
+      amount = amount * (1 - discount.percentage);
+    }
+
+    if (CloudSyncService.isEnabled) {
+      final err = await CloudSyncService.writeSaleToCloud(
+        items,
+        totalAmount: amount,
+        paymentMethod: paymentMethod,
+        amountTendered: amountTendered,
+        changeGiven: changeGiven,
+      );
+      if (err != null) throw StateError(err);
+    }
+
+    SaleSyncPayload? payload;
     await _db.transaction(() async {
-      var amount = totalAmount ??
-          items.fold<double>(0.0, (sum, item) => sum + item.subtotal);
-      if (totalAmount == null && discount != null) {
-        amount = amount * (1 - discount.percentage);
-      }
 
       // 1. Loop through each CartItem and deduct inventory (with debug)
       for (final cartItem in items) {
@@ -530,56 +732,47 @@ class PosRepository {
 
         if (recipeItems.isEmpty) {
           debugPrint(
-            '❌ ERROR: No recipe found for $productLabel. Check Database!',
+            '⚠️ No recipe for $productLabel (productId=${cartItem.productId}); skipping inventory deduction.',
           );
-          throw StateError(
-            'No recipe found for $productLabel (productId=${cartItem.productId}). '
-            'Add recipe entries linking this product to supplies.',
-          );
-        }
+          // Still deduct modifier supplies and continue so the sale is recorded.
+        } else {
+          // Loop through recipeItems and deduct from supplies
+          for (final recipe in recipeItems) {
+            final amount =
+                recipe.quantityRequired * cartItem.quantity;
 
-        // Loop through recipeItems and deduct from supplies
-        for (final recipe in recipeItems) {
-          final amount =
-              recipe.quantityRequired * cartItem.quantity;
+            final supply = await (_db.select(_db.supplies)
+                  ..where((s) => s.id.equals(recipe.supplyId)))
+                .getSingleOrNull();
 
-          final supply = await (_db.select(_db.supplies)
-                ..where((s) => s.id.equals(recipe.supplyId)))
-              .getSingleOrNull();
-
-          if (supply == null) {
-            throw StateError(
-              'Supply id=${recipe.supplyId} not found for product ${cartItem.productId}',
-            );
-          }
-
-          if (supply.currentStock < amount) {
-            throw StateError(
-              'Insufficient stock for supply "${supply.name}" '
-              '(required: $amount, available: ${supply.currentStock})',
-            );
-          }
-
-          final newStock = supply.currentStock - amount;
-
-          await (_db.update(_db.supplies)
-                ..where((tbl) => tbl.id.equals(recipe.supplyId)))
-              .write(
-            SuppliesCompanion(currentStock: Value(newStock)),
-          );
-
-          debugPrint(
-            '✅ DEDUCTING: $amount from Supply ${recipe.supplyId}. '
-            'New Stock: $newStock',
-          );
-
-          await _db.into(_db.inventoryLogs).insert(
-                InventoryLogsCompanion.insert(
-                  supplyId: recipe.supplyId,
-                  changeAmount: -amount,
-                  reason: 'SALE',
-                ),
+            if (supply == null) {
+              throw StateError(
+                'Supply id=${recipe.supplyId} not found for product ${cartItem.productId}',
               );
+            }
+
+            // Permitir venta aunque no haya stock suficiente (stock puede quedar negativo).
+            final newStock = supply.currentStock - amount;
+
+            await (_db.update(_db.supplies)
+                  ..where((tbl) => tbl.id.equals(recipe.supplyId)))
+                .write(
+              SuppliesCompanion(currentStock: Value(newStock)),
+            );
+
+            debugPrint(
+              '✅ DEDUCTING: $amount from Supply ${recipe.supplyId}. '
+              'New Stock: $newStock',
+            );
+
+            await _db.into(_db.inventoryLogs).insert(
+                  InventoryLogsCompanion.insert(
+                    supplyId: recipe.supplyId,
+                    changeAmount: -amount,
+                    reason: 'SALE',
+                  ),
+                );
+          }
         }
 
         // Deduct inventory for selected modifiers
@@ -596,13 +789,7 @@ class PosRepository {
             );
           }
 
-          if (supply.currentStock < amount) {
-            throw StateError(
-              'Insufficient stock for supply "${supply.name}" '
-              '(modifier required: $amount, available: ${supply.currentStock})',
-            );
-          }
-
+          // Permitir venta aunque no haya stock suficiente (stock puede quedar negativo).
           final newStock = supply.currentStock - amount;
 
           await (_db.update(_db.supplies)
@@ -623,7 +810,12 @@ class PosRepository {
 
       // 2. Finally, insert the Sale record and sale items
       final saleId = await _db.into(_db.sales).insert(
-            SalesCompanion.insert(totalAmount: amount),
+            SalesCompanion.insert(
+              totalAmount: amount,
+              paymentMethod: Value(paymentMethod),
+              amountTendered: Value(amountTendered),
+              changeGiven: Value(changeGiven),
+            ),
           );
 
       for (final item in items) {
@@ -636,7 +828,26 @@ class PosRepository {
               ),
             );
       }
+
+      final now = DateTime.now();
+      payload = SaleSyncPayload(
+        date: now,
+        totalAmount: amount,
+        paymentMethod: paymentMethod,
+        amountTendered: amountTendered,
+        changeGiven: changeGiven,
+        items: items
+            .map(
+              (i) => SaleSyncItem(
+                productName: i.productName ?? 'Producto',
+                quantity: i.quantity,
+                unitPrice: i.unitPrice,
+              ),
+            )
+            .toList(),
+      );
     });
+    return payload;
   }
 
   /// Gets the current (open) shift, or null if none.

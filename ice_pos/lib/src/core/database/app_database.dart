@@ -8,6 +8,7 @@ import 'tables.dart';
 part 'app_database.g.dart'; 
 
 @DriftDatabase(tables: [
+  Categories,
   Products,
   Supplies,
   Recipes,
@@ -30,11 +31,18 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (migrator, from, to) async {
+          if (from < 11) {
+            await migrator.addColumn(bundles, bundles.categoryId);
+          }
+          if (from < 10) {
+            await migrator.addColumn(sales, sales.amountTendered);
+            await migrator.addColumn(sales, sales.changeGiven);
+          }
           if (from < 2) {
             await migrator.createTable(modifierGroups);
             await migrator.createTable(productModifiers);
@@ -60,6 +68,10 @@ class AppDatabase extends _$AppDatabase {
             await migrator.createTable(shifts);
             await migrator.createTable(cashMovements);
             await migrator.createTable(shiftClosures);
+          }
+          if (from < 9) {
+            await migrator.createTable(categories);
+            await migrator.addColumn(products, products.categoryId);
           }
         },
       );

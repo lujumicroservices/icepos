@@ -1,4 +1,7 @@
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' hide Category;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:drift/drift.dart';
 import 'app_database.dart';
 
@@ -6,6 +9,102 @@ class DatabaseSeeder {
   final AppDatabase db;
 
   DatabaseSeeder(this.db);
+
+  /// Loads categories and products from [menu_reyes_nieves.json] and inserts them.
+  /// Call after schema v9 (Categories table, products.categoryId). Skips if any category already exists.
+  Future<void> seedMenuReyesNieves() async {
+    final existing = await db.select(db.categories).get();
+    if (existing.isNotEmpty) {
+      debugPrint('Menu Reyes Nieves already seeded (categories exist). Skipping.');
+      return;
+    }
+    await _loadMenuFromJson();
+  }
+
+  /// Clears existing menu (categories + products that belong to a category), then loads from JSON again.
+  /// Also removes modifier groups/options linked to those products so no orphans remain.
+  Future<void> seedMenuReyesNievesForce() async {
+    await db.transaction(() async {
+      final categoryProducts = await (db.select(db.products)
+            ..where((p) => p.categoryId.isNotNull()))
+          .get();
+      final productIds = categoryProducts.map((p) => p.id).toList();
+      for (final pid in productIds) {
+        final pmLinks = await (db.select(db.productModifiers)
+              ..where((pm) => pm.productId.equals(pid)))
+            .get();
+        final groupIds = pmLinks.map((pm) => pm.modifierGroupId).toSet().toList();
+        for (final gid in groupIds) {
+          await (db.delete(db.modifierOptions)
+                ..where((o) => o.modifierGroupId.equals(gid)))
+              .go();
+        }
+        await (db.delete(db.productModifiers)..where((pm) => pm.productId.equals(pid))).go();
+        for (final gid in groupIds) {
+          await (db.delete(db.modifierGroups)..where((g) => g.id.equals(gid))).go();
+        }
+      }
+      await (db.delete(db.products)..where((p) => p.categoryId.isNotNull())).go();
+      await db.delete(db.categories).go();
+    });
+    debugPrint('Cleared menu (categories and linked products). Reloading from JSON...');
+    await _loadMenuFromJson();
+  }
+
+  Future<void> _loadMenuFromJson() async {
+    String jsonString;
+    try {
+      jsonString = await rootBundle.loadString('assets/data/menu_reyes_nieves.json');
+    } catch (e) {
+      debugPrint('Could not load menu_reyes_nieves.json: $e');
+      return;
+    }
+    final map = jsonDecode(jsonString) as Map<String, dynamic>;
+    final categoriesJson = map['categories'] as List<dynamic>? ?? [];
+    final productsByCategory = map['products'] as List<dynamic>? ?? [];
+
+    final categoryNameToId = <String, int>{};
+    for (final c in categoriesJson) {
+      final m = c as Map<String, dynamic>;
+      final name = m['name'] as String;
+      final parentName = m['parentName'] as String?;
+      final parentId = parentName != null && parentName.isNotEmpty
+          ? categoryNameToId[parentName]
+          : m['parentId'] as int?;
+      final color = m['color'] as String?;
+      final id = await db.into(db.categories).insert(
+        CategoriesCompanion.insert(
+          name: name,
+          parentId: Value(parentId),
+          color: Value(color),
+        ),
+      );
+      categoryNameToId[name] = id;
+    }
+    debugPrint('✅ Inserted ${categoryNameToId.length} categories (Menu Reyes Nieves).');
+
+    int productCount = 0;
+    for (final group in productsByCategory) {
+      final g = group as Map<String, dynamic>;
+      final categoryName = g['category'] as String?;
+      final items = g['items'] as List<dynamic>? ?? [];
+      final categoryId = categoryName == null ? null : categoryNameToId[categoryName];
+      for (final item in items) {
+        final i = item as Map<String, dynamic>;
+        final name = i['name'] as String;
+        final price = (i['price'] as num).toDouble();
+        await db.into(db.products).insert(
+          ProductsCompanion.insert(
+            name: name,
+            price: price,
+            categoryId: Value(categoryId),
+          ),
+        );
+        productCount++;
+      }
+    }
+    debugPrint('✅ Inserted $productCount products (Menu Reyes Nieves).');
+  }
 
   Future<void> seed() async {
     // 1. Check if initial data exists
@@ -66,6 +165,37 @@ class DatabaseSeeder {
         .getSingleOrNull();
     if (vasoChico != null) {
       debugPrint('Ice Cream & Baguette already seeded. Skipping.');
+      await seedMenuReyesNieves();
+      try {
+        await seedProductWithModifiersFromJson('assets/data/bolis_modifiers.json');
+      } catch (e, st) {
+        debugPrint('Bolis seed error: $e');
+        debugPrint('$st');
+      }
+      try {
+        await seedProductsWithModifiersFromJson('assets/data/paletas_modifiers.json');
+      } catch (e, st) {
+        debugPrint('Paletas seed error: $e');
+        debugPrint('$st');
+      }
+      try {
+        await seedProductsWithModifiersFromJson('assets/data/nieves_modifiers.json');
+      } catch (e, st) {
+        debugPrint('Nieves seed error: $e');
+        debugPrint('$st');
+      }
+      try {
+        await seedProductsWithModifiersFromJson('assets/data/bebidas_leche_modifiers.json');
+      } catch (e, st) {
+        debugPrint('Bebidas leche modifiers seed error: $e');
+        debugPrint('$st');
+      }
+      try {
+        await seedProductsWithModifiersFromJson('assets/data/malteadas_modifiers.json');
+      } catch (e, st) {
+        debugPrint('Malteadas modifiers seed error: $e');
+        debugPrint('$st');
+      }
       return;
     }
 
@@ -318,5 +448,248 @@ class DatabaseSeeder {
     }
 
     debugPrint('✅ Ice Cream & Baguette seeded successfully!');
+
+    // 11. Seed Menu Reyes Nieves (categories + products from JSON) if not already present
+    await seedMenuReyesNieves();
+
+    // 12. Seed products with modifiers from JSON (Boli, Paletas, Nieves)
+    await seedProductWithModifiersFromJson('assets/data/bolis_modifiers.json');
+    await seedProductsWithModifiersFromJson('assets/data/paletas_modifiers.json');
+    try {
+      await seedProductsWithModifiersFromJson('assets/data/nieves_modifiers.json');
+    } catch (e, st) {
+      debugPrint('Nieves seed error: $e');
+      debugPrint('$st');
+    }
+    try {
+      await seedProductsWithModifiersFromJson('assets/data/bebidas_leche_modifiers.json');
+    } catch (e, st) {
+      debugPrint('Bebidas leche modifiers seed error: $e');
+      debugPrint('$st');
+    }
+    try {
+      await seedProductsWithModifiersFromJson('assets/data/malteadas_modifiers.json');
+    } catch (e, st) {
+      debugPrint('Malteadas modifiers seed error: $e');
+      debugPrint('$st');
+    }
+  }
+
+  /// Loads product with modifier groups from JSON (e.g. bolis_modifiers.json). Skips if product already has modifiers.
+  Future<void> seedProductWithModifiersFromJson(String assetPath) async {
+    String jsonString;
+    try {
+      jsonString = await rootBundle.loadString(assetPath);
+    } catch (e) {
+      debugPrint('Could not load $assetPath: $e');
+      return;
+    }
+    final map = jsonDecode(jsonString) as Map<String, dynamic>;
+    await _createProductWithModifiers(map);
+  }
+
+  /// Ensures categories required by nieves_modifiers.json exist (Conos, Vasos, Canastas under Nieves de Garrafa y Paquetes).
+  /// Call before seedProductsWithModifiersFromJson('nieves_modifiers.json') when menu may have been seeded from an old JSON.
+  Future<void> _ensureNievesSubcategories() async {
+    const parentName = 'Nieves de Garrafa y Paquetes';
+    const subNames = ['Conos', 'Vasos', 'Canastas'];
+    const subColors = ['#B0E0E6', '#ADD8E6', '#87CEFA'];
+
+    final parentList = await (db.select(db.categories)
+          ..where((c) => c.name.equals(parentName)))
+        .get();
+    int? parentId;
+    if (parentList.isEmpty) {
+      parentId = await db.into(db.categories).insert(
+        CategoriesCompanion.insert(
+          name: parentName,
+          parentId: const Value(null),
+          color: const Value('#87CEEB'),
+        ),
+      );
+      debugPrint('Created category "$parentName" for nieves subcategories.');
+    } else {
+      parentId = parentList.first.id;
+    }
+
+    for (var i = 0; i < subNames.length; i++) {
+      final name = subNames[i];
+      final list = await (db.select(db.categories)
+            ..where((c) => c.name.equals(name)))
+          .get();
+      if (list.isEmpty) {
+        await db.into(db.categories).insert(
+          CategoriesCompanion.insert(
+            name: name,
+            parentId: Value(parentId),
+            color: Value(subColors[i]),
+          ),
+        );
+        debugPrint('Created category "$name" for nieves products.');
+      }
+    }
+  }
+
+  /// Loads multiple products with modifiers from JSON (e.g. paletas_modifiers.json).
+  /// If the JSON has "flavorOptions" and groups use "optionsRef": "flavorOptions", options are expanded from that list.
+  Future<void> seedProductsWithModifiersFromJson(String assetPath) async {
+    String jsonString;
+    try {
+      jsonString = await rootBundle.loadString(assetPath);
+    } catch (e) {
+      debugPrint('Could not load $assetPath: $e');
+      return;
+    }
+    final map = jsonDecode(jsonString) as Map<String, dynamic>;
+    final list = map['products'] as List<dynamic>? ?? [];
+    final flavorOptions = map['flavorOptions'] as List<dynamic>?;
+
+    if (assetPath.contains('nieves_modifiers')) {
+      await _ensureNievesSubcategories();
+    }
+
+    for (final item in list) {
+      final productMap = Map<String, dynamic>.from(item as Map<String, dynamic>);
+      if (flavorOptions != null) {
+        final groups = productMap['modifierGroups'] as List<dynamic>? ?? [];
+        final newGroups = <Map<String, dynamic>>[];
+        for (final g in groups) {
+          final groupMap = Map<String, dynamic>.from(g as Map<String, dynamic>);
+          final ref = groupMap['optionsRef'] as String?;
+          if (ref == 'flavorOptions' && flavorOptions.isNotEmpty) {
+            groupMap['options'] = List<dynamic>.from(flavorOptions);
+            groupMap.remove('optionsRef');
+          }
+          newGroups.add(groupMap);
+        }
+        productMap['modifierGroups'] = newGroups;
+      }
+      await _createProductWithModifiers(productMap);
+    }
+  }
+
+  Future<void> _createProductWithModifiers(Map<String, dynamic> map) async {
+    final productJson = map['product'] as Map<String, dynamic>?;
+    final groupsJson = map['modifierGroups'] as List<dynamic>? ?? [];
+    if (productJson == null || groupsJson.isEmpty) return;
+
+    final productName = productJson['name'] as String?;
+    final price = (productJson['price'] as num?)?.toDouble() ?? 0.0;
+    final categoryName = productJson['categoryName'] as String?;
+    if (productName == null || productName.isEmpty) return;
+
+    final categoryList = categoryName != null && categoryName.isNotEmpty
+        ? await (db.select(db.categories)
+              ..where((c) => c.name.equals(categoryName)))
+            .get()
+        : <Category>[];
+    final category = categoryList.isNotEmpty ? categoryList.first : null;
+    if (categoryName != null && category == null) {
+      debugPrint('Category "$categoryName" not found. Skipping product "$productName".');
+      return;
+    }
+    final categoryId = category?.id;
+
+    // Remove any existing product with this name (with or without modifiers) so reload from JSON always wins.
+    final existingList = await (db.select(db.products)
+          ..where((p) => p.name.equals(productName)))
+        .get();
+    for (final p in existingList) {
+      final pmLinks = await (db.select(db.productModifiers)
+            ..where((pm) => pm.productId.equals(p.id)))
+          .get();
+      final groupIds = pmLinks.map((pm) => pm.modifierGroupId).toSet().toList();
+      for (final gid in groupIds) {
+        await (db.delete(db.modifierOptions)
+              ..where((o) => o.modifierGroupId.equals(gid)))
+            .go();
+      }
+      await (db.delete(db.productModifiers)..where((pm) => pm.productId.equals(p.id))).go();
+      for (final gid in groupIds) {
+        await (db.delete(db.modifierGroups)..where((g) => g.id.equals(gid))).go();
+      }
+      await (db.delete(db.recipes)..where((r) => r.productId.equals(p.id))).go();
+      await (db.delete(db.products)..where((p2) => p2.id.equals(p.id))).go();
+    }
+
+    final supplyIds = <String, int>{};
+
+    for (final g in groupsJson) {
+      final groupMap = g as Map<String, dynamic>;
+      final options = groupMap['options'] as List<dynamic>? ?? [];
+      for (final o in options) {
+        final opt = o as Map<String, dynamic>;
+        final supplyName = opt['supplyName'] as String? ?? '';
+        if (supplyName.isEmpty || supplyIds.containsKey(supplyName)) continue;
+        final existingList = await (db.select(db.supplies)
+              ..where((s) => s.name.equals(supplyName)))
+            .get();
+        final existing = existingList.isNotEmpty ? existingList.first : null;
+        if (existing != null) {
+          supplyIds[supplyName] = existing.id;
+          continue;
+        }
+        final isBoliType = supplyName.startsWith('Boli Regular') || supplyName.startsWith('Boli Light');
+        final isPaletaType = supplyName.startsWith('Paleta Agua') || supplyName.startsWith('Paleta Forrada');
+        final isNieveType = supplyName.startsWith('Nieve ');
+        final id = await db.into(db.supplies).insert(
+          SuppliesCompanion.insert(
+            name: supplyName,
+            unit: isNieveType ? 'kg' : 'pcs',
+            currentStock: Value(isBoliType || isPaletaType ? 100.0 : (isNieveType ? 50.0 : 0.0)),
+            costPerUnit: const Value(0.0),
+          ),
+        );
+        supplyIds[supplyName] = id;
+      }
+    }
+
+    final productId = await db.into(db.products).insert(
+      ProductsCompanion.insert(
+        name: productName,
+        price: price,
+        categoryId: Value(categoryId),
+      ),
+    );
+
+    for (final g in groupsJson) {
+      final groupMap = g as Map<String, dynamic>;
+      final name = groupMap['name'] as String? ?? '';
+      final minSel = groupMap['minSelection'] as int? ?? 0;
+      final maxSel = groupMap['maxSelection'] as int? ?? 1;
+      final options = groupMap['options'] as List<dynamic>? ?? [];
+
+      final groupId = await db.into(db.modifierGroups).insert(
+        ModifierGroupsCompanion.insert(
+          name: name,
+          minSelection: Value(minSel),
+          maxSelection: maxSel,
+        ),
+      );
+      await db.into(db.productModifiers).insert(
+        ProductModifiersCompanion.insert(
+          productId: productId,
+          modifierGroupId: groupId,
+        ),
+      );
+      for (final o in options) {
+        final opt = o as Map<String, dynamic>;
+        final supplyName = opt['supplyName'] as String? ?? '';
+        final qty = (opt['quantityDeducted'] as num?)?.toDouble() ?? 0.0;
+        final extra = (opt['priceExtra'] as num?)?.toDouble() ?? 0.0;
+        final supplyId = supplyIds[supplyName];
+        if (supplyId == null) continue;
+        await db.into(db.modifierOptions).insert(
+          ModifierOptionsCompanion.insert(
+            modifierGroupId: groupId,
+            supplyId: supplyId,
+            quantityDeducted: qty,
+            priceExtra: Value(extra),
+          ),
+        );
+      }
+    }
+
+    debugPrint('✅ Product "$productName" with modifiers seeded from JSON.');
   }
 }

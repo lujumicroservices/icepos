@@ -3,9 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 
 final _allProductsProvider = StreamProvider<List<Product>>((ref) {
   return ref.watch(posRepositoryProvider).watchAllProducts();
+});
+
+final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
+  return ref.read(posRepositoryProvider).getAllCategories();
 });
 
 class BundleEditorScreen extends ConsumerStatefulWidget {
@@ -14,12 +19,14 @@ class BundleEditorScreen extends ConsumerStatefulWidget {
     this.bundleId,
     this.initialName,
     this.initialPrice,
+    this.initialCategoryId,
     this.initialProductIds = const [],
   });
 
   final int? bundleId;
   final String? initialName;
   final double? initialPrice;
+  final int? initialCategoryId;
   final List<({int productId, double quantity})>? initialProductIds;
 
   @override
@@ -30,6 +37,7 @@ class _BundleEditorScreenState extends ConsumerState<BundleEditorScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _selectedProducts = <int, double>{}; // productId -> quantity
+  int? _selectedCategoryId;
   bool _isSaving = false;
 
   @override
@@ -37,6 +45,7 @@ class _BundleEditorScreenState extends ConsumerState<BundleEditorScreen> {
     super.initState();
     _nameController.text = widget.initialName ?? '';
     _priceController.text = widget.initialPrice?.toStringAsFixed(2) ?? '';
+    _selectedCategoryId = widget.initialCategoryId;
     for (final p in widget.initialProductIds ?? []) {
       _selectedProducts[p.productId] = p.quantity;
     }
@@ -114,6 +123,7 @@ class _BundleEditorScreenState extends ConsumerState<BundleEditorScreen> {
             id: widget.bundleId,
             name: name,
             price: price,
+            categoryId: _selectedCategoryId,
             productItems: _selectedProducts.entries
                 .map((e) => (productId: e.key, quantity: e.value))
                 .toList(),
@@ -189,6 +199,30 @@ class _BundleEditorScreenState extends ConsumerState<BundleEditorScreen> {
                     prefixText: '\$ ',
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 20),
+                ref.watch(_categoriesProvider).when(
+                  data: (categories) => InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int?>(
+                        value: _selectedCategoryId,
+                        isExpanded: true,
+                        items: [
+                          const DropdownMenuItem<int?>(value: null, child: Text('No category')),
+                          ...categories.map(
+                            (c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.name)),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _selectedCategoryId = v),
+                      ),
+                    ),
+                  ),
+                  loading: () => const SizedBox(height: 56, child: Center(child: CircularProgressIndicator())),
+                  error: (_, __) => const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 24),
                 Text(
