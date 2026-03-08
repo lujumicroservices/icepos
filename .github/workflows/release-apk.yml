@@ -32,8 +32,8 @@ on:
       - 'v*'
 
 env:
-  # Flutter 3.32 = Dart 3.8 (freezed 3.2 + riverpod_generator 4 comparten source_gen 3.x)
-  FLUTTER_VERSION: '3.32.0'
+  # Flutter 3.35 = Dart 3.9 (riverpod_generator 4.x → analyzer 8.2+ → SDK 3.9+)
+  FLUTTER_VERSION: '3.35.0'
 
 jobs:
   build-and-release:
