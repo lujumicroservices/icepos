@@ -138,12 +138,12 @@ class ReceiptTicketBuilder {
     // ----- Pie -----
     lines.addAll(generator.hr(ch: '=', linesAfter: 0));
     lines.addAll(generator.text(
-      'Gracias por su compra',
+      'Gracias por tu visita,',
       styles: const PosStyles(align: PosAlign.center, bold: true),
       linesAfter: 0,
     ));
     lines.addAll(generator.text(
-      '¡Vuelva pronto!',
+      'recuerda que siempre hay espacio para otra nieve',
       styles: const PosStyles(align: PosAlign.center),
       linesAfter: 1,
     ));

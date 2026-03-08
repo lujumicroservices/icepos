@@ -5,6 +5,7 @@ import 'package:ice_pos/src/features/pos/data/pos_repository.dart' as pos_data;
 import 'package:ice_pos/src/features/pos/domain/bundle_adjusted_cart.dart';
 import 'package:ice_pos/src/features/pos/domain/bundle_promotion.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart';
+import 'package:ice_pos/src/features/pos/domain/product_discount_rule.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_computer.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_line.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +27,7 @@ final currentReceiptProvider =
     cartState.items,
     bundles,
     cartState.appliedDiscount,
+    productDiscounts: cartState.productDiscounts,
   );
 });
 
@@ -53,7 +55,12 @@ class CartController extends _$CartController {
     }
     final bundles =
         await ref.read(pos_data.posRepositoryProvider).getBundlesWithItems();
-    return computeReceipt(state.items, bundles, state.appliedDiscount);
+    return computeReceipt(
+      state.items,
+      bundles,
+      state.appliedDiscount,
+      productDiscounts: state.productDiscounts,
+    );
   }
 
   void addToCart(
@@ -131,6 +138,34 @@ class CartController extends _$CartController {
     state = state.copyWith(clearDiscount: true);
   }
 
+  /// Aplica un descuento por porcentaje a productos cuyo nombre contenga [nameContains].
+  /// [percentage] 0.20 = 20%. [label] opcional para el ticket (ej. "Día de la mujer").
+  void applyProductDiscount({
+    required String nameContains,
+    required double percentage,
+    String? label,
+  }) {
+    if (nameContains.trim().isEmpty || percentage <= 0 || percentage > 1) return;
+    state = state.copyWith(
+      productDiscounts: [
+        ...state.productDiscounts,
+        ProductDiscountRule(
+          nameContains: nameContains.trim(),
+          percentage: percentage,
+          label: label?.trim().isEmpty == true ? null : label?.trim(),
+        ),
+      ],
+    );
+  }
+
+  /// Quita el descuento por producto en el índice indicado.
+  void removeProductDiscountAt(int index) {
+    if (index < 0 || index >= state.productDiscounts.length) return;
+    final updated = List<ProductDiscountRule>.from(state.productDiscounts)
+      ..removeAt(index);
+    state = state.copyWith(productDiscounts: updated);
+  }
+
   /// Restores a parked order into the cart and removes it from DB.
   Future<void> restoreOrder(ParkedOrder order) async {
     clearCart();
@@ -174,7 +209,7 @@ class CartController extends _$CartController {
         )
         .toList();
 
-    final payload = await ref.read(pos_data.posRepositoryProvider).processSale(
+    await ref.read(pos_data.posRepositoryProvider).processSale(
           items,
           totalAmount: receipt.total,
           paymentMethod: paymentMethod,

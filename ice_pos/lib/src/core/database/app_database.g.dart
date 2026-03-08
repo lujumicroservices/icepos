@@ -795,6 +795,15 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0.0),
   );
+  static const VerificationMeta _categoryMeta = const VerificationMeta('category');
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -803,6 +812,7 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
     unit,
     costPerUnit,
     reorderPoint,
+    category,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -862,6 +872,11 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
         ),
       );
     }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta));
+    }
     return context;
   }
 
@@ -895,6 +910,10 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
         DriftSqlType.double,
         data['${effectivePrefix}reorder_point'],
       )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      ),
     );
   }
 
@@ -911,6 +930,7 @@ class Supply extends DataClass implements Insertable<Supply> {
   final String unit;
   final double costPerUnit;
   final double reorderPoint;
+  final String? category;
   const Supply({
     required this.id,
     required this.name,
@@ -918,6 +938,7 @@ class Supply extends DataClass implements Insertable<Supply> {
     required this.unit,
     required this.costPerUnit,
     required this.reorderPoint,
+    this.category,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -928,6 +949,9 @@ class Supply extends DataClass implements Insertable<Supply> {
     map['unit'] = Variable<String>(unit);
     map['cost_per_unit'] = Variable<double>(costPerUnit);
     map['reorder_point'] = Variable<double>(reorderPoint);
+    if (category != null || !nullToAbsent) {
+      map['category'] = Variable<String>(category);
+    }
     return map;
   }
 
@@ -939,6 +963,7 @@ class Supply extends DataClass implements Insertable<Supply> {
       unit: Value(unit),
       costPerUnit: Value(costPerUnit),
       reorderPoint: Value(reorderPoint),
+      category: category == null && nullToAbsent ? const Value.absent() : Value(category),
     );
   }
 
@@ -954,6 +979,7 @@ class Supply extends DataClass implements Insertable<Supply> {
       unit: serializer.fromJson<String>(json['unit']),
       costPerUnit: serializer.fromJson<double>(json['costPerUnit']),
       reorderPoint: serializer.fromJson<double>(json['reorderPoint']),
+      category: serializer.fromJson<String?>(json['category']),
     );
   }
   @override
@@ -966,6 +992,7 @@ class Supply extends DataClass implements Insertable<Supply> {
       'unit': serializer.toJson<String>(unit),
       'costPerUnit': serializer.toJson<double>(costPerUnit),
       'reorderPoint': serializer.toJson<double>(reorderPoint),
+      'category': serializer.toJson<String?>(category),
     };
   }
 
@@ -976,6 +1003,7 @@ class Supply extends DataClass implements Insertable<Supply> {
     String? unit,
     double? costPerUnit,
     double? reorderPoint,
+    String? category,
   }) => Supply(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -983,6 +1011,7 @@ class Supply extends DataClass implements Insertable<Supply> {
     unit: unit ?? this.unit,
     costPerUnit: costPerUnit ?? this.costPerUnit,
     reorderPoint: reorderPoint ?? this.reorderPoint,
+    category: category ?? this.category,
   );
   Supply copyWithCompanion(SuppliesCompanion data) {
     return Supply(
@@ -998,6 +1027,7 @@ class Supply extends DataClass implements Insertable<Supply> {
       reorderPoint: data.reorderPoint.present
           ? data.reorderPoint.value
           : this.reorderPoint,
+      category: data.category.present ? data.category.value : this.category,
     );
   }
 
@@ -1009,14 +1039,15 @@ class Supply extends DataClass implements Insertable<Supply> {
           ..write('currentStock: $currentStock, ')
           ..write('unit: $unit, ')
           ..write('costPerUnit: $costPerUnit, ')
-          ..write('reorderPoint: $reorderPoint')
+          ..write('reorderPoint: $reorderPoint, ')
+          ..write('category: $category')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, name, currentStock, unit, costPerUnit, reorderPoint);
+      Object.hash(id, name, currentStock, unit, costPerUnit, reorderPoint, category);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1026,7 +1057,8 @@ class Supply extends DataClass implements Insertable<Supply> {
           other.currentStock == this.currentStock &&
           other.unit == this.unit &&
           other.costPerUnit == this.costPerUnit &&
-          other.reorderPoint == this.reorderPoint);
+          other.reorderPoint == this.reorderPoint &&
+          other.category == this.category);
 }
 
 class SuppliesCompanion extends UpdateCompanion<Supply> {
@@ -1036,6 +1068,7 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
   final Value<String> unit;
   final Value<double> costPerUnit;
   final Value<double> reorderPoint;
+  final Value<String?> category;
   const SuppliesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -1043,6 +1076,7 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     this.unit = const Value.absent(),
     this.costPerUnit = const Value.absent(),
     this.reorderPoint = const Value.absent(),
+    this.category = const Value.absent(),
   });
   SuppliesCompanion.insert({
     this.id = const Value.absent(),
@@ -1051,6 +1085,7 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     required String unit,
     this.costPerUnit = const Value.absent(),
     this.reorderPoint = const Value.absent(),
+    this.category = const Value.absent(),
   }) : name = Value(name),
        unit = Value(unit);
   static Insertable<Supply> custom({
@@ -1060,6 +1095,7 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     Expression<String>? unit,
     Expression<double>? costPerUnit,
     Expression<double>? reorderPoint,
+    Expression<String>? category,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1068,6 +1104,7 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
       if (unit != null) 'unit': unit,
       if (costPerUnit != null) 'cost_per_unit': costPerUnit,
       if (reorderPoint != null) 'reorder_point': reorderPoint,
+      if (category != null) 'category': category,
     });
   }
 
@@ -1078,6 +1115,7 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     Value<String>? unit,
     Value<double>? costPerUnit,
     Value<double>? reorderPoint,
+    Value<String?>? category,
   }) {
     return SuppliesCompanion(
       id: id ?? this.id,
@@ -1086,6 +1124,7 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
       unit: unit ?? this.unit,
       costPerUnit: costPerUnit ?? this.costPerUnit,
       reorderPoint: reorderPoint ?? this.reorderPoint,
+      category: category ?? this.category,
     );
   }
 
@@ -1110,6 +1149,9 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     if (reorderPoint.present) {
       map['reorder_point'] = Variable<double>(reorderPoint.value);
     }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
     return map;
   }
 
@@ -1121,7 +1163,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
           ..write('currentStock: $currentStock, ')
           ..write('unit: $unit, ')
           ..write('costPerUnit: $costPerUnit, ')
-          ..write('reorderPoint: $reorderPoint')
+          ..write('reorderPoint: $reorderPoint, ')
+          ..write('category: $category')
           ..write(')'))
         .toString();
   }

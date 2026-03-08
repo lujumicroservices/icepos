@@ -17,8 +17,10 @@ create table if not exists public.supplies (
   current_stock real not null default 0,
   unit text not null,
   cost_per_unit real default 0,
-  reorder_point real default 0
+  reorder_point real default 0,
+  category text
 );
+comment on column public.supplies.category is 'Categoría para agrupar insumos (ej. Lácteos, Sabores). Opcional.';
 
 -- 3. Products
 create table if not exists public.products (
@@ -232,3 +234,15 @@ end;
 $$;
 grant execute on function public.sync_sequences() to anon;
 grant execute on function public.sync_sequences() to authenticated;
+
+-- Migración: agregar columna category a supplies (si ya tenías la tabla sin esta columna, ejecuta esto una vez)
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'supplies' and column_name = 'category'
+  ) then
+    alter table public.supplies add column category text;
+    comment on column public.supplies.category is 'Categoría para agrupar insumos (ej. Lácteos, Sabores). Opcional.';
+  end if;
+end $$;

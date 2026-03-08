@@ -9,6 +9,7 @@ class Supplies extends Table {
   TextColumn get unit => text().withLength(min: 1, max: 10)(); // 'kg', 'lt', 'pcs'
   RealColumn get costPerUnit => real().withDefault(const Constant(0.0))();
   RealColumn get reorderPoint => real().withDefault(const Constant(0.0))(); // Alert threshold
+  TextColumn get category => text().nullable()(); // e.g. "Lácteos", "Sabores" for grouping
 }
 
 // 1.5 CATEGORIES (Menu navigation: Bebidas, Barra Fría, etc.)

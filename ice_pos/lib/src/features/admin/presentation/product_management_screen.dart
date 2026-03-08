@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_editor_screen.dart';
 
 final _allProductsStreamProvider = StreamProvider<List<Product>>((ref) {
@@ -118,7 +119,7 @@ class ProductManagementScreen extends ConsumerWidget {
           }
           return categoriesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) => _flatProductList(context, products),
+            error: (_, __) => _flatProductList(context, ref, products),
             data: (categories) {
               final sections = _groupProductsByCategory(products, categories);
               return ListView(
@@ -130,7 +131,7 @@ class ProductManagementScreen extends ConsumerWidget {
                       count: section.products.length,
                       color: section.color,
                     ),
-                    ...section.products.map((p) => _ProductTile(product: p)),
+                    ...section.products.map((p) => _ProductTile(product: p, ref: ref)),
                   ],
                 ],
               );
@@ -152,11 +153,11 @@ class ProductManagementScreen extends ConsumerWidget {
     );
   }
 
-  Widget _flatProductList(BuildContext context, List<Product> products) {
+  Widget _flatProductList(BuildContext context, WidgetRef ref, List<Product> products) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: products.length,
-      itemBuilder: (context, index) => _ProductTile(product: products[index]),
+      itemBuilder: (context, index) => _ProductTile(product: products[index], ref: ref),
     );
   }
 }
@@ -219,9 +220,77 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _ProductTile extends StatelessWidget {
-  const _ProductTile({required this.product});
+  const _ProductTile({required this.product, required this.ref});
 
   final Product product;
+  final WidgetRef ref;
+
+  Future<void> _toggleActive(BuildContext context, WidgetRef ref) async {
+    await ref.read(posRepositoryProvider).setProductActive(
+          product.id,
+          !product.isActive,
+        );
+    ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            product.isActive ? 'Producto desactivado' : 'Producto activado',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteProduct(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar producto'),
+        content: Text(
+          '¿Eliminar "${product.name}"? Esta acción no se puede deshacer.\n\n'
+          'Si el producto tiene ventas asociadas no se puede eliminar; en ese caso desactívalo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+    try {
+      await ref.read(posRepositoryProvider).deleteProduct(product.id);
+      ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Producto eliminado'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on StateError catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -248,14 +317,44 @@ class _ProductTile extends StatelessWidget {
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
       ),
-      trailing: product.isActive
-          ? null
-          : Chip(
-              label: Text(
-                'Inactive',
-                style: GoogleFonts.inter(fontSize: 12),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!product.isActive)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Chip(
+                label: Text(
+                  'Inactivo',
+                  style: GoogleFonts.inter(fontSize: 12),
+                ),
               ),
             ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) async {
+              if (value == 'toggle') {
+                await _toggleActive(context, ref);
+              } else if (value == 'delete') {
+                await _deleteProduct(context, ref);
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'toggle',
+                child: Text(
+                  product.isActive ? 'Desactivar' : 'Activar',
+                  style: GoogleFonts.inter(),
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text('Eliminar'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

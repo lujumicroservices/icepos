@@ -15,6 +15,8 @@ import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dar
 import 'package:ice_pos/src/features/pos/presentation/checkout_dialog.dart';
 import 'package:ice_pos/src/features/pos/presentation/product_modifier_dialog.dart';
 import 'package:ice_pos/src/features/pos/presentation/qr_scanner_screen.dart';
+import 'package:ice_pos/src/core/l10n/app_localizations.dart';
+import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 
 final _parkedOrdersStreamProvider = StreamProvider<List<ParkedOrder>>((ref) {
   return ref.watch(posRepositoryProvider).watchParkedOrders();
@@ -62,6 +64,7 @@ class PosScreen extends ConsumerWidget {
     final cartState = ref.watch(cartControllerProvider);
     final parkedOrdersAsync = ref.watch(_parkedOrdersStreamProvider);
     final navState = ref.watch(categoryNavigationControllerProvider);
+    final l10n = ref.watch(appLocalizationsProvider);
 
     return Scaffold(
       body: Column(
@@ -146,6 +149,7 @@ class PosScreen extends ConsumerWidget {
                           minHeight: 200,
                         ),
                         child: _CartSummaryPanel(
+                          l10n: l10n,
                           cartState: cartState,
                           receiptAsync: ref.watch(currentReceiptProvider),
                           onRemoveItem: (item) => ref.read(cartControllerProvider.notifier).removeFromCart(item),
@@ -155,83 +159,97 @@ class PosScreen extends ConsumerWidget {
                             if (!context.mounted) return;
                             final paymentData = await showDialog<Map<String, dynamic>>(
                               context: context,
-                              builder: (_) => CheckoutDialog(cartTotal: receipt.total),
+                              builder: (_) => CheckoutDialog(cartTotal: receipt.total, l10n: l10n),
                             );
                             if (paymentData != null && context.mounted) {
+                              showDialog<void>(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (ctx) => PopScope(
+                                  canPop: false,
+                                  child: AlertDialog(
+                                    content: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                        const SizedBox(width: 20),
+                                        Text(
+                                          l10n.processingSale,
+                                          style: GoogleFonts.inter(fontSize: 16),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
                               try {
                                 await ref.read(cartControllerProvider.notifier).completeSale(paymentData);
+                                if (context.mounted) Navigator.of(context).pop();
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: const Text('Venta completada con éxito'),
+                                      content: Text(l10n.saleComplete),
                                       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                       behavior: SnackBarBehavior.floating,
                                     ),
                                   );
                                   final printData = _receiptPrintDataFromReceipt(receipt, paymentData);
-                                  final shouldPrint = await showDialog<bool>(
+                                  showDialog<void>(
                                     context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      title: const Text('Imprimir ticket'),
-                                      content: const Text('¿Deseas imprimir el ticket de la venta?'),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(ctx, false),
-                                          child: const Text('No'),
-                                        ),
-                                        FilledButton(
-                                          onPressed: () => Navigator.pop(ctx, true),
-                                          child: const Text('Sí'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                  if (shouldPrint == true && context.mounted) {
-                                    showDialog<void>(
-                                      context: context,
-                                      barrierDismissible: false,
-                                      builder: (ctx) => PopScope(
-                                        canPop: false,
-                                        child: AlertDialog(
-                                          content: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const SizedBox(
-                                                width: 24,
-                                                height: 24,
-                                                child: CircularProgressIndicator(strokeWidth: 2),
-                                              ),
-                                              const SizedBox(width: 20),
-                                              Text(
-                                                'Imprimiendo ticket...',
-                                                style: GoogleFonts.inter(fontSize: 16),
-                                              ),
-                                            ],
-                                          ),
+                                    barrierDismissible: false,
+                                    builder: (ctx) => PopScope(
+                                      canPop: false,
+                                      child: AlertDialog(
+                                        content: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const SizedBox(
+                                              width: 24,
+                                              height: 24,
+                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                            ),
+                                            const SizedBox(width: 20),
+                                            Text(
+                                              l10n.printingTicket,
+                                              style: GoogleFonts.inter(fontSize: 16),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    );
-                                    final err = await ref.read(receiptPrinterProvider.notifier).printReceipt(printData);
-                                    if (context.mounted) Navigator.of(context).pop();
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            err != null ? 'Impresión: $err' : 'Ticket enviado a impresora',
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          backgroundColor: err != null
-                                              ? Theme.of(context).colorScheme.error
-                                              : Theme.of(context).colorScheme.primaryContainer,
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                    }
+                                    ),
+                                  );
+                                  String? printErr;
+                                  try {
+                                    printErr = await ref.read(receiptPrinterProvider.notifier).printReceipt(printData);
+                                  } catch (_) {
+                                    printErr = l10n.printError;
                                   }
+                                  if (context.mounted) Navigator.of(context).pop();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          printErr != null
+                                              ? '${l10n.saleCompletePrintError}: $printErr'
+                                              : l10n.ticketSent,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      backgroundColor: printErr != null
+                                          ? Theme.of(context).colorScheme.error
+                                          : Theme.of(context).colorScheme.primaryContainer,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
                                 }
-                              } catch (e, st) {
+                              }
+                            } catch (e, st) {
                                 debugPrint('Checkout error: $e\n$st');
+                                if (context.mounted) Navigator.of(context).pop();
                                 if (context.mounted) {
                                   final msg = e is StateError
                                       ? e.message
@@ -258,6 +276,9 @@ class PosScreen extends ConsumerWidget {
                           onRemoveDiscount: () => ref
                               .read(cartControllerProvider.notifier)
                               .removeDiscount(),
+                          onRemoveProductDiscountAt: (i) => ref
+                              .read(cartControllerProvider.notifier)
+                              .removeProductDiscountAt(i),
                           scrollable: true,
                         ),
                       ),
@@ -318,6 +339,7 @@ class PosScreen extends ConsumerWidget {
                     Expanded(
                       flex: 4,
                       child: _CartSummaryPanel(
+                        l10n: l10n,
                         cartState: cartState,
                         receiptAsync: ref.watch(currentReceiptProvider),
                         onRemoveItem: (item) => ref.read(cartControllerProvider.notifier).removeFromCart(item),
@@ -327,83 +349,97 @@ class PosScreen extends ConsumerWidget {
                           if (!context.mounted) return;
                           final paymentData = await showDialog<Map<String, dynamic>>(
                             context: context,
-                            builder: (_) => CheckoutDialog(cartTotal: receipt.total),
+                            builder: (_) => CheckoutDialog(cartTotal: receipt.total, l10n: l10n),
                           );
                           if (paymentData != null && context.mounted) {
+                            showDialog<void>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (ctx) => PopScope(
+                                canPop: false,
+                                child: AlertDialog(
+                                  content: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                      const SizedBox(width: 20),
+                                      Text(
+                                        l10n.processingSale,
+                                        style: GoogleFonts.inter(fontSize: 16),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
                             try {
                               await ref.read(cartControllerProvider.notifier).completeSale(paymentData);
+                              if (context.mounted) Navigator.of(context).pop();
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: const Text('Venta completada con éxito'),
+                                    content: Text(l10n.saleComplete),
                                     backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
                                 final printData = _receiptPrintDataFromReceipt(receipt, paymentData);
-                                final shouldPrint = await showDialog<bool>(
+                                showDialog<void>(
                                   context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Text('Imprimir ticket'),
-                                    content: const Text('¿Deseas imprimir el ticket de la venta?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(ctx, false),
-                                        child: const Text('No'),
-                                      ),
-                                      FilledButton(
-                                        onPressed: () => Navigator.pop(ctx, true),
-                                        child: const Text('Sí'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (shouldPrint == true && context.mounted) {
-                                  showDialog<void>(
-                                    context: context,
-                                    barrierDismissible: false,
-                                    builder: (ctx) => PopScope(
-                                      canPop: false,
-                                      child: AlertDialog(
-                                        content: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                              child: CircularProgressIndicator(strokeWidth: 2),
-                                            ),
-                                            const SizedBox(width: 20),
-                                            Text(
-                                              'Imprimiendo ticket...',
-                                              style: GoogleFonts.inter(fontSize: 16),
-                                            ),
-                                          ],
-                                        ),
+                                  barrierDismissible: false,
+                                  builder: (ctx) => PopScope(
+                                    canPop: false,
+                                    child: AlertDialog(
+                                      content: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                          const SizedBox(width: 20),
+                                          Text(
+                                            l10n.printingTicket,
+                                            style: GoogleFonts.inter(fontSize: 16),
+                                          ),
+                                        ],
                                       ),
                                     ),
+                                  ),
+                                );
+                                String? printErr;
+                                try {
+                                  printErr = await ref.read(receiptPrinterProvider.notifier).printReceipt(printData);
+                                } catch (_) {
+                                  printErr = l10n.printError;
+                                }
+                                if (context.mounted) Navigator.of(context).pop();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        printErr != null
+                                            ? '${l10n.saleCompletePrintError}: $printErr'
+                                            : l10n.ticketSent,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                      backgroundColor: printErr != null
+                                          ? Theme.of(context).colorScheme.error
+                                          : Theme.of(context).colorScheme.primaryContainer,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
                                   );
-                                  final err = await ref.read(receiptPrinterProvider.notifier).printReceipt(printData);
-                                  if (context.mounted) Navigator.of(context).pop();
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          err != null ? 'Impresión: $err' : 'Ticket enviado a impresora',
-                                          maxLines: 3,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        backgroundColor: err != null
-                                            ? Theme.of(context).colorScheme.error
-                                            : Theme.of(context).colorScheme.primaryContainer,
-                                        behavior: SnackBarBehavior.floating,
-                                      ),
-                                    );
-                                  }
                                 }
                               }
                             } catch (e, st) {
                               debugPrint('Checkout error: $e\n$st');
+                              if (context.mounted) Navigator.of(context).pop();
                               if (context.mounted) {
                                 final msg = e is StateError
                                     ? e.message
@@ -430,6 +466,9 @@ class PosScreen extends ConsumerWidget {
                         onRemoveDiscount: () => ref
                             .read(cartControllerProvider.notifier)
                             .removeDiscount(),
+                        onRemoveProductDiscountAt: (i) => ref
+                            .read(cartControllerProvider.notifier)
+                            .removeProductDiscountAt(i),
                         scrollable: false,
                       ),
                     ),
@@ -555,70 +594,175 @@ void _scanAndApplyDiscount(BuildContext context, WidgetRef ref) async {
 }
 
 void _showDiscountDialog(BuildContext context, WidgetRef ref) async {
-  final controller = TextEditingController();
-  final result = await showDialog<String>(
+  final codeController = TextEditingController();
+  final pctController = TextEditingController();
+  final nameContainsController = TextEditingController();
+  final labelController = TextEditingController();
+
+  final result = await showDialog<Object>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Apply Discount'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Discount Code',
-              hintText: 'e.g. SCHOOL_CAMPO_VERDE',
-              border: OutlineInputBorder(),
+      title: const Text('Descuentos'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Por código',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
             ),
-            textCapitalization: TextCapitalization.characters,
-            autocorrect: false,
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final code = await Navigator.push<String>(
-                ctx,
-                MaterialPageRoute<String>(
-                  builder: (_) => const QrScannerScreen(),
-                ),
-              );
-              if (code != null && code.isNotEmpty && ctx.mounted) {
-                Navigator.pop(ctx, code);
-              }
-            },
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan QR'),
-          ),
-        ],
+            const SizedBox(height: 8),
+            TextField(
+              controller: codeController,
+              decoration: const InputDecoration(
+                labelText: 'Código de descuento',
+                hintText: 'ej. SCHOOL_CAMPO_VERDE',
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.characters,
+              autocorrect: false,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final code = await Navigator.push<String>(
+                  ctx,
+                  MaterialPageRoute<String>(
+                    builder: (_) => const QrScannerScreen(),
+                  ),
+                );
+                if (code != null && code.isNotEmpty && ctx.mounted) {
+                  codeController.text = code;
+                }
+              },
+              icon: const Icon(Icons.qr_code_scanner, size: 20),
+              label: const Text('Escanear QR'),
+            ),
+            const SizedBox(height: 20),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            Text(
+              'Descuento en producto',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: pctController,
+              decoration: const InputDecoration(
+                labelText: 'Porcentaje (ej. 20)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: nameContainsController,
+              decoration: const InputDecoration(
+                labelText: 'Aplicar a productos que contengan',
+                hintText: 'ej. nieve',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: labelController,
+              decoration: const InputDecoration(
+                labelText: 'Etiqueta (opcional, ej. Día de la mujer)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
+          child: const Text('Cerrar'),
+        ),
+        OutlinedButton(
+          onPressed: () {
+            final code = codeController.text.trim();
+            if (code.isNotEmpty) Navigator.pop(ctx, _DiscountResultCode(code));
+          },
+          child: const Text('Aplicar código'),
         ),
         FilledButton(
           onPressed: () {
-            final code = controller.text.trim();
-            if (code.isNotEmpty) {
-              Navigator.pop(ctx, code);
-            }
+            final pctStr = pctController.text.trim();
+            final nameContains = nameContainsController.text.trim();
+            if (nameContains.isEmpty) return;
+            final pct = double.tryParse(pctStr);
+            if (pct == null || pct <= 0 || pct > 100) return;
+            Navigator.pop(ctx, _DiscountResultProduct(
+              percentage: pct / 100,
+              nameContains: nameContains,
+              label: labelController.text.trim().isEmpty
+                  ? null
+                  : labelController.text.trim(),
+            ));
           },
-          child: const Text('Apply'),
+          child: const Text('Descuento en producto'),
         ),
       ],
     ),
   );
-  if (result != null && result.isNotEmpty && context.mounted) {
-    final ok = await ref.read(cartControllerProvider.notifier).applyDiscount(result);
+
+  if (!context.mounted) return;
+  if (result == null) return;
+
+  if (result is _DiscountResultCode) {
+    final ok = await ref.read(cartControllerProvider.notifier).applyDiscount(result.code);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? 'Discount applied' : 'Invalid discount code'),
+          content: Text(ok ? 'Código aplicado' : 'Código inválido'),
           backgroundColor: ok ? null : Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
+    return;
   }
+  if (result is _DiscountResultProduct) {
+    ref.read(cartControllerProvider.notifier).applyProductDiscount(
+      nameContains: result.nameContains,
+      percentage: result.percentage,
+      label: result.label,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Descuento ${(result.percentage * 100).toStringAsFixed(0)}% aplicado a productos que contengan "${result.nameContains}"',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _DiscountResultCode {
+  const _DiscountResultCode(this.code);
+  final String code;
+}
+
+class _DiscountResultProduct {
+  const _DiscountResultProduct({
+    required this.percentage,
+    required this.nameContains,
+    this.label,
+  });
+  final double percentage;
+  final String nameContains;
+  final String? label;
 }
 
 String _timeAgo(DateTime dt) {
@@ -1338,6 +1482,7 @@ class _TotalsRow extends StatelessWidget {
 
 class _CartSummaryPanel extends StatelessWidget {
   const _CartSummaryPanel({
+    required this.l10n,
     required this.cartState,
     required this.receiptAsync,
     required this.onRemoveItem,
@@ -1346,9 +1491,11 @@ class _CartSummaryPanel extends StatelessWidget {
     required this.onDiscountTap,
     required this.onScanDiscount,
     required this.onRemoveDiscount,
+    required this.onRemoveProductDiscountAt,
     this.scrollable = false,
   });
 
+  final AppLocalizations l10n;
   final CartState cartState;
   final AsyncValue<ReceiptResult> receiptAsync;
   final void Function(CartItem item) onRemoveItem;
@@ -1357,6 +1504,7 @@ class _CartSummaryPanel extends StatelessWidget {
   final VoidCallback onDiscountTap;
   final VoidCallback onScanDiscount;
   final VoidCallback onRemoveDiscount;
+  final void Function(int index) onRemoveProductDiscountAt;
   final bool scrollable;
 
   @override
@@ -1393,7 +1541,7 @@ class _CartSummaryPanel extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Text(
-            'Carrito',
+            l10n.cart,
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -1410,7 +1558,7 @@ class _CartSummaryPanel extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Center(
                 child: Text(
-                  'Error al cargar',
+                  l10n.errorLoading,
                   style: GoogleFonts.inter(
                     color: Theme.of(context).colorScheme.error,
                     fontSize: 14,
@@ -1424,7 +1572,7 @@ class _CartSummaryPanel extends StatelessWidget {
                   padding: const EdgeInsets.all(24),
                   child: Center(
                     child: Text(
-                      'Carrito vacío',
+                      l10n.cartEmpty,
                       style: GoogleFonts.inter(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 14,
@@ -1459,7 +1607,7 @@ class _CartSummaryPanel extends StatelessWidget {
               ),
               error: (_, __) => Center(
                 child: Text(
-                  'Error loading receipt',
+                  l10n.errorLoading,
                   style: GoogleFonts.inter(
                     color: Theme.of(context).colorScheme.error,
                     fontSize: 14,
@@ -1470,7 +1618,7 @@ class _CartSummaryPanel extends StatelessWidget {
                 if (items.isEmpty) {
                   return Center(
                     child: Text(
-                      'Carrito vacío',
+                      l10n.cartEmpty,
                       style: GoogleFonts.inter(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 16,
@@ -1496,9 +1644,9 @@ class _CartSummaryPanel extends StatelessWidget {
           child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TotalsRow(label: 'Bundles', value: '\$${bundleTotal.toStringAsFixed(2)}'),
+                _TotalsRow(label: l10n.bundles, value: '\$${bundleTotal.toStringAsFixed(2)}'),
                 _TotalsRow(
-                  label: 'Subtotal (Other)',
+                  label: l10n.subtotalOther,
                   value: '\$${standaloneSubtotal.toStringAsFixed(2)}',
                 ),
                 if (cartState.appliedDiscount != null) ...[
@@ -1507,7 +1655,7 @@ class _CartSummaryPanel extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'Discount (${(cartState.appliedDiscount!.percentage * 100).toStringAsFixed(0)}%)',
+                          '${l10n.discountPercent} (${(cartState.appliedDiscount!.percentage * 100).toStringAsFixed(0)}%)',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: Colors.green.shade700,
@@ -1527,12 +1675,42 @@ class _CartSummaryPanel extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.close, size: 18),
                         onPressed: onRemoveDiscount,
-                        tooltip: 'Remove discount',
+                        tooltip: l10n.removeDiscount,
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                 ],
+                ...List.generate(cartState.productDiscounts.length, (index) {
+                  final rule = cartState.productDiscounts[index];
+                  final label = rule.label?.isNotEmpty == true
+                      ? '${rule.label}'
+                      : "'${rule.nameContains}'";
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${(rule.percentage * 100).toStringAsFixed(0)}% ${l10n.productDiscountLabel} $label',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => onRemoveProductDiscountAt(index),
+                          tooltip: l10n.removeDiscount,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
                 const Divider(height: 1),
                 const SizedBox(height: 8),
                 Row(
@@ -1541,7 +1719,7 @@ class _CartSummaryPanel extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          'Total',
+                          l10n.total,
                           style: GoogleFonts.inter(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -1550,12 +1728,12 @@ class _CartSummaryPanel extends StatelessWidget {
                         IconButton(
                           icon: const Icon(Icons.confirmation_number_outlined),
                           onPressed: onDiscountTap,
-                          tooltip: 'Apply Discount',
+                          tooltip: l10n.applyDiscount,
                         ),
                         TextButton.icon(
                           onPressed: onScanDiscount,
                           icon: const Icon(Icons.qr_code_scanner, size: 20),
-                          label: const Text('Scan Discount'),
+                          label: Text(l10n.scanDiscount),
                         ),
                       ],
                     ),
@@ -1575,7 +1753,7 @@ class _CartSummaryPanel extends StatelessWidget {
                     IconButton.filled(
                       onPressed: items.isEmpty ? null : onPark,
                       icon: const Icon(Icons.pause_circle_outline),
-                      tooltip: 'Park Order',
+                      tooltip: l10n.park,
                       style: IconButton.styleFrom(
                         padding: const EdgeInsets.all(16),
                         shape: RoundedRectangleBorder(
@@ -1594,7 +1772,7 @@ class _CartSummaryPanel extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          'Checkout',
+                          l10n.checkout,
                           style: GoogleFonts.inter(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,

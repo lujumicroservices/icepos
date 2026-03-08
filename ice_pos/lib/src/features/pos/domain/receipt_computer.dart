@@ -1,14 +1,17 @@
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart';
+import 'package:ice_pos/src/features/pos/domain/product_discount_rule.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_line.dart';
 
 /// Computes receipt lines using a strict Quantity Map (inventory) approach.
 /// Prevents double-counting by decrementing inventory when bundles are applied.
+/// [productDiscounts]: descuentos por producto (ej. 20% en productos que contengan "nieve").
 ReceiptResult computeReceipt(
   List<CartItem> items,
   List<({Bundle bundle, List<BundleItem> bundleItems})> bundlesWithItems,
-  Discount? appliedDiscount,
-) {
+  Discount? appliedDiscount, {
+  List<ProductDiscountRule> productDiscounts = const [],
+}) {
   final lines = <ReceiptLine>[];
   var standaloneSubtotal = 0.0;
 
@@ -93,7 +96,7 @@ ReceiptResult computeReceipt(
     ));
   }
 
-  // Apply QR discount ONLY to leftover lines
+  // Apply QR/code discount ONLY to leftover lines
   var total = lines.fold<double>(0.0, (s, l) => s + l.amount);
   if (appliedDiscount != null && standaloneSubtotal > 0) {
     final discountAmount = standaloneSubtotal * appliedDiscount.percentage;
@@ -105,6 +108,31 @@ ReceiptResult computeReceipt(
       quantity: 1,
     ));
   }
+
+  // Apply product discounts: match by name (e.g. 20% on "nieve" → Cono Chico, Vaso Grande, etc.)
+  final discountLinesToAdd = <ReceiptLine>[];
+  for (final line in lines) {
+    if (line.isBundle) continue;
+    final nameLower = line.description.toLowerCase();
+    for (final rule in productDiscounts) {
+      if (rule.nameContains.trim().isEmpty) continue;
+      if (!nameLower.contains(rule.nameContains.trim().toLowerCase())) continue;
+      final discountAmount = line.amount * rule.percentage;
+      if (discountAmount <= 0) continue;
+      final label = rule.label?.trim().isNotEmpty == true
+          ? rule.label!.trim()
+          : rule.nameContains.trim();
+      discountLinesToAdd.add(ReceiptLine(
+        description: 'Descuento ${(rule.percentage * 100).toStringAsFixed(0)}% ($label)',
+        amount: -discountAmount,
+        isBundle: false,
+        quantity: 1,
+      ));
+      total -= discountAmount;
+      break; // one rule per line
+    }
+  }
+  lines.addAll(discountLinesToAdd);
 
   return ReceiptResult(
     lines: lines,

@@ -76,6 +76,7 @@ class CloudSyncService {
           currentStock: Value(_double(row['current_stock'])),
           costPerUnit: Value(_double(row['cost_per_unit'])),
           reorderPoint: Value(_double(row['reorder_point'])),
+          category: Value(row['category'] as String?),
         ));
       }
 
@@ -317,6 +318,7 @@ class CloudSyncService {
         'current_stock': s.currentStock,
         'cost_per_unit': s.costPerUnit,
         'reorder_point': s.reorderPoint,
+        'category': s.category,
       }).toList();
       if (supplyRows.isNotEmpty) {
         await client.from('supplies').upsert(supplyRows, onConflict: 'id');

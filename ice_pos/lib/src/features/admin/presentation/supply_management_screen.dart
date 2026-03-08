@@ -6,8 +6,13 @@ import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 const _units = ['kg', 'lt', 'pz', 'pcs', 'g', 'ml'];
 
-final _suppliesStreamProvider = StreamProvider<List<Supply>>((ref) {
-  return ref.watch(posRepositoryProvider).watchSupplies();
+final _suppliesGroupedProvider =
+    FutureProvider<List<({String name, List<Supply> supplies})>>((ref) {
+  return ref.read(posRepositoryProvider).getSuppliesGroupedByCategory();
+});
+
+final _supplyCategoryNamesProvider = FutureProvider<List<String>>((ref) {
+  return ref.read(posRepositoryProvider).getSupplyCategoryNames();
 });
 
 class SupplyManagementScreen extends ConsumerWidget {
@@ -15,12 +20,12 @@ class SupplyManagementScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final suppliesAsync = ref.watch(_suppliesStreamProvider);
+    final groupedAsync = ref.watch(_suppliesGroupedProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Supply Management',
+          'Insumos',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w600,
             fontSize: 20,
@@ -29,7 +34,7 @@ class SupplyManagementScreen extends ConsumerWidget {
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
       ),
-      body: suppliesAsync.when(
+      body: groupedAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
           child: Padding(
@@ -44,7 +49,7 @@ class SupplyManagementScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Error loading supplies',
+                  'Error al cargar insumos',
                   style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -60,11 +65,11 @@ class SupplyManagementScreen extends ConsumerWidget {
             ),
           ),
         ),
-        data: (supplies) {
-          if (supplies.isEmpty) {
+        data: (sections) {
+          if (sections.isEmpty) {
             return Center(
               child: Text(
-                'No supplies. Tap + to add.',
+                'No hay insumos. Toca + para agregar.',
                 style: GoogleFonts.inter(
                   fontSize: 18,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -72,88 +77,31 @@ class SupplyManagementScreen extends ConsumerWidget {
               ),
             );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: supplies.length,
-            itemBuilder: (context, index) {
-              final supply = supplies[index];
-              final isLowStock = supply.currentStock <= supply.reorderPoint;
-
-              return Dismissible(
-                key: ValueKey(supply.id),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  color: Theme.of(context).colorScheme.error,
-                  child: const Icon(Icons.delete, color: Colors.white, size: 32),
-                ),
-                confirmDismiss: (direction) async {
-                  return await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Delete Supply'),
-                      content: Text(
-                        'Delete "${supply.name}"? This cannot be undone.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(false),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.of(ctx).pop(true),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Theme.of(context).colorScheme.error,
-                          ),
-                          child: const Text('Delete'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                onDismissed: (_) async {
-                  await ref.read(posRepositoryProvider).deleteSupply(supply.id);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Deleted ${supply.name}')),
-                    );
-                  }
-                },
-                child: ListTile(
-                  onTap: () => _showSupplyDialog(
-                    context: context,
-                    ref: ref,
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 80),
+            children: [
+              for (final section in sections) ...[
+                _SectionHeader(name: section.name, count: section.supplies.length),
+                ...section.supplies.map(
+                  (supply) => _SupplyTile(
                     supply: supply,
-                  ),
-                  title: Text(
-                    supply.name,
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '${supply.currentStock.toStringAsFixed(1)} ${supply.unit}'
-                    '${supply.reorderPoint > 0 ? ' · Reorder at ${supply.reorderPoint}' : ''}',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: isLowStock
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: isLowStock ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                  trailing: Text(
-                    '\$${supply.costPerUnit.toStringAsFixed(2)}/${supply.unit}',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    onTap: () => _showSupplyDialog(context: context, ref: ref, supply: supply),
+                    onDismiss: () async {
+                      await ref.read(posRepositoryProvider).deleteSupply(supply.id);
+                      ref.invalidate(_suppliesGroupedProvider);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Eliminado: ${supply.name}'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
                   ),
                 ),
-              );
-            },
+              ],
+            ],
           );
         },
       ),
@@ -173,19 +121,24 @@ class SupplyManagementScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => _SupplyFormDialog(
         supply: supply,
-        onSave: (name, unit, costPerUnit, reorderPoint) async {
+        categoryNames: ref.read(_supplyCategoryNamesProvider).value ?? [],
+        onSave: (name, unit, costPerUnit, reorderPoint, category) async {
           await ref.read(posRepositoryProvider).saveSupply(
                 id: supply?.id,
                 name: name,
                 unit: unit,
                 costPerUnit: costPerUnit,
                 reorderPoint: reorderPoint,
+                category: category?.trim().isEmpty == true ? null : category?.trim(),
               );
+          ref.invalidate(_suppliesGroupedProvider);
+          ref.invalidate(_supplyCategoryNamesProvider);
           if (ctx.mounted) Navigator.of(ctx).pop();
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(supply == null ? 'Supply created' : 'Supply updated'),
+                content: Text(supply == null ? 'Insumo creado' : 'Insumo actualizado'),
+                behavior: SnackBarBehavior.floating,
               ),
             );
           }
@@ -195,18 +148,146 @@ class SupplyManagementScreen extends ConsumerWidget {
   }
 }
 
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.name, required this.count});
+
+  final String name;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            name,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '($count)',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupplyTile extends StatelessWidget {
+  const _SupplyTile({
+    required this.supply,
+    required this.onTap,
+    required this.onDismiss,
+  });
+
+  final Supply supply;
+  final VoidCallback onTap;
+  final Future<void> Function() onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLowStock = supply.currentStock <= supply.reorderPoint;
+
+    return Dismissible(
+      key: ValueKey(supply.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Theme.of(context).colorScheme.error,
+        child: const Icon(Icons.delete, color: Colors.white, size: 32),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Eliminar insumo'),
+            content: Text(
+              '¿Eliminar "${supply.name}"? No se puede deshacer.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                ),
+                child: const Text('Eliminar'),
+              ),
+            ],
+          ),
+        );
+      },
+      onDismissed: (_) => onDismiss(),
+      child: ListTile(
+        onTap: onTap,
+        title: Text(
+          supply.name,
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          '${supply.currentStock.toStringAsFixed(1)} ${supply.unit}'
+          '${supply.reorderPoint > 0 ? ' · Reorden en ${supply.reorderPoint}' : ''}',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            color: isLowStock
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: isLowStock ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        trailing: Text(
+          '\$${supply.costPerUnit.toStringAsFixed(2)}/${supply.unit}',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SupplyFormDialog extends StatefulWidget {
   const _SupplyFormDialog({
     this.supply,
+    required this.categoryNames,
     required this.onSave,
   });
 
   final Supply? supply;
+  final List<String> categoryNames;
   final Future<void> Function(
     String name,
     String unit,
     double costPerUnit,
     double reorderPoint,
+    String? category,
   ) onSave;
 
   @override
@@ -217,6 +298,7 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _costController;
   late final TextEditingController _reorderController;
+  late final TextEditingController _categoryController;
   late String _selectedUnit;
   bool _isSaving = false;
 
@@ -230,6 +312,7 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
     _reorderController = TextEditingController(
       text: widget.supply?.reorderPoint.toStringAsFixed(1) ?? '0',
     );
+    _categoryController = TextEditingController(text: widget.supply?.category ?? '');
     _selectedUnit = widget.supply?.unit ?? _units.first;
     if (!_units.contains(_selectedUnit)) _selectedUnit = _units.first;
   }
@@ -239,6 +322,7 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
     _nameController.dispose();
     _costController.dispose();
     _reorderController.dispose();
+    _categoryController.dispose();
     super.dispose();
   }
 
@@ -246,30 +330,32 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name is required')),
+        const SnackBar(content: Text('El nombre es obligatorio')),
       );
       return;
     }
 
-    final cost = double.tryParse(_costController.text);
+    final cost = double.tryParse(_costController.text.replaceFirst(',', '.'));
     if (cost == null || cost < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid cost per unit')),
+        const SnackBar(content: Text('Costo por unidad inválido')),
       );
       return;
     }
 
-    final reorder = double.tryParse(_reorderController.text) ?? 0;
+    final reorder = double.tryParse(_reorderController.text.replaceFirst(',', '.')) ?? 0;
+    final category = _categoryController.text.trim();
+    final categoryOrNull = category.isEmpty ? null : category;
 
     setState(() => _isSaving = true);
-    await widget.onSave(name, _selectedUnit, cost, reorder);
+    await widget.onSave(name, _selectedUnit, cost, reorder, categoryOrNull);
     if (mounted) setState(() => _isSaving = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.supply == null ? 'New Supply' : 'Edit Supply'),
+      title: Text(widget.supply == null ? 'Nuevo insumo' : 'Editar insumo'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -277,16 +363,35 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
-                labelText: 'Name',
+                labelText: 'Nombre',
                 border: OutlineInputBorder(),
               ),
               textCapitalization: TextCapitalization.words,
               autofocus: widget.supply == null,
             ),
             const SizedBox(height: 16),
+            TextField(
+              controller: _categoryController,
+              decoration: InputDecoration(
+                labelText: 'Categoría (opcional)',
+                hintText: 'Ej. Lácteos, Sabores',
+                border: const OutlineInputBorder(),
+                suffixIcon: widget.categoryNames.isEmpty
+                    ? null
+                    : PopupMenuButton<String>(
+                        icon: const Icon(Icons.arrow_drop_down),
+                        onSelected: (v) => _categoryController.text = v,
+                        itemBuilder: (_) => widget.categoryNames
+                            .map((c) => PopupMenuItem(value: c, child: Text(c)))
+                            .toList(),
+                      ),
+              ),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 16),
             InputDecorator(
               decoration: const InputDecoration(
-                labelText: 'Unit',
+                labelText: 'Unidad',
                 border: OutlineInputBorder(),
               ),
               child: DropdownButtonHideUnderline(
@@ -305,9 +410,9 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
             TextField(
               controller: _costController,
               decoration: const InputDecoration(
-                labelText: 'Cost per Unit',
+                labelText: 'Costo por unidad',
                 border: OutlineInputBorder(),
-                prefixText: '\$ ',
+                prefixText: r'$ ',
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
@@ -315,9 +420,9 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
             TextField(
               controller: _reorderController,
               decoration: const InputDecoration(
-                labelText: 'Reorder Point (alert threshold)',
+                labelText: 'Punto de reorden (alerta)',
                 border: OutlineInputBorder(),
-                hintText: '0 = no alert',
+                hintText: '0 = sin alerta',
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
@@ -327,7 +432,7 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
       actions: [
         TextButton(
           onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: const Text('Cancelar'),
         ),
         FilledButton(
           onPressed: _isSaving ? null : _onSave,
@@ -337,7 +442,7 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Save'),
+              : const Text('Guardar'),
         ),
       ],
     );

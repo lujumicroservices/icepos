@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 
 /// Payment method for checkout.
 enum PaymentMethod {
@@ -51,9 +52,11 @@ class CheckoutDialog extends StatefulWidget {
   const CheckoutDialog({
     super.key,
     required this.cartTotal,
+    this.l10n,
   });
 
   final double cartTotal;
+  final AppLocalizations? l10n;
 
   @override
   State<CheckoutDialog> createState() => _CheckoutDialogState();
@@ -100,11 +103,15 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     _amountController.text = value.toStringAsFixed(2);
   }
 
+  AppLocalizations get _l10n =>
+      widget.l10n ?? AppLocalizations(const Locale('es'));
+
   @override
   Widget build(BuildContext context) {
+    final l10n = _l10n;
     return AlertDialog(
       title: Text(
-        'Checkout',
+        l10n.checkout,
         style: GoogleFonts.inter(fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
@@ -113,7 +120,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Total: \$${widget.cartTotal.toStringAsFixed(2)}',
+              '${l10n.total}: \$${widget.cartTotal.toStringAsFixed(2)}',
               style: GoogleFonts.inter(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -125,7 +132,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               children: [
                 Expanded(
                   child: _MethodChip(
-                    label: 'Cash',
+                    label: l10n.cash,
                     icon: Icons.payments,
                     selected: _selectedMethod == PaymentMethod.cash,
                     onTap: () => setState(() => _selectedMethod = PaymentMethod.cash),
@@ -134,7 +141,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _MethodChip(
-                    label: 'Card',
+                    label: l10n.card,
                     icon: Icons.credit_card,
                     selected: _selectedMethod == PaymentMethod.card,
                     onTap: () => setState(() => _selectedMethod = PaymentMethod.card),
@@ -143,7 +150,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _MethodChip(
-                    label: 'Transfer',
+                    label: l10n.transfer,
                     icon: Icons.phone_android,
                     selected: _selectedMethod == PaymentMethod.transfer,
                     onTap: () => setState(() => _selectedMethod = PaymentMethod.transfer),
@@ -161,7 +168,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: GoogleFonts.inter()),
+          child: Text(_l10n.cancel, style: GoogleFonts.inter()),
         ),
         FilledButton(
           onPressed: _canConfirm
@@ -178,19 +185,20 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   });
                 }
               : null,
-          child: Text('Confirm Sale', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          child: Text(_l10n.confirmSale, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         ),
       ],
     );
   }
 
   Widget _buildCashSection() {
+    final l10n = _l10n;
     final change = _amountReceived - widget.cartTotal;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Cantidad Recibida',
+          l10n.amountReceived,
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w600,
             fontSize: 14,
@@ -217,7 +225,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           children: [
             FilledButton.tonal(
               onPressed: () => _setAmount(widget.cartTotal),
-              child: const Text('Exact Amount'),
+              child: Text(l10n.exactAmount),
             ),
             FilledButton.tonal(
               onPressed: () => _setAmount(100),
@@ -236,7 +244,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         if (_amountReceived > 0) ...[
           const SizedBox(height: 16),
           Text(
-            'Change: \$${change >= 0 ? change.toStringAsFixed(2) : '0.00'}',
+            '${l10n.change}: \$${change >= 0 ? change.toStringAsFixed(2) : '0.00'}',
             style: GoogleFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -251,11 +259,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   }
 
   Widget _buildCardSection() {
+    final l10n = _l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Card type',
+          '${l10n.card} (${l10n.debit}/${l10n.credit})',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w600,
             fontSize: 14,
@@ -266,16 +275,16 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           children: [
             Expanded(
               child: SegmentedButton<CardType>(
-                segments: const [
+                segments: [
                   ButtonSegment<CardType>(
                     value: CardType.debit,
-                    label: Text('Debit'),
-                    icon: Icon(Icons.account_balance_wallet_outlined),
+                    label: Text(l10n.debit),
+                    icon: const Icon(Icons.account_balance_wallet_outlined),
                   ),
                   ButtonSegment<CardType>(
                     value: CardType.credit,
-                    label: Text('Credit'),
-                    icon: Icon(Icons.credit_card_outlined),
+                    label: Text(l10n.credit),
+                    icon: const Icon(Icons.credit_card_outlined),
                   ),
                 ],
                 selected: {_cardType},
@@ -294,7 +303,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(
-        'Verify transfer in banking app before confirming.',
+        _l10n.verifyTransfer,
         style: GoogleFonts.inter(
           fontSize: 14,
           color: Theme.of(context).colorScheme.onSurfaceVariant,

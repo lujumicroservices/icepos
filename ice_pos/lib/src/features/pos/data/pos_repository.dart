@@ -76,13 +76,48 @@ class ShiftClosureResult {
     required this.closure,
     required this.startingFund,
     required this.cashSales,
+    required this.cardSales,
+    required this.transferSales,
     required this.expenses,
   });
 
   final ShiftClosure closure;
   final double startingFund;
   final double cashSales;
+  final double cardSales;
+  final double transferSales;
   final double expenses;
+
+  /// Total ventas del turno (efectivo + tarjeta + transferencia).
+  double get totalSales => cashSales + cardSales + transferSales;
+}
+
+/// Totals for the current shift (for closure form). Does not close the shift.
+class ShiftTotalsForClosure {
+  const ShiftTotalsForClosure({
+    required this.startingFund,
+    required this.cashSales,
+    required this.debitSales,
+    required this.creditSales,
+    required this.transferSales,
+    required this.expenses,
+  });
+
+  final double startingFund;
+  final double cashSales;
+  final double debitSales;
+  final double creditSales;
+  final double transferSales;
+  final double expenses;
+
+  double get cardSales => debitSales + creditSales;
+  double get totalSales => cashSales + cardSales + transferSales;
+
+  /// Lo que debería haber en caja: fondo inicial + ventas efectivo - gastos.
+  double get expectedCashInDrawer =>
+      startingFund + cashSales + expensesNeg;
+  /// Gastos como número negativo (retiros).
+  double get expensesNeg => -expenses.abs();
 }
 
 /// Modifier group with its options for the modifier dialog.
@@ -255,6 +290,35 @@ class PosRepository {
         .getSingleOrNull();
   }
 
+  /// Sets product active flag. Inactive products are hidden from POS.
+  Future<void> setProductActive(int productId, bool active) async {
+    await (_db.update(_db.products)..where((p) => p.id.equals(productId)))
+        .write(ProductsCompanion(isActive: Value(active)));
+  }
+
+  /// Deletes a product and its recipes and product_modifiers.
+  /// Throws StateError if the product has any sales (sale_items).
+  Future<void> deleteProduct(int productId) async {
+    await _db.transaction(() async {
+      final saleCount = await (_db.selectOnly(_db.saleItems)
+            ..addColumns([_db.saleItems.id.count()])
+            ..where(_db.saleItems.productId.equals(productId)))
+          .getSingle();
+      if ((saleCount.read(_db.saleItems.id.count()) ?? 0) > 0) {
+        throw StateError(
+          'No se puede eliminar: el producto tiene ventas asociadas. Desactívalo en su lugar.',
+        );
+      }
+      await (_db.delete(_db.recipes)..where((r) => r.productId.equals(productId)))
+          .go();
+      await (_db.delete(_db.productModifiers)
+            ..where((pm) => pm.productId.equals(productId)))
+          .go();
+      await (_db.delete(_db.products)..where((p) => p.id.equals(productId)))
+          .go();
+    });
+  }
+
   /// Gets recipes for a product with supply names.
   Future<List<({Recipe recipe, Supply supply})>> getRecipesForProduct(
     int productId,
@@ -382,6 +446,37 @@ class PosRepository {
     return _db.select(_db.supplies).get();
   }
 
+  /// Distinct category names from supplies (for dropdowns / grouping).
+  Future<List<String>> getSupplyCategoryNames() async {
+    final rows = await _db.customSelect(
+      'SELECT DISTINCT category FROM supplies WHERE category IS NOT NULL AND category != \'\' ORDER BY category',
+    ).get();
+    return rows.map((r) => r.read<String>('category')).toList();
+  }
+
+  /// All supplies grouped by category for management screen: (category name, supplies).
+  Future<List<({String name, List<Supply> supplies})>> getSuppliesGroupedByCategory() async {
+    final all = await _db.select(_db.supplies).get();
+    final byCategory = <String?, List<Supply>>{};
+    for (final s in all) {
+      final key = s.category?.trim().isEmpty == true ? null : s.category;
+      byCategory.putIfAbsent(key, () => []).add(s);
+    }
+    final result = <({String name, List<Supply> supplies})>[];
+    final sortedCategories = byCategory.keys.whereType<String>().toList()..sort();
+    for (final name in sortedCategories) {
+      final list = byCategory[name]!;
+      list.sort((a, b) => a.name.compareTo(b.name));
+      result.add((name: name, supplies: list));
+    }
+    final uncategorized = byCategory[null];
+    if (uncategorized != null && uncategorized.isNotEmpty) {
+      uncategorized.sort((a, b) => a.name.compareTo(b.name));
+      result.add((name: 'Sin categoría', supplies: uncategorized));
+    }
+    return result;
+  }
+
   /// Gets active bundles with their product requirements.
   Future<List<({Bundle bundle, List<BundleItem> bundleItems})>> getBundlesWithItems() async {
     final bundles = await (_db.select(_db.bundles)
@@ -475,6 +570,7 @@ class PosRepository {
     required String unit,
     required double costPerUnit,
     double reorderPoint = 0,
+    String? category,
   }) async {
     if (id == null) {
       await _db.into(_db.supplies).insert(
@@ -483,6 +579,7 @@ class PosRepository {
           unit: unit,
           costPerUnit: Value(costPerUnit),
           reorderPoint: Value(reorderPoint),
+          category: Value(category?.trim().isEmpty == true ? null : category?.trim()),
         ),
       );
     } else {
@@ -492,6 +589,7 @@ class PosRepository {
           unit: Value(unit),
           costPerUnit: Value(costPerUnit),
           reorderPoint: Value(reorderPoint),
+          category: Value(category?.trim().isEmpty == true ? null : category?.trim()),
         ),
       );
     }
@@ -601,6 +699,33 @@ class PosRepository {
       result.add(ModifierGroupWithOptions(group: group, options: options));
     }
     return result;
+  }
+
+  /// Deletes all sales and sale items from the local database (e.g. to match cloud after clearing cloud sales).
+  Future<void> deleteAllLocalSales() async {
+    await _db.delete(_db.saleItems).go();
+    await _db.delete(_db.sales).go();
+  }
+
+  /// Deletes ALL local data in FK order. Use before "Sincronizar desde la nube" for a full reload from cloud.
+  Future<void> deleteAllLocalData() async {
+    await _db.delete(_db.saleItems).go();
+    await _db.delete(_db.sales).go();
+    await _db.delete(_db.inventoryLogs).go();
+    await _db.delete(_db.modifierOptions).go();
+    await _db.delete(_db.productModifiers).go();
+    await _db.delete(_db.modifierGroups).go();
+    await _db.delete(_db.recipes).go();
+    await _db.delete(_db.bundleItems).go();
+    await _db.delete(_db.bundles).go();
+    await _db.delete(_db.products).go();
+    await _db.delete(_db.supplies).go();
+    await _db.delete(_db.categories).go();
+    await _db.delete(_db.cashMovements).go();
+    await _db.delete(_db.shiftClosures).go();
+    await _db.delete(_db.shifts).go();
+    await _db.delete(_db.parkedOrders).go();
+    await _db.delete(_db.discounts).go();
   }
 
   /// Observes sales history with items, ordered by date descending.
@@ -889,15 +1014,34 @@ class PosRepository {
 
       final now = DateTime.now();
 
-      // Cash sales: sum of CASH sales between shift start and now
+      final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
+          _db.sales.date.isSmallerOrEqualValue(now);
+
+      // Cash sales
       final cashSales = await (_db.selectOnly(_db.sales)
             ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('CASH') &
-                _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
-                _db.sales.date.isSmallerOrEqualValue(now)))
+            ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange))
           .getSingle();
       final cashSalesTotal =
           cashSales.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+      // Card sales (débito + crédito)
+      final cardSalesQuery = await (_db.selectOnly(_db.sales)
+            ..addColumns([_db.sales.totalAmount.sum()])
+            ..where((_db.sales.paymentMethod.equals('CARD_DEBIT') |
+                    _db.sales.paymentMethod.equals('CARD_CREDIT')) &
+                dateInRange))
+          .getSingle();
+      final cardSalesTotal =
+          cardSalesQuery.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+      // Transfer sales
+      final transferSalesQuery = await (_db.selectOnly(_db.sales)
+            ..addColumns([_db.sales.totalAmount.sum()])
+            ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange))
+          .getSingle();
+      final transferSalesTotal =
+          transferSalesQuery.read(_db.sales.totalAmount.sum()) ?? 0.0;
 
       // Expenses: sum of cash movements (negative = out)
       final expensesResult = await (_db.selectOnly(_db.cashMovements)
@@ -935,9 +1079,62 @@ class PosRepository {
         closure: closure,
         startingFund: shift.startingFund,
         cashSales: cashSalesTotal,
+        cardSales: cardSalesTotal,
+        transferSales: transferSalesTotal,
         expenses: expensesAbs,
       );
     });
+  }
+
+  /// Totals for closure form (expected in drawer, sales by payment type). Does not close the shift.
+  Future<ShiftTotalsForClosure?> getShiftTotalsForClosure(int shiftId) async {
+    final shift = await (_db.select(_db.shifts)
+          ..where((s) => s.id.equals(shiftId)))
+        .getSingleOrNull();
+    if (shift == null) return null;
+    final now = DateTime.now();
+    final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
+        _db.sales.date.isSmallerOrEqualValue(now);
+
+    final cashR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange))
+        .getSingle();
+    final cashSales = cashR.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+    final debitR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange))
+        .getSingle();
+    final debitSales = debitR.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+    final creditR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange))
+        .getSingle();
+    final creditSales = creditR.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+    final transferR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange))
+        .getSingle();
+    final transferSales = transferR.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+    final expR = await (_db.selectOnly(_db.cashMovements)
+          ..addColumns([_db.cashMovements.amount.sum()])
+          ..where(_db.cashMovements.shiftId.equals(shiftId)))
+        .getSingle();
+    final expensesSum = expR.read(_db.cashMovements.amount.sum()) ?? 0.0;
+    final expenses = expensesSum.abs();
+
+    return ShiftTotalsForClosure(
+      startingFund: shift.startingFund,
+      cashSales: cashSales,
+      debitSales: debitSales,
+      creditSales: creditSales,
+      transferSales: transferSales,
+      expenses: expenses,
+    );
   }
 
   /// Gets shift summary for Z-Report display (starting fund, cash sales, expenses).
