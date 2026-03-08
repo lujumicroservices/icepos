@@ -1,0 +1,125 @@
+# Build Android APK, publish to GitHub Releases, and notify Supabase (app_releases).
+# Free tier: 2000 min/month (private), unlimited (public). One run ~3–5 min.
+#
+# How to use:
+#  A) Manual: Actions → "Release APK" → Run workflow → set version, build_number, message.
+#  B) Tag:    git tag v1.0.1 && git push origin v1.0.1  (version from tag, build_number = run number)
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL      - https://<project>.supabase.co
+#   SUPABASE_ANON_KEY - anon key from Supabase Dashboard
+
+name: Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.0.1)'
+        required: true
+        type: string
+      build_number:
+        description: 'Build number (integer, must be greater than current)'
+        required: true
+        type: number
+      message_es:
+        description: 'Release notes (optional)'
+        required: false
+        type: string
+        default: 'Nueva versión disponible.'
+  push:
+    tags:
+      - 'v*'
+
+env:
+  FLUTTER_VERSION: '3.24.x'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version from tag (on tag push)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        id: tag_version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Set version (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        id: manual_version
+        run: |
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          echo "tag=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+
+      - name: Resolve VERSION and BUILD
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "build=${{ github.event.inputs.build_number }}" >> $GITHUB_OUTPUT
+            echo "message_es=${{ github.event.inputs.message_es }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.tag_version.outputs.version }}" >> $GITHUB_OUTPUT
+            echo "build=${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "message_es=Nueva versión disponible." >> $GITHUB_OUTPUT
+          fi
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        working-directory: ice_pos
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: ice_pos
+        run: |
+          flutter build apk --release \
+            --build-name=${{ steps.vars.outputs.version }} \
+            --build-number=${{ steps.vars.outputs.build }}
+
+      - name: Create Release and upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.vars.outputs.version }}
+          name: Release ${{ steps.vars.outputs.version }}
+          body: ${{ steps.vars.outputs.message_es }}
+          files: |
+            ice_pos/build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Supabase app_releases
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "SUPABASE_URL or SUPABASE_ANON_KEY not set; skipping Supabase update."
+            exit 0
+          fi
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/v${{ steps.vars.outputs.version }}/app-release.apk"
+          MESSAGE="${{ steps.vars.outputs.message_es }}"
+          MESSAGE_JSON=$(printf '%s' "$MESSAGE" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+          curl -s -X POST "$SUPABASE_URL/rest/v1/app_releases" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{\"version\":\"${{ steps.vars.outputs.version }}\",\"build_number\":${{ steps.vars.outputs.build }},\"download_url\":\"$DOWNLOAD_URL\",\"message_es\":$MESSAGE_JSON}"
