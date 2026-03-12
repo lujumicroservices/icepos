@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/admin/presentation/bundle_editor_screen.dart';
 
 final _bundlesProvider = FutureProvider<List<({Bundle bundle, List<BundleItem> bundleItems})>>((ref) async {
@@ -11,6 +12,7 @@ final _bundlesProvider = FutureProvider<List<({Bundle bundle, List<BundleItem> b
 });
 
 final _categoriesForBundlesProvider = FutureProvider<List<domain_cat.Category>>((ref) async {
+  ref.watch(posCategoriesRefreshProvider);
   return ref.read(posRepositoryProvider).getAllCategories();
 });
 

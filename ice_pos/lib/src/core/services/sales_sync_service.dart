@@ -60,6 +60,8 @@ class RemoteSale {
     this.amountTendered = 0.0,
     this.changeGiven = 0.0,
     required this.items,
+    this.deviceId,
+    this.deviceName,
   });
 
   final String id;
@@ -69,6 +71,10 @@ class RemoteSale {
   final double amountTendered;
   final double changeGiven;
   final List<RemoteSaleItem> items;
+  /// ID del dispositivo que registró la venta (en la nube).
+  final String? deviceId;
+  /// Nombre legible del dispositivo (ej. Caja 1).
+  final String? deviceName;
 
   static RemoteSale? fromSupabase(
     Map<String, dynamic> row,
@@ -99,6 +105,8 @@ class RemoteSale {
           );
         })
         .toList();
+    final deviceId = row['device_id'] as String?;
+    final deviceName = row['device_name'] as String?;
     return RemoteSale(
       id: idStr,
       createdAt: createdAt,
@@ -107,6 +115,8 @@ class RemoteSale {
       amountTendered: amountTendered,
       changeGiven: changeGiven,
       items: items,
+      deviceId: deviceId?.isNotEmpty == true ? deviceId : null,
+      deviceName: deviceName?.isNotEmpty == true ? deviceName : null,
     );
   }
 }
@@ -165,7 +175,7 @@ class SalesSyncService {
     if (!SupabaseService.isInitialized) return [];
     try {
       final client = SupabaseService.instance.client;
-      final salesRes = await client.from('sales').select('*').order('date', ascending: false);
+      final salesRes = await client.from('sales').select('*').isFilter('cancelled_at', null).order('date', ascending: false);
       final salesList = salesRes as List<dynamic>? ?? [];
       if (salesList.isEmpty) return [];
       final itemsRes = await client.from('sale_items').select('*');

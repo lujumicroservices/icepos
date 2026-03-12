@@ -12,6 +12,7 @@ final _allProductsStreamProvider = StreamProvider<List<Product>>((ref) {
 });
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
+  ref.watch(posCategoriesRefreshProvider);
   return ref.read(posRepositoryProvider).getAllCategories();
 });
 

@@ -36,7 +36,8 @@ Then run the app; the full seed (including the menu) runs again.
 | `menu_reyes_nieves_flavors.json` | Lista de referencia de sabores (para futuros modificadores). |
 | `bolis_modifiers.json` | **Boli**: un solo modificador "Sabor" con opciones Regular y Light por sabor; en el POS se muestran agrupadas (sección Regular / Light). Cantidad por sabor. |
 | `paletas_modifiers.json` | **Paleta Agua** y **Paleta Forrada** con grupo Sabor. Cargado por el seeder. |
-| `nieves_modifiers.json` | **Nieves**: Conos (Mini 2 bolas, Chico 3), Vasos (Mini 2, Chico 3, Mediano 4, Grande 5), Canastas (Mediana 4, Grande 5). Sabores agrupados por tipo AGUA/LECHE/CREMA/LIGHT. Usa `flavorOptions` y `optionsRef`. |
+| `nieves_modifiers.json` | **Nieves**: Conos (Mini 2 bolas, Chico 3), Vasos (Mini 2, Chico 3, Mediano 4, Grande 5), Canastas (Mediana 4, Grande 5). Cada sabor es un **insumo en ml**; se descuenta del inventario **50 ml por bola** (quantityDeducted). Stock inicial 5000 ml por sabor. |
+| `recetas_formato.json` / `recetas_formato.csv` | **Recetas**: formato para capturar qué insumos y cantidades usa cada producto. Ver [RECETAS_FORMATO.md](RECETAS_FORMATO.md). |
 
 Tras editar cualquier JSON, usa **Reload menu from JSON** (o reinstalar la app) para cargar los cambios.
 

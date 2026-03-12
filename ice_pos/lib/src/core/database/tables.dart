@@ -50,6 +50,10 @@ class Sales extends Table {
   TextColumn get paymentMethod => text().withDefault(const Constant('CASH'))();
   RealColumn get amountTendered => real().withDefault(const Constant(0.0))();
   RealColumn get changeGiven => real().withDefault(const Constant(0.0))();
+  /// Id de la venta en Supabase (para poder cancelarla en la nube).
+  IntColumn get cloudSaleId => integer().nullable()();
+  /// Borrado lógico: si no es null, la venta está cancelada (no se borra físicamente).
+  DateTimeColumn get cancelledAt => dateTime().nullable()();
 }
 
 // 5. SALE ITEMS (Details)
@@ -148,6 +152,28 @@ class CashMovements extends Table {
   RealColumn get amount => real()(); // Negative = cash out (expense)
   TextColumn get reason => text()();
   DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
+}
+
+// 15.5 MOVEMENTS (Entradas/salidas que afectan caja o banco; no son ventas)
+// type: ENTRADA | SALIDA, account: CAJA | BANCO. amount siempre positivo.
+// Si account=CAJA, shiftId opcional para asociar al turno en curso.
+class Movements extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get type => text()(); // ENTRADA, SALIDA
+  TextColumn get account => text()(); // CAJA, BANCO
+  RealColumn get amount => real()(); // Siempre positivo
+  TextColumn get reason => text()();
+  IntColumn get shiftId => integer().nullable().references(Shifts, #id)();
+}
+
+// 15.7 USERS (Login: administradores y cajeros)
+class AppUsers extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get username => text().withLength(min: 1, max: 64)();
+  TextColumn get passwordHash => text()();
+  TextColumn get role => text()(); // 'admin', 'cajero'
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 // 16. SHIFT CLOSURES (Z-Reports - reconciliation)

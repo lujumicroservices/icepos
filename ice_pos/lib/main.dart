@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -7,12 +10,28 @@ import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
+import 'package:ice_pos/src/core/utils/error_logger.dart';
 import 'package:ice_pos/src/core/utils/logger.dart';
+import 'package:ice_pos/src/core/auth/auth_gate.dart';
 import 'package:ice_pos/src/features/home/presentation/home_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/controllers/receipt_printer_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Ensure errors are always printed to the terminal so you can copy them.
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    logErrorToConsole(details.exception, details.stack);
+  };
+  runZonedGuarded<Future<void>>(() async {
+    await _runApp();
+  }, (Object error, StackTrace stackTrace) {
+    logErrorToConsole(error, stackTrace);
+  });
+}
+
+Future<void> _runApp() async {
 
   await dotenv.load(fileName: '.env');
 
@@ -27,13 +46,15 @@ void main() async {
 
   if (CloudSyncService.isEnabled) {
     try {
-      final rows = await SupabaseService.instance.client.from('categories').select('id').limit(1);
-      if ((rows as List).isNotEmpty) {
-        final err = await CloudSyncService.syncFromCloud(database);
-        if (err != null) debugPrint('Cloud sync warning: $err');
+      final err = await CloudSyncService.syncFromCloud(database);
+      if (err != null) {
+        debugPrint('Cloud sync al arranque: $err');
+        await CloudSyncService.setStartupSyncError(err);
       }
     } catch (e) {
-      debugPrint('Cloud sync skipped: $e');
+      debugPrint('Cloud sync al arranque (excepción): $e');
+      CloudSyncService.lastSyncError = e.toString();
+      await CloudSyncService.setStartupSyncError(e.toString());
     }
   }
 
@@ -43,7 +64,7 @@ void main() async {
       overrides: [
         appDatabaseProvider.overrideWith((_) => database),
       ],
-      child: const _AppWithPrinterRestore(),
+      child: AuthGate(child: const _AppWithPrinterRestore()),
     ),
   );
 }

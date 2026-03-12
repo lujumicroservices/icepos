@@ -626,17 +626,23 @@ class DatabaseSeeder {
             .get();
         final existing = existingList.isNotEmpty ? existingList.first : null;
         if (existing != null) {
+          final isNieveFlavor = supplyName.startsWith('Nieve ');
+          if (isNieveFlavor && existing.unit != 'ml') {
+            await (db.update(db.supplies)..where((s) => s.id.equals(existing.id)))
+                .write(SuppliesCompanion(unit: Value('ml')));
+          }
           supplyIds[supplyName] = existing.id;
           continue;
         }
         final isBoliType = supplyName.startsWith('Boli Regular') || supplyName.startsWith('Boli Light');
         final isPaletaType = supplyName.startsWith('Paleta Agua') || supplyName.startsWith('Paleta Forrada');
         final isNieveType = supplyName.startsWith('Nieve ');
+        // Sabores de nieve: unidad ml; se descontarán quantityDeducted (ml) por cada bola en el modificador.
         final id = await db.into(db.supplies).insert(
           SuppliesCompanion.insert(
             name: supplyName,
-            unit: isNieveType ? 'kg' : 'pcs',
-            currentStock: Value(isBoliType || isPaletaType ? 100.0 : (isNieveType ? 50.0 : 0.0)),
+            unit: isNieveType ? 'ml' : 'pcs',
+            currentStock: Value(isBoliType || isPaletaType ? 100.0 : (isNieveType ? 5000.0 : 0.0)),
             costPerUnit: const Value(0.0),
           ),
         );

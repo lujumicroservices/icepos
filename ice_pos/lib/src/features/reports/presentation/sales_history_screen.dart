@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ice_pos/src/core/auth/user_role_provider.dart';
+import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
@@ -15,7 +17,10 @@ final _remoteSalesProvider =
 });
 
 class SalesHistoryScreen extends ConsumerStatefulWidget {
-  const SalesHistoryScreen({super.key});
+  const SalesHistoryScreen({super.key, this.onlyToday = false});
+
+  /// Si es true (modo empleado), solo se muestran las ventas del día.
+  final bool onlyToday;
 
   @override
   ConsumerState<SalesHistoryScreen> createState() => _SalesHistoryScreenState();
@@ -24,13 +29,28 @@ class SalesHistoryScreen extends ConsumerStatefulWidget {
 class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
   int _segmentIndex = 0; // 0 = local, 1 = cloud
 
-  static double _totalSalesToday(List<SaleWithItems> sales) {
+  static DateTime get _today {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  static List<SaleWithItems> _filterToToday(List<SaleWithItems> sales) {
+    final today = _today;
     return sales
         .where((s) {
-          final saleDate =
-              DateTime(s.sale.date.year, s.sale.date.month, s.sale.date.day);
+          final local = s.sale.date.toLocal();
+          final saleDate = DateTime(local.year, local.month, local.day);
+          return saleDate == today;
+        })
+        .toList();
+  }
+
+  static double _totalSalesToday(List<SaleWithItems> sales) {
+    final today = _today;
+    return sales
+        .where((s) {
+          final local = s.sale.date.toLocal();
+          final saleDate = DateTime(local.year, local.month, local.day);
           return saleDate == today;
         })
         .fold(0.0, (sum, s) => sum + s.sale.totalAmount);
@@ -41,8 +61,8 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
     final today = DateTime(now.year, now.month, now.day);
     return sales
         .where((s) {
-          final d = s.createdAt;
-          final saleDate = DateTime(d.year, d.month, d.day);
+          final local = s.createdAt.toLocal();
+          final saleDate = DateTime(local.year, local.month, local.day);
           return saleDate == today;
         })
         .fold(0.0, (sum, s) => sum + s.totalAmount);
@@ -51,7 +71,8 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final salesAsync = ref.watch(_salesHistoryStreamProvider);
-    final syncAvailable = SalesSyncService.isAvailable;
+    final syncAvailable = SalesSyncService.isAvailable && !widget.onlyToday;
+    final l10n = ref.watch(appLocalizationsProvider);
 
     return Scaffold(
       body: Column(
@@ -61,9 +82,9 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Este dispositivo')),
-                  ButtonSegment(value: 1, label: Text('En la nube')),
+                segments: [
+                  ButtonSegment(value: 0, label: Text(l10n.thisDevice)),
+                  ButtonSegment(value: 1, label: Text(l10n.inCloud)),
                 ],
                 selected: {_segmentIndex},
                 onSelectionChanged: (s) => setState(() => _segmentIndex = s.first),
@@ -71,7 +92,7 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
             ),
           Expanded(
             child: _segmentIndex == 0
-                ? _buildLocalBody(salesAsync)
+                ? _buildLocalBody(salesAsync, ref.watch(userRoleProvider))
                 : syncAvailable
                     ? _buildCloudBody(ref)
                     : Center(
@@ -93,7 +114,7 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
     );
   }
 
-  Widget _buildLocalBody(AsyncValue<List<SaleWithItems>> salesAsync) {
+  Widget _buildLocalBody(AsyncValue<List<SaleWithItems>> salesAsync, UserRole? role) {
     return salesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
@@ -126,7 +147,9 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
           ),
         ),
         data: (sales) {
-          final totalToday = _totalSalesToday(sales);
+          final list =
+              widget.onlyToday ? _filterToToday(sales) : sales;
+          final totalToday = _totalSalesToday(list);
 
           return CustomScrollView(
             slivers: [
@@ -162,7 +185,7 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                   ),
                 ),
               ),
-              if (sales.isEmpty)
+              if (list.isEmpty)
                 const SliverFillRemaining(
                   child: Center(
                     child: Text('No hay ventas aún'),
@@ -174,11 +197,35 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
-                        final saleWithItems = sales[index];
+                        final saleWithItems = list[index];
                         final sale = saleWithItems.sale;
+                        final dateLocal = sale.date.toLocal();
                         final timeStr =
-                            '${sale.date.hour.toString().padLeft(2, '0')}:${sale.date.minute.toString().padLeft(2, '0')}';
+                            '${dateLocal.hour.toString().padLeft(2, '0')}:${dateLocal.minute.toString().padLeft(2, '0')}';
 
+                        final l10n = ref.watch(appLocalizationsProvider);
+                        final children = <Widget>[
+                          ...saleWithItems.items
+                              .map(
+                                (item) => ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    '${item.quantity.toStringAsFixed(0)}x ${item.productName} @ \$${item.priceAtSale.toStringAsFixed(2)}',
+                                    style: GoogleFonts.inter(fontSize: 14),
+                                  ),
+                                ),
+                              ),
+                          if (role == UserRole.admin)
+                            ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.cancel_outlined, color: Colors.red),
+                              title: Text(
+                                l10n.cancelSale,
+                                style: GoogleFonts.inter(fontSize: 14, color: Theme.of(context).colorScheme.error),
+                              ),
+                              onTap: () => _confirmCancelSale(context, sale.id, l10n),
+                            ),
+                        ];
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ExpansionTile(
@@ -198,21 +245,11 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                                     .onSurfaceVariant,
                               ),
                             ),
-                            children: saleWithItems.items
-                                .map(
-                                  (item) => ListTile(
-                                    dense: true,
-                                    title: Text(
-                                      '${item.quantity.toStringAsFixed(0)}x ${item.productName} @ \$${item.priceAtSale.toStringAsFixed(2)}',
-                                      style: GoogleFonts.inter(fontSize: 14),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
+                            children: children,
                           ),
                         );
                       },
-                      childCount: sales.length,
+                      childCount: list.length,
                     ),
                   ),
                 ),
@@ -220,6 +257,37 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
           );
         },
     );
+  }
+
+  Future<void> _confirmCancelSale(BuildContext context, int saleId, dynamic l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.cancelSaleConfirmTitle),
+        content: Text(l10n.cancelSaleConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            child: Text(l10n.cancelSale),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await ref.read(posRepositoryProvider).deleteSale(saleId);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.saleCancelled),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _buildCloudBody(WidgetRef ref) {
@@ -294,10 +362,15 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final sale = sales[index];
+                        final local = sale.createdAt.toLocal();
                         final timeStr =
-                            '${sale.createdAt.hour.toString().padLeft(2, '0')}:${sale.createdAt.minute.toString().padLeft(2, '0')}';
+                            '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
                         final dateStr =
-                            '${sale.createdAt.day}/${sale.createdAt.month}/${sale.createdAt.year}';
+                            '${local.day}/${local.month}/${local.year}';
+                        final deviceLabel = sale.deviceName ??
+                            (sale.deviceId != null
+                                ? 'ID: ${sale.deviceId!.length > 8 ? '${sale.deviceId!.substring(0, 8)}…' : sale.deviceId}'
+                                : null);
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ExpansionTile(
@@ -306,7 +379,8 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                               style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 16),
                             ),
                             subtitle: Text(
-                              sale.paymentMethod,
+                              [sale.paymentMethod, if (deviceLabel != null) deviceLabel]
+                                  .join(' · '),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,

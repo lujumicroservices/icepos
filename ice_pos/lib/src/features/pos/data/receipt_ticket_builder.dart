@@ -153,11 +153,12 @@ class ReceiptTicketBuilder {
   }
 
   static String _formatDate(DateTime d) {
-    final y = d.year;
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    final h = d.hour.toString().padLeft(2, '0');
-    final min = d.minute.toString().padLeft(2, '0');
+    final local = d.toLocal();
+    final y = local.year;
+    final m = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
     return '$day/$m/$y  $h:$min';
   }
 }

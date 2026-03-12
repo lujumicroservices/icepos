@@ -40,14 +40,16 @@ create table if not exists public.recipes (
   quantity_required real not null
 );
 
--- 5. Sales
+-- 5. Sales (device_id identifica el dispositivo que registró la venta; device_name es opcional, ej. "Caja 1")
 create table if not exists public.sales (
   id serial primary key,
   date timestamptz not null default now(),
   total_amount real not null,
   payment_method text default 'CASH',
   amount_tendered real default 0,
-  change_given real default 0
+  change_given real default 0,
+  device_id text,
+  device_name text
 );
 
 -- 6. Sale items
@@ -155,6 +157,20 @@ create table if not exists public.shift_closures (
   notes text
 );
 
+-- 17.5 Movements (entradas/salidas de caja o banco; no son ventas)
+-- type: ENTRADA | SALIDA, account: CAJA | BANCO. amount siempre positivo.
+-- shift_id opcional: si account=CAJA, puede asociarse al turno en curso.
+create table if not exists public.movements (
+  id serial primary key,
+  date timestamptz not null default now(),
+  type text not null,
+  account text not null,
+  amount real not null,
+  reason text not null,
+  shift_id int references public.shifts(id)
+);
+comment on table public.movements is 'Entradas y salidas de caja o banco que afectan el monto esperado; no son ventas.';
+
 -- 18. App releases (para avisar a empleados de nueva versión sin Google Play)
 create table if not exists public.app_releases (
   id serial primary key,
@@ -192,12 +208,13 @@ alter table public.bundle_items enable row level security;
 alter table public.shifts enable row level security;
 alter table public.cash_movements enable row level security;
 alter table public.shift_closures enable row level security;
+alter table public.movements enable row level security;
 alter table public.app_releases enable row level security;
 
 do $$
 declare t text;
 begin
-  for t in select unnest(array['categories','supplies','products','recipes','sales','sale_items','inventory_logs','modifier_groups','product_modifiers','modifier_options','parked_orders','discounts','bundles','bundle_items','shifts','cash_movements','shift_closures','app_releases'])
+  for t in select unnest(array['categories','supplies','products','recipes','sales','sale_items','inventory_logs','modifier_groups','product_modifiers','modifier_options','parked_orders','discounts','bundles','bundle_items','shifts','cash_movements','shift_closures','movements','app_releases'])
   loop
     execute format('drop policy if exists "anon_all_%s" on public.%I', t, t);
     execute format('create policy "anon_all_%s" on public.%I for all to anon using (true) with check (true)', t, t);
@@ -230,19 +247,10 @@ begin
   perform setval(pg_get_serial_sequence('shifts', 'id'), coalesce((select max(id) from shifts), 1));
   perform setval(pg_get_serial_sequence('cash_movements', 'id'), coalesce((select max(id) from cash_movements), 1));
   perform setval(pg_get_serial_sequence('shift_closures', 'id'), coalesce((select max(id) from shift_closures), 1));
+  perform setval(pg_get_serial_sequence('movements', 'id'), coalesce((select max(id) from movements), 1));
 end;
 $$;
 grant execute on function public.sync_sequences() to anon;
 grant execute on function public.sync_sequences() to authenticated;
 
--- Migración: agregar columna category a supplies (si ya tenías la tabla sin esta columna, ejecuta esto una vez)
-do $$
-begin
-  if not exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'supplies' and column_name = 'category'
-  ) then
-    alter table public.supplies add column category text;
-    comment on column public.supplies.category is 'Categoría para agrupar insumos (ej. Lácteos, Sabores). Opcional.';
-  end if;
-end $$;
+-- Migraciones incrementales: ver carpeta supabase/migrations/ (001_..., 002_..., etc.).

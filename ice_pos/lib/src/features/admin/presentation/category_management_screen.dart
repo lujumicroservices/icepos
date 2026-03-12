@@ -7,6 +7,7 @@ import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dar
 import 'package:ice_pos/src/features/admin/presentation/product_editor_screen.dart';
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
+  ref.watch(posCategoriesRefreshProvider);
   return ref.read(posRepositoryProvider).getAllCategories();
 });
 

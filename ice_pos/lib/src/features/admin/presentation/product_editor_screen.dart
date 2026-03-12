@@ -4,12 +4,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 
 final _suppliesStreamProvider = StreamProvider<List<Supply>>((ref) {
   return ref.watch(posRepositoryProvider).watchSupplies();
 });
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
+  ref.watch(posCategoriesRefreshProvider);
   return ref.read(posRepositoryProvider).getAllCategories();
 });
 

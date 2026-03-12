@@ -5,11 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/services/device_id_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 const _kCloudProductIdMap = 'cloud_product_id_map';
 const _kCloudSupplyIdMap = 'cloud_supply_id_map';
+const _kStartupSyncErrorKey = 'startup_sync_error';
 
 /// When Supabase is the source of truth:
 /// - syncFromCloud: replace local master data (categories, products, supplies, recipes, modifiers, bundles) from cloud.
@@ -18,6 +20,29 @@ class CloudSyncService {
   CloudSyncService._();
 
   static bool get isEnabled => SupabaseService.isInitialized;
+
+  /// Último error de sincronización (fallo o "nube vacía"). La UI puede mostrarlo en el drawer.
+  static String? lastSyncError;
+
+  /// Call when sync fails at startup so the UI can show the error once.
+  static Future<void> setStartupSyncError(String message) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kStartupSyncErrorKey, message);
+    } catch (_) {}
+  }
+
+  /// Reads and clears the startup sync error (for showing in UI once).
+  static Future<String?> takeStartupSyncError() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final msg = prefs.getString(_kStartupSyncErrorKey);
+      if (msg != null) await prefs.remove(_kStartupSyncErrorKey);
+      return msg;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// True if cloud has no categories (empty master data). Use to allow "Cargar desde JSON" only when cloud is empty.
   static Future<bool> isCloudEmpty() async {
@@ -34,12 +59,47 @@ class CloudSyncService {
   }
 
   /// Replaces local master data with Supabase data. Does not sync sales (those are write-through).
+  /// Fetches all data from cloud first; only clears local DB after a successful fetch so a failed
+  /// sync (network, RLS, etc.) never wipes local data.
   static Future<String?> syncFromCloud(AppDatabase db) async {
     if (!SupabaseService.isInitialized) return null;
-    try {
-      final client = SupabaseService.instance.client;
+    final client = SupabaseService.instance.client;
 
-      // Clear local master data in FK order so deletes succeed (no duplicates after insert)
+    // 1. Fetch everything from cloud first (no local writes). On any failure we return without touching local DB.
+    List<Map<String, dynamic>> catRows;
+    List<Map<String, dynamic>> supRows;
+    List<Map<String, dynamic>> prodRows;
+    List<Map<String, dynamic>> recRows;
+    List<Map<String, dynamic>> mgRows;
+    List<Map<String, dynamic>> pmRows;
+    List<Map<String, dynamic>> moRows;
+    List<Map<String, dynamic>> bundleRows;
+    List<Map<String, dynamic>> biRows;
+    try {
+      final catRaw = await client.from('categories').select('*').order('id');
+      catRows = _list(catRaw).map((r) => _map(r)).toList();
+      // If cloud has no categories, do not wipe local — leave data as is.
+      if (catRows.isEmpty) {
+        lastSyncError = 'La nube no tiene categorías. Sube datos desde otro dispositivo (Cargar desde JSON y enviar a la nube).';
+        return lastSyncError;
+      }
+      supRows = _list(await client.from('supplies').select('*').order('id')).map((r) => _map(r)).toList();
+      prodRows = _list(await client.from('products').select('*').order('id')).map((r) => _map(r)).toList();
+      recRows = _list(await client.from('recipes').select('*').order('id')).map((r) => _map(r)).toList();
+      mgRows = _list(await client.from('modifier_groups').select('*').order('id')).map((r) => _map(r)).toList();
+      pmRows = _list(await client.from('product_modifiers').select('*')).map((r) => _map(r)).toList();
+      moRows = _list(await client.from('modifier_options').select('*')).map((r) => _map(r)).toList();
+      bundleRows = _list(await client.from('bundles').select('*').order('id')).map((r) => _map(r)).toList();
+      biRows = _list(await client.from('bundle_items').select('*')).map((r) => _map(r)).toList();
+    } catch (e, st) {
+      debugPrint('CloudSyncService.syncFromCloud fetch failed: $e');
+      debugPrint('$st');
+      lastSyncError = e.toString();
+      return lastSyncError;
+    }
+
+    try {
+      // 2. Now replace local master data (FK order: delete dependents first)
       await (db.delete(db.modifierOptions)).go();
       await (db.delete(db.productModifiers)).go();
       await (db.delete(db.modifierGroups)).go();
@@ -50,10 +110,7 @@ class CloudSyncService {
       await (db.delete(db.supplies)).go();
       await (db.delete(db.categories)).go();
 
-      // 1. Categories — insert with id = cloud id so local and cloud IDs stay aligned
-      final catRows = await client.from('categories').select('*').order('id');
-      for (final r in _list(catRows)) {
-        final row = _map(r);
+      for (final row in catRows) {
         final cloudId = _int(row['id'])!;
         final cloudParentId = _int(row['parent_id']);
         await db.into(db.categories).insert(CategoriesCompanion(
@@ -63,11 +120,7 @@ class CloudSyncService {
           color: Value(row['color'] as String?),
         ));
       }
-
-      // 2. Supplies — same id in local as in cloud
-      final supRows = await client.from('supplies').select('*').order('id');
-      for (final r in _list(supRows)) {
-        final row = _map(r);
+      for (final row in supRows) {
         final cloudId = _int(row['id'])!;
         await db.into(db.supplies).insert(SuppliesCompanion(
           id: Value(cloudId),
@@ -79,11 +132,7 @@ class CloudSyncService {
           category: Value(row['category'] as String?),
         ));
       }
-
-      // 3. Products — same id in local as in cloud
-      final prodRows = await client.from('products').select('*').order('id');
-      for (final r in _list(prodRows)) {
-        final row = _map(r);
+      for (final row in prodRows) {
         final cloudId = _int(row['id'])!;
         final cloudCatId = _int(row['category_id']);
         await db.into(db.products).insert(ProductsCompanion(
@@ -95,24 +144,14 @@ class CloudSyncService {
           categoryId: Value(cloudCatId),
         ));
       }
-
-      // 4. Recipes — product_id and supply_id are same in cloud and local (aligned)
-      final recRows = await client.from('recipes').select('*').order('id');
-      for (final r in _list(recRows)) {
-        final row = _map(r);
-        final productId = _int(row['product_id'])!;
-        final supplyId = _int(row['supply_id'])!;
+      for (final row in recRows) {
         await db.into(db.recipes).insert(RecipesCompanion.insert(
-          productId: productId,
-          supplyId: supplyId,
+          productId: _int(row['product_id'])!,
+          supplyId: _int(row['supply_id'])!,
           quantityRequired: _double(row['quantity_required']),
         ));
       }
-
-      // 5. Modifier groups — same id in local as in cloud
-      final mgRows = await client.from('modifier_groups').select('*').order('id');
-      for (final r in _list(mgRows)) {
-        final row = _map(r);
+      for (final row in mgRows) {
         final cloudId = _int(row['id'])!;
         await db.into(db.modifierGroups).insert(ModifierGroupsCompanion(
           id: Value(cloudId),
@@ -121,19 +160,13 @@ class CloudSyncService {
           maxSelection: Value(_int(row['max_selection'])!),
         ));
       }
-
-      final pmRows = await client.from('product_modifiers').select('*');
-      for (final r in _list(pmRows)) {
-        final row = _map(r);
+      for (final row in pmRows) {
         await db.into(db.productModifiers).insert(ProductModifiersCompanion.insert(
           productId: _int(row['product_id'])!,
           modifierGroupId: _int(row['modifier_group_id'])!,
         ));
       }
-
-      final moRows = await client.from('modifier_options').select('*');
-      for (final r in _list(moRows)) {
-        final row = _map(r);
+      for (final row in moRows) {
         await db.into(db.modifierOptions).insert(ModifierOptionsCompanion.insert(
           modifierGroupId: _int(row['modifier_group_id'])!,
           supplyId: _int(row['supply_id'])!,
@@ -141,11 +174,7 @@ class CloudSyncService {
           priceExtra: Value(_double(row['price_extra'])),
         ));
       }
-
-      // 6. Bundles & bundle_items — same ids in local as in cloud
-      final bundleRows = await client.from('bundles').select('*').order('id');
-      for (final r in _list(bundleRows)) {
-        final row = _map(r);
+      for (final row in bundleRows) {
         final cloudId = _int(row['id'])!;
         await db.into(db.bundles).insert(BundlesCompanion(
           id: Value(cloudId),
@@ -155,9 +184,7 @@ class CloudSyncService {
           categoryId: Value(_int(row['category_id'])),
         ));
       }
-      final biRows = await client.from('bundle_items').select('*');
-      for (final r in _list(biRows)) {
-        final row = _map(r);
+      for (final row in biRows) {
         await db.into(db.bundleItems).insert(BundleItemsCompanion.insert(
           bundleId: _int(row['bundle_id'])!,
           productId: _int(row['product_id'])!,
@@ -165,7 +192,6 @@ class CloudSyncService {
         ));
       }
 
-      // IDs aligned: local id = cloud id. Save identity maps for writeSaleToCloud.
       final allProducts = await (db.select(db.products)..orderBy([(p) => OrderingTerm.asc(p.id)])).get();
       final allSupplies = await (db.select(db.supplies)..orderBy([(s) => OrderingTerm.asc(s.id)])).get();
       final localToCloudProduct = {for (final p in allProducts) p.id: p.id};
@@ -173,36 +199,37 @@ class CloudSyncService {
       if (localToCloudProduct.isNotEmpty) {
         await _saveIdMaps(localToCloudProduct, localToCloudSupply);
       }
-
+      lastSyncError = null;
       return null;
     } catch (e, st) {
-      debugPrint('CloudSyncService.syncFromCloud: $e');
+      debugPrint('CloudSyncService.syncFromCloud write failed: $e');
       debugPrint('$st');
-      return e.toString();
+      lastSyncError = e.toString();
+      return lastSyncError;
     }
   }
 
   /// Writes sale + sale_items + supply deductions + inventory_logs to Supabase.
-  /// Uses persisted local->cloud ID maps so product_id and supply_id match Supabase.
-  static Future<String?> writeSaleToCloud(
+  /// Returns (error, cloudSaleId): on success (null, id), on failure (message, null). When cloud disabled, (null, null).
+  static Future<(String? error, int? cloudSaleId)> writeSaleToCloud(
     List<CartItem> items, {
     required double totalAmount,
     required String paymentMethod,
     double amountTendered = 0,
     double changeGiven = 0,
   }) async {
-    if (!SupabaseService.isInitialized || items.isEmpty) return null;
+    if (!SupabaseService.isInitialized || items.isEmpty) return (null, null);
     try {
       final client = SupabaseService.instance.client;
       final (productMap, supplyMap) = await _loadIdMaps();
       if (productMap.isEmpty) {
-        return 'Falta el mapa de productos con la nube. Abre el menú (≡) y pulsa "Sincronizar" si la nube ya tiene datos, o "Enviar datos a la nube" si este dispositivo tiene el menú.';
+        return ('Falta el mapa de productos con la nube. Abre el menú (≡) y pulsa "Sincronizar" si la nube ya tiene datos, o "Enviar datos a la nube" si este dispositivo tiene el menú.', null);
       }
 
       for (final cartItem in items) {
         final cloudProductId = productMap[cartItem.productId];
         if (cloudProductId == null) {
-          return 'Producto (id ${cartItem.productId}) no está en la nube. En este dispositivo abre el menú (≡) y pulsa Sincronizar para alinear IDs con la nube.';
+          return ('Producto (id ${cartItem.productId}) no está en la nube. En este dispositivo abre el menú (≡) y pulsa Sincronizar para alinear IDs con la nube.', null);
         }
         final recipeRows = await client.from('recipes').select('*').eq('product_id', cloudProductId);
         for (final r in _list(recipeRows)) {
@@ -211,7 +238,6 @@ class CloudSyncService {
           final qty = _double(row['quantity_required']) * cartItem.quantity;
           final res = await client.from('supplies').select('current_stock').eq('id', supplyId).maybeSingle();
           final cur = res == null ? 0.0 : _double(_map(res)['current_stock']);
-          // Permitir venta aunque no haya stock suficiente (stock puede quedar negativo).
           await client.from('supplies').update({'current_stock': cur - qty}).eq('id', supplyId);
           await client.from('inventory_logs').insert({'supply_id': supplyId, 'change_amount': -qty, 'reason': 'SALE'});
         }
@@ -219,29 +245,48 @@ class CloudSyncService {
           final amount = mod.quantityDeducted * cartItem.quantity;
           final cloudSupplyId = supplyMap[mod.supplyId];
           if (cloudSupplyId == null) {
-            return 'Insumo (id ${mod.supplyId}) no está en la nube. Sincroniza desde la nube.';
+            return ('Insumo (id ${mod.supplyId}) no está en la nube. Sincroniza desde la nube.', null);
           }
           final res = await client.from('supplies').select('current_stock').eq('id', cloudSupplyId).maybeSingle();
           final cur = res == null ? 0.0 : _double(_map(res)['current_stock']);
-          // Permitir venta aunque no haya stock suficiente (stock puede quedar negativo).
           await client.from('supplies').update({'current_stock': cur - amount}).eq('id', cloudSupplyId);
           await client.from('inventory_logs').insert({'supply_id': cloudSupplyId, 'change_amount': -amount, 'reason': 'SALE'});
         }
       }
 
-      final saleRes = await client.from('sales').insert({
+      final device = await DeviceIdService.getDeviceInfo();
+      Map<String, dynamic> saleRow = {
         'total_amount': totalAmount,
         'payment_method': paymentMethod,
         'amount_tendered': amountTendered,
         'change_given': changeGiven,
-      }).select('id').single();
-      final saleId = _int(saleRes['id']);
-      if (saleId == null) return 'Error al crear venta';
+        'device_id': device.deviceId,
+        'device_name': device.deviceName,
+      };
+      dynamic saleRes;
+      try {
+        saleRes = await client.from('sales').insert(saleRow).select('id').single();
+      } catch (e) {
+        final msg = e.toString();
+        if (msg.contains('device_id') || msg.contains('device_name') || msg.contains('does not exist')) {
+          saleRow = {
+            'total_amount': totalAmount,
+            'payment_method': paymentMethod,
+            'amount_tendered': amountTendered,
+            'change_given': changeGiven,
+          };
+          saleRes = await client.from('sales').insert(saleRow).select('id').single();
+        } else {
+          rethrow;
+        }
+      }
+      final saleId = _int(_map(saleRes)['id']);
+      if (saleId == null) return ('Error al crear venta', null);
 
       for (final item in items) {
         final cloudProductId = productMap[item.productId];
         if (cloudProductId == null) {
-          return 'Producto (id ${item.productId}) no está en la nube. En este dispositivo pulsa Sincronizar (≡) para alinear IDs con la nube.';
+          return ('Producto (id ${item.productId}) no está en la nube. En este dispositivo pulsa Sincronizar (≡) para alinear IDs con la nube.', null);
         }
         await client.from('sale_items').insert({
           'sale_id': saleId,
@@ -250,9 +295,23 @@ class CloudSyncService {
           'unit_price': item.unitPrice,
         });
       }
-      return null;
+      return (null, saleId);
     } catch (e, st) {
       debugPrint('CloudSyncService.writeSaleToCloud: $e');
+      debugPrint('$st');
+      return (e.toString(), null);
+    }
+  }
+
+  /// Marca la venta como cancelada en Supabase (borrado lógico). No borra sale_items.
+  static Future<String?> softCancelSaleInCloud(int cloudSaleId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final client = SupabaseService.instance.client;
+      await client.from('sales').update({'cancelled_at': DateTime.now().toUtc().toIso8601String()}).eq('id', cloudSaleId);
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.softCancelSaleInCloud: $e');
       debugPrint('$st');
       return e.toString();
     }

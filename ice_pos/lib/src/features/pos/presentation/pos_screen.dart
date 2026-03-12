@@ -17,6 +17,7 @@ import 'package:ice_pos/src/features/pos/presentation/product_modifier_dialog.da
 import 'package:ice_pos/src/features/pos/presentation/qr_scanner_screen.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/utils/error_logger.dart';
 
 final _parkedOrdersStreamProvider = StreamProvider<List<ParkedOrder>>((ref) {
   return ref.watch(posRepositoryProvider).watchParkedOrders();
@@ -69,10 +70,6 @@ class PosScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          _RetrieveBar(
-            parkedOrdersAsync: parkedOrdersAsync,
-            onRetrieveTap: () => _showRetrieveBottomSheet(context, ref),
-          ),
           _CategoryBreadcrumbsBar(
             breadcrumbs: navState.breadcrumbs,
             onHomeTap: () =>
@@ -84,6 +81,12 @@ class PosScreen extends ConsumerWidget {
                 ? null
                 : () =>
                     ref.read(categoryNavigationControllerProvider.notifier).goBack(),
+            parkedCount: parkedOrdersAsync.when(
+              data: (orders) => orders.length,
+              loading: () => 0,
+              error: (_, __) => 0,
+            ),
+            onRetrieveTap: () => _showRetrieveBottomSheet(context, ref),
           ),
           Expanded(
             child: LayoutBuilder(
@@ -248,7 +251,7 @@ class PosScreen extends ConsumerWidget {
                                 }
                               }
                             } catch (e, st) {
-                                debugPrint('Checkout error: $e\n$st');
+                                logErrorToConsole(e, st);
                                 if (context.mounted) Navigator.of(context).pop();
                                 if (context.mounted) {
                                   final msg = e is StateError
@@ -438,7 +441,7 @@ class PosScreen extends ConsumerWidget {
                                 }
                               }
                             } catch (e, st) {
-                              debugPrint('Checkout error: $e\n$st');
+                              logErrorToConsole(e, st);
                               if (context.mounted) Navigator.of(context).pop();
                               if (context.mounted) {
                                 final msg = e is StateError
@@ -809,28 +812,33 @@ class _CategoryBreadcrumbsBar extends StatelessWidget {
     required this.onHomeTap,
     required this.onBreadcrumbTap,
     this.onBackTap,
+    this.parkedCount = 0,
+    this.onRetrieveTap,
   });
 
   final List<Category> breadcrumbs;
   final VoidCallback onHomeTap;
   final void Function(int index) onBreadcrumbTap;
   final VoidCallback? onBackTap;
+  final int parkedCount;
+  final VoidCallback? onRetrieveTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       elevation: 1,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Row(
           children: [
             if (onBackTap != null)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: onBackTap,
-                  tooltip: 'Back',
+              IconButton(
+                icon: const Icon(Icons.arrow_back, size: 22),
+                onPressed: onBackTap,
+                tooltip: 'Back',
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(40, 40),
                 ),
               ),
             Expanded(
@@ -892,6 +900,43 @@ class _CategoryBreadcrumbsBar extends StatelessWidget {
                 ),
               ),
             ),
+            if (onRetrieveTap != null)
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.play_circle_outline, size: 22),
+                    onPressed: onRetrieveTap,
+                    tooltip: 'Recuperar ventas pausadas',
+                    style: IconButton.styleFrom(
+                      padding: const EdgeInsets.all(8),
+                      minimumSize: const Size(40, 40),
+                    ),
+                  ),
+                  if (parkedCount > 0)
+                    Positioned(
+                      right: 2,
+                      top: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 16),
+                        child: Text(
+                          parkedCount > 99 ? '99+' : '$parkedCount',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1110,71 +1155,6 @@ Color _parseColor(String hex) {
     return Color(int.parse('FF$c', radix: 16));
   }
   return const Color(0xFF6200EE);
-}
-
-class _RetrieveBar extends StatelessWidget {
-  const _RetrieveBar({
-    required this.parkedOrdersAsync,
-    required this.onRetrieveTap,
-  });
-
-  final AsyncValue<List<ParkedOrder>> parkedOrdersAsync;
-  final VoidCallback onRetrieveTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final count = parkedOrdersAsync.when(
-      data: (orders) => orders.length,
-      loading: () => 0,
-      error: (_, __) => 0,
-    );
-    return Material(
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            const Spacer(),
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.play_circle_outline),
-                  onPressed: onRetrieveTap,
-                  tooltip: 'Retrieve Parked Order',
-                ),
-                if (count > 0)
-                  Positioned(
-                    right: 4,
-                    top: 4,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Text(
-                        count > 99 ? '99+' : '$count',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ParkedOrdersList extends StatelessWidget {

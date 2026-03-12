@@ -1,0 +1,1710 @@
+{
+  "_formato": "Recetas: cada producto lista sus ingredientes (insumos) con cantidad por unidad de producto.",
+  "_nota": "Los nombres de producto e insumo deben coincidir exactamente con los dados de alta en la app (Productos e Insumos). Crea los insumos que falten en Insumos antes de cargar.",
+  "_origen": "Recetas cargadas desde tu tabla de materia prima. Revisa cantidades y da de alta los insumos listados en Gestión de insumos.",
+  "_unidades_sugeridas": "pcs: vasos, conos, servilletas, tapas, etc. | lt: leche, agua. | kg: nutella, cheddar, nieve, etc. | ml: sabores de nieve (modificadores). Ajusta en cada insumo.",
+  "_modificadores_leyenda": "Si la receta incluye 'modificadores', el producto tiene opciones (ej. sabores de nieve). Además de los ingredientes base, se descuenta automáticamente del inventario la cantidad indicada por cada elección (ej. 50 ml por cada bola de sabor). Los insumos del modificador están en insumos_guia (unidad ml).",
+  "recetas": [
+    {
+      "producto": "Cono Mini",
+      "modificadores": {
+        "grupo": "Sabores (Elige 2 bolas)",
+        "bolas": 2,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido (ej. Nieve LECHE - Chocolate). Ver insumos_guia: sabores Nieve AGUA/LECHE/CREMA/LIGHT."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Cono",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Cono Chico",
+      "modificadores": {
+        "grupo": "Sabores (Elige 3 bolas)",
+        "bolas": 3,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido. Ver insumos_guia: sabores en ml."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Cono",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Vaso Mini",
+      "modificadores": {
+        "grupo": "Sabores (Elige 2 bolas)",
+        "bolas": 2,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Vaso Mini",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Vaso Chico",
+      "modificadores": {
+        "grupo": "Sabores (Elige 3 bolas)",
+        "bolas": 3,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Vaso Chico",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Vaso Mediano",
+      "modificadores": {
+        "grupo": "Sabores (Elige 4 bolas)",
+        "bolas": 4,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Vaso Mediano",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Vaso Grande",
+      "modificadores": {
+        "grupo": "Sabores (Elige 5 bolas)",
+        "bolas": 5,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Vaso Grande",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Canasta Mediana",
+      "modificadores": {
+        "grupo": "Sabores (Elige 4 bolas)",
+        "bolas": 4,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Canasta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Canasta Grande",
+      "modificadores": {
+        "grupo": "Sabores (Elige 5 bolas)",
+        "bolas": 5,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Canasta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cuchara",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Topping",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Nieve 1/2 Litro",
+      "modificadores": {
+        "grupo": "Elige 1 sabor",
+        "bolas": 1,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Medio litro de un sabor. Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Bote 1/2 litro",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa litro",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Bolsa",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Nieve Litro",
+      "modificadores": {
+        "grupo": "Elige 1 sabor",
+        "bolas": 1,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "Un litro de un sabor. Se deduce del insumo del sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Bote litro",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa litro",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Bolsa",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Malteada Mediano",
+      "modificadores": {
+        "grupo": "Sabor",
+        "elecciones": 1,
+        "descuento_por_eleccion": {
+          "unidad": "pcs",
+          "cantidad": 0
+        },
+        "nota": "Elige un sabor (Malteada - Oreo, Chocolate, Vainilla, etc.). Sin descuento adicional de inventario; el sabor está considerado en la receta base."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Leche",
+          "cantidad": 0.15
+        },
+        {
+          "insumo": "Hielo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Nieve",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Polvo base malteada",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Crema batida",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Muffin",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Vaso Mediano",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa domo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Malteada Grande",
+      "modificadores": {
+        "grupo": "Sabor",
+        "elecciones": 1,
+        "descuento_por_eleccion": {
+          "unidad": "pcs",
+          "cantidad": 0
+        },
+        "nota": "Elige un sabor (Malteada - Oreo, Chocolate, Vainilla, etc.). Sin descuento adicional de inventario; el sabor está considerado en la receta base."
+      },
+      "ingredientes": [
+        {
+          "insumo": "Leche",
+          "cantidad": 0.2
+        },
+        {
+          "insumo": "Hielo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Nieve",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Polvo base malteada",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Crema batida",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Muffin",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Vaso Grande",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa domo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Soda Orgánica Regular Mediano",
+      "ingredientes": [
+        {
+          "insumo": "Concentrado soda",
+          "cantidad": 0.025
+        },
+        {
+          "insumo": "Hielo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Agua mineral",
+          "cantidad": 0.35
+        },
+        {
+          "insumo": "Vaso Mediano",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Soda Orgánica Regular Grande",
+      "ingredientes": [
+        {
+          "insumo": "Concentrado soda",
+          "cantidad": 0.03
+        },
+        {
+          "insumo": "Hielo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Agua mineral",
+          "cantidad": 0.45
+        },
+        {
+          "insumo": "Vaso Grande",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Soda Orgánica con Nieve Mediano",
+      "ingredientes": [
+        {
+          "insumo": "Concentrado soda",
+          "cantidad": 0.025
+        },
+        {
+          "insumo": "Hielo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Nieve",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Agua mineral",
+          "cantidad": 0.3
+        },
+        {
+          "insumo": "Vaso Mediano",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Soda Orgánica con Nieve Grande",
+      "ingredientes": [
+        {
+          "insumo": "Concentrado soda",
+          "cantidad": 0.03
+        },
+        {
+          "insumo": "Hielo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Nieve",
+          "cantidad": 0.06
+        },
+        {
+          "insumo": "Agua mineral",
+          "cantidad": 0.4
+        },
+        {
+          "insumo": "Vaso Grande",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "croissant de jamon y queso",
+      "ingredientes": [
+        {
+          "insumo": "Cuernito",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Pechuga de pavo",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Queso gouda",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Plato cartón",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aderezo",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "croissant de nutella",
+      "ingredientes": [
+        {
+          "insumo": "Cuernito",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Nutella",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Plato cartón",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Sándwich Rey",
+      "ingredientes": [
+        {
+          "insumo": "Galletas",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Nieve",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Canasta cartón",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Reyes Waffle",
+      "ingredientes": [
+        {
+          "insumo": "Waffle",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Nieve",
+          "cantidad": 0.1
+        },
+        {
+          "insumo": "Crema batida",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Italiano",
+      "ingredientes": [
+        {
+          "insumo": "Pepperoni",
+          "cantidad": 5
+        },
+        {
+          "insumo": "Jamón selva negra",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Pechuga de pavo",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Queso gouda",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Pan baguette",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Queso cheddar",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cebolla",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Mayonesa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aderezo frambuesa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Español",
+      "ingredientes": [
+        {
+          "insumo": "Chile serrano",
+          "cantidad": 4
+        },
+        {
+          "insumo": "Queso cheddar",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Pan baguette",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Mayonesa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cebolla",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Pepino",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cilantro",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Pollo Crunch",
+      "ingredientes": [
+        {
+          "insumo": "Tiras pollo",
+          "cantidad": 3
+        },
+        {
+          "insumo": "Queso cheddar",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Queso gouda",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Mayonesa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cebolla",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Salsa chipotle",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Pollo Fit",
+      "ingredientes": [
+        {
+          "insumo": "Pan baguette",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Pechuga pollo",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Queso panela",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Pepino",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cilantro",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Light",
+      "ingredientes": [
+        {
+          "insumo": "Pan baguette",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Pechuga de pavo",
+          "cantidad": 3
+        },
+        {
+          "insumo": "Queso panela",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Pepino",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cilantro",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Alemán",
+      "ingredientes": [
+        {
+          "insumo": "Pan baguette",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Queso cheddar",
+          "cantidad": 0.05
+        },
+        {
+          "insumo": "Jamón selva negra",
+          "cantidad": 0.03
+        },
+        {
+          "insumo": "Aderezo frambuesa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cebolla",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Pepino",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Lomo Canadiense",
+      "ingredientes": [
+        {
+          "insumo": "Pan baguette",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Queso gouda",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Lomo canadiense",
+          "cantidad": 4
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cebolla",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Mayonesa",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Pizza",
+      "ingredientes": [
+        {
+          "insumo": "Pepperoni",
+          "cantidad": 6
+        },
+        {
+          "insumo": "Queso gouda",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Queso cheddar",
+          "cantidad": 0.04
+        },
+        {
+          "insumo": "Salsa chipotle",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Cebolla",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Baguetera",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Papel encerado",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Platanitos",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Jalapeños",
+          "cantidad": 1
+        }
+      ]
+    },
+    {
+      "producto": "Jamón de Pechuga de Pavo",
+      "ingredientes": [
+        {
+          "insumo": "Queso cheddar",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Pechuga de pavo",
+          "cantidad": 2.0
+        },
+        {
+          "insumo": "Mayonesa",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Aluminio",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Pepino",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Cilantro",
+          "cantidad": 1.0
+        }
+      ]
+    },
+    {
+      "producto": "Vegetariano",
+      "ingredientes": [
+        {
+          "insumo": "Pan baguette",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Lechuga",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Jitomate",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Pepino",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Cilantro",
+          "cantidad": 1.0
+        }
+      ]
+    },
+    {
+      "producto": "Mango & Ginger Power",
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "cantidad": 1.0
+        }
+      ]
+    },
+    {
+      "producto": "Matcha Paradise",
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "cantidad": 1.0
+        }
+      ]
+    },
+    {
+      "producto": "Coco Lover",
+      "ingredientes": []
+    },
+    {
+      "producto": "Coffee Energy",
+      "ingredientes": []
+    },
+    {
+      "producto": "Berry Special",
+      "ingredientes": []
+    },
+    {
+      "producto": "Chocolate Caliente Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Chocolate Caliente Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Moka Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Moka Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Matcha (Barra) Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Matcha (Barra) Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Capuccino Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Capuccino Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Latte Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Latte Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Chai Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Chai Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Taro (Barra) Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Taro (Barra) Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Tisana Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Tisana Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Americano Mediano",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Americano Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Espresso Sencillo",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Espresso Doble",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Espresso Cortado",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Paquete Amigos (3 Medios Litros)",
+      "modificadores": {
+        "grupo": "Elige 3 sabores",
+        "bolas": 3,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "3 medios litros (un sabor cada uno). Se deduce del insumo de cada sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Paquete Familiar (4 Medios Litros)",
+      "modificadores": {
+        "grupo": "Elige 4 sabores",
+        "bolas": 4,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "4 medios litros (un sabor cada uno). Se deduce del insumo de cada sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Paquete Rey (6 Medios Litros)",
+      "modificadores": {
+        "grupo": "Elige 6 sabores",
+        "bolas": 6,
+        "descuento_por_bola": {
+          "unidad": "ml",
+          "cantidad": 50
+        },
+        "nota": "6 medios litros (un sabor cada uno). Se deduce del insumo de cada sabor elegido. Ver insumos_guia."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Boli",
+      "modificadores": {
+        "grupo": "Sabor (elige cantidad por sabor)",
+        "elecciones_min": 1,
+        "elecciones_max": 50,
+        "descuento_por_eleccion": {
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        "nota": "Cada sabor elegido descuenta 1 pcs del insumo correspondiente (Boli Regular/Light - café, coco, chocolate, etc.). Ver opciones en bolis_modifiers.json."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Paleta Agua",
+      "modificadores": {
+        "grupo": "Sabor (elige cantidad por sabor)",
+        "elecciones_min": 1,
+        "elecciones_max": 50,
+        "descuento_por_eleccion": {
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        "nota": "Cada sabor elegido descuenta 1 pcs del insumo (Paleta Agua - limón, fresa, mango). Ver paletas_modifiers.json."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Paleta Forrada",
+      "modificadores": {
+        "grupo": "Sabor (elige cantidad por sabor)",
+        "elecciones_min": 1,
+        "elecciones_max": 50,
+        "descuento_por_eleccion": {
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        "nota": "Cada sabor elegido descuenta 1 pcs del insumo (Paleta Forrada - m&m, nuez, cookies & cream). Ver paletas_modifiers.json."
+      },
+      "ingredientes": []
+    },
+    {
+      "producto": "Agua",
+      "ingredientes": []
+    },
+    {
+      "producto": "Agua mineral",
+      "ingredientes": []
+    },
+    {
+      "producto": "Té verde",
+      "ingredientes": []
+    },
+    {
+      "producto": "Té helado mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Té helado grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Taro Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Taro Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Matcha Mediano",
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "cantidad": 1.0
+        }
+      ]
+    },
+    {
+      "producto": "Shake Matcha Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Pink Flamingo Mediano",
+      "ingredientes": [
+        {
+          "insumo": "Agua mineral",
+          "cantidad": 1.0
+        }
+      ]
+    },
+    {
+      "producto": "Shake Pink Flamingo Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Carbón Activado Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Carbón Activado Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Mango Spicy Hot Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Shake Mango Spicy Hot Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Cold Chai Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Cold Chai Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Frapuccino Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Frapuccino Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Americano Helado Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Americano Helado Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Latte Frío Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Latte Frío Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Mojito Botánico Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Mojito Botánico Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Sunset Mandarina Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Sunset Mandarina Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Brisa de Coco Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Brisa de Coco Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Berry Spritz Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Berry Spritz Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Mango Tropical Mediano",
+      "ingredientes": []
+    },
+    {
+      "producto": "Mango Tropical Grande",
+      "ingredientes": []
+    },
+    {
+      "producto": "Croissant Helado Monchis",
+      "ingredientes": []
+    },
+    {
+      "producto": "Croissant Helado Sencillo",
+      "ingredientes": []
+    },
+    {
+      "producto": "Paletas para Perritos Chica",
+      "ingredientes": []
+    },
+    {
+      "producto": "Paletas para Perritos Grande",
+      "ingredientes": []
+    }
+  ]
+}

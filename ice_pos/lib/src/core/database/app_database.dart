@@ -25,17 +25,31 @@ part 'app_database.g.dart';
   Shifts,
   CashMovements,
   ShiftClosures,
+  Movements,
+  AppUsers,
 ])
 class AppDatabase extends _$AppDatabase {
   // Constructor
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (migrator, from, to) async {
+          if (from < 16) {
+            await migrator.addColumn(sales, sales.cancelledAt);
+          }
+          if (from < 15) {
+            await migrator.addColumn(sales, sales.cloudSaleId);
+          }
+          if (from < 14) {
+            await migrator.createTable(appUsers);
+          }
+          if (from < 13) {
+            await migrator.createTable(movements);
+          }
           if (from < 12) {
             final hasCategory = await customSelect(
               "SELECT 1 FROM pragma_table_info('supplies') WHERE name='category'",
@@ -89,7 +103,6 @@ class AppDatabase extends _$AppDatabase {
         },
       );
 
-  // Connection logic for Android/iOS/Windows
   static QueryExecutor _openConnection() {
     return driftDatabase(
       name: 'pos_database_v2',

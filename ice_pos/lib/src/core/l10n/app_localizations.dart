@@ -55,6 +55,26 @@ class AppLocalizations {
   String get download => _('download');
   String get versionBuild => _('versionBuild');
   String get downloadHint => _('downloadHint');
+  String get downloadLinkCopied => _('downloadLinkCopied');
+
+  // Seguridad / roles / login
+  String get login => _('login');
+  String get username => _('username');
+  String get emailOrUsername => _('emailOrUsername');
+  String get password => _('password');
+  String get signIn => _('signIn');
+  String get invalidCredentials => _('invalidCredentials');
+  String get logout => _('logout');
+  String get logoutHint => _('logoutHint');
+  String get adminAccess => _('adminAccess');
+  String get adminAccessHint => _('adminAccessHint');
+  String get enterAdminPin => _('enterAdminPin');
+  String get setAdminPin => _('setAdminPin');
+  String get invalidPin => _('invalidPin');
+  String get lockAsEmployee => _('lockAsEmployee');
+  String get lockAsEmployeeHint => _('lockAsEmployeeHint');
+  String get salesToday => _('salesToday');
+  String get employeeMode => _('employeeMode');
 
   // POS / Cart
   String get pointOfSale => _('pointOfSale');
@@ -111,6 +131,62 @@ class AppLocalizations {
   // Inventory & History
   String get inventory => _('inventory');
   String get salesHistory => _('salesHistory');
+  String get cancelSale => _('cancelSale');
+  String get cancelSaleConfirmTitle => _('cancelSaleConfirmTitle');
+  String get cancelSaleConfirmBody => _('cancelSaleConfirmBody');
+  String get saleCancelled => _('saleCancelled');
+
+  // Reports
+  String get reports => _('reports');
+  String get reportsSubtitle => _('reportsSubtitle');
+  String get salesReports => _('salesReports');
+  String get inventoryReports => _('inventoryReports');
+  String get rayosXReport => _('rayosXReport');
+  String get rayosXSubtitle => _('rayosXSubtitle');
+  String get closuresOfDay => _('closuresOfDay');
+  String get noClosuresThatDay => _('noClosuresThatDay');
+  String get cutLabel => _('cutLabel');
+  String get openingTime => _('openingTime');
+  String get closingTime => _('closingTime');
+  String get startingFund => _('startingFund');
+  String get expectedInDrawer => _('expectedInDrawer');
+  String get declaredCash => _('declaredCash');
+  String get difference => _('difference');
+  String get expenses => _('expenses');
+  String get movements => _('movements');
+  String get movementsSubtitle => _('movementsSubtitle');
+  String get entry => _('entry');
+  String get exit => _('exit');
+  String get addMovement => _('addMovement');
+  String get concept => _('concept');
+  String get accountCash => _('accountCash');
+  String get accountBank => _('accountBank');
+  String get period => _('period');
+  String get periodToday => _('periodToday');
+  String get periodYesterday => _('periodYesterday');
+  String get periodThisWeek => _('periodThisWeek');
+  String get periodLastWeek => _('periodLastWeek');
+  String get periodThisMonth => _('periodThisMonth');
+  String get periodLastMonth => _('periodLastMonth');
+  String get startDate => _('startDate');
+  String get endDate => _('endDate');
+  String get totalSales => _('totalSales');
+  String get numberOfSales => _('numberOfSales');
+  String get salesByPaymentMethod => _('salesByPaymentMethod');
+  String get topProductsByRevenue => _('topProductsByRevenue');
+  String get product => _('product');
+  String get quantitySold => _('quantitySold');
+  String get revenue => _('revenue');
+  String get currentStock => _('currentStock');
+  String get reorderPoint => _('reorderPoint');
+  String get inventoryValue => _('inventoryValue');
+  String get lowStockAlert => _('lowStockAlert');
+  String get recentMovements => _('recentMovements');
+  String get reason => _('reason');
+  String get changeAmount => _('changeAmount');
+  String get reportSale => _('reportSale');
+  String get reportPurchase => _('reportPurchase');
+  String get reportWaste => _('reportWaste');
 
   // Descuentos
   String get discounts => _('discounts');
@@ -201,6 +277,24 @@ class AppLocalizations {
     'download': 'Descargar',
     'versionBuild': 'Versión',
     'downloadHint': 'Pulsa "Descargar" para abrir el enlace e instalar la nueva versión.',
+    'downloadLinkCopied': 'Enlace copiado. Pégalo en el navegador para descargar.',
+    'login': 'Iniciar sesión',
+    'username': 'Usuario',
+    'emailOrUsername': 'Usuario o correo',
+    'password': 'Contraseña',
+    'signIn': 'Entrar',
+    'invalidCredentials': 'Usuario o contraseña incorrectos',
+    'logout': 'Cerrar sesión',
+    'logoutHint': 'Salir y volver a la pantalla de login',
+    'adminAccess': 'Acceso administrador',
+    'adminAccessHint': 'Solo administradores pueden ver categorías, productos, insumos, corte y sincronización.',
+    'enterAdminPin': 'Introduce PIN de administrador',
+    'setAdminPin': 'Establecer PIN (4 dígitos)',
+    'invalidPin': 'PIN incorrecto',
+    'lockAsEmployee': 'Bloquear como empleado',
+    'lockAsEmployeeHint': 'Solo Punto de venta e historial del día',
+    'salesToday': 'Ventas del día',
+    'employeeMode': 'Modo empleado',
     'pointOfSale': 'Punto de venta',
     'cart': 'Carrito',
     'cartEmpty': 'Carrito vacío',
@@ -250,6 +344,60 @@ class AppLocalizations {
     'inCloud': 'En la nube',
     'inventory': 'Inventario',
     'salesHistory': 'Historial de ventas',
+    'cancelSale': 'Cancelar venta',
+    'cancelSaleConfirmTitle': 'Cancelar venta',
+    'cancelSaleConfirmBody': 'Se borrará esta venta solo en este dispositivo. El inventario no se revierte (si fue una venta de prueba, ajusta el stock manualmente si hace falta).',
+    'saleCancelled': 'Venta cancelada',
+    'reports': 'Reportes',
+    'reportsSubtitle': 'Estadísticas de ventas e inventario',
+    'salesReports': 'Ventas',
+    'inventoryReports': 'Inventario',
+    'rayosXReport': 'Rayos X del día',
+    'rayosXSubtitle': 'Resumen de ventas y cortes del día',
+    'closuresOfDay': 'Cortes del día',
+    'noClosuresThatDay': 'No hay cortes registrados este día',
+    'cutLabel': 'Corte',
+    'openingTime': 'Apertura',
+    'closingTime': 'Cierre',
+    'startingFund': 'Fondo inicial',
+    'expectedInDrawer': 'Esperado en caja',
+    'declaredCash': 'Declarado',
+    'difference': 'Diferencia',
+    'expenses': 'Gastos / retiros',
+    'movements': 'Movimientos',
+    'movementsSubtitle': 'Entradas y salidas de caja o banco (no son ventas)',
+    'entry': 'Entrada',
+    'exit': 'Salida',
+    'addMovement': 'Nuevo movimiento',
+    'concept': 'Concepto',
+    'accountCash': 'Caja',
+    'accountBank': 'Banco',
+    'period': 'Período',
+    'periodToday': 'Hoy',
+    'periodYesterday': 'Ayer',
+    'periodThisWeek': 'Semana en curso',
+    'periodLastWeek': 'Semana pasada',
+    'periodThisMonth': 'Mes en curso',
+    'periodLastMonth': 'Mes pasado',
+    'startDate': 'Desde',
+    'endDate': 'Hasta',
+    'totalSales': 'Total ventas',
+    'numberOfSales': 'Nº de ventas',
+    'salesByPaymentMethod': 'Por método de pago',
+    'topProductsByRevenue': 'Productos más vendidos',
+    'product': 'Producto',
+    'quantitySold': 'Cant. vendida',
+    'revenue': 'Ingresos',
+    'currentStock': 'Stock actual',
+    'reorderPoint': 'Punto de reorden',
+    'inventoryValue': 'Valor inventario',
+    'lowStockAlert': 'Stock bajo',
+    'recentMovements': 'Movimientos recientes',
+    'reason': 'Motivo',
+    'changeAmount': 'Cantidad',
+    'reportSale': 'Venta',
+    'reportPurchase': 'Compra',
+    'reportWaste': 'Merma',
     'discounts': 'Descuentos',
     'discountCode': 'Código de descuento',
     'discountByProduct': 'Descuento en producto',
@@ -333,6 +481,24 @@ class AppLocalizations {
     'download': 'Download',
     'versionBuild': 'Version',
     'downloadHint': 'Tap "Download" to open the link and install the new version.',
+    'downloadLinkCopied': 'Link copied. Paste it in your browser to download.',
+    'login': 'Log in',
+    'username': 'Username',
+    'emailOrUsername': 'Email or username',
+    'password': 'Password',
+    'signIn': 'Sign in',
+    'invalidCredentials': 'Invalid username or password',
+    'logout': 'Log out',
+    'logoutHint': 'Sign out and return to login screen',
+    'adminAccess': 'Admin access',
+    'adminAccessHint': 'Only admins can access categories, products, supplies, shift close, and sync.',
+    'enterAdminPin': 'Enter admin PIN',
+    'setAdminPin': 'Set PIN (4 digits)',
+    'invalidPin': 'Invalid PIN',
+    'lockAsEmployee': 'Lock as employee',
+    'lockAsEmployeeHint': 'POS and today\'s sales only',
+    'salesToday': 'Sales today',
+    'employeeMode': 'Employee mode',
     'pointOfSale': 'Point of Sale',
     'cart': 'Cart',
     'cartEmpty': 'Cart empty',
@@ -382,6 +548,60 @@ class AppLocalizations {
     'inCloud': 'In cloud',
     'inventory': 'Inventory',
     'salesHistory': 'Sales history',
+    'cancelSale': 'Cancel sale',
+    'cancelSaleConfirmTitle': 'Cancel sale',
+    'cancelSaleConfirmBody': 'This sale will be deleted on this device only. Inventory is not restored (for test sales, adjust stock manually if needed).',
+    'saleCancelled': 'Sale cancelled',
+    'reports': 'Reports',
+    'reportsSubtitle': 'Sales and inventory statistics',
+    'salesReports': 'Sales',
+    'inventoryReports': 'Inventory',
+    'rayosXReport': 'Day X-Ray',
+    'rayosXSubtitle': 'Sales summary and shift closures for the day',
+    'closuresOfDay': 'Closures of the day',
+    'noClosuresThatDay': 'No closures recorded for this day',
+    'cutLabel': 'Closure',
+    'openingTime': 'Opening',
+    'closingTime': 'Closing',
+    'startingFund': 'Starting fund',
+    'expectedInDrawer': 'Expected in drawer',
+    'declaredCash': 'Declared',
+    'difference': 'Difference',
+    'expenses': 'Expenses / withdrawals',
+    'movements': 'Movements',
+    'movementsSubtitle': 'Cash and bank entries and exits (not sales)',
+    'entry': 'Entry',
+    'exit': 'Exit',
+    'addMovement': 'New movement',
+    'concept': 'Concept',
+    'accountCash': 'Cash',
+    'accountBank': 'Bank',
+    'period': 'Period',
+    'periodToday': 'Today',
+    'periodYesterday': 'Yesterday',
+    'periodThisWeek': 'This week',
+    'periodLastWeek': 'Last week',
+    'periodThisMonth': 'This month',
+    'periodLastMonth': 'Last month',
+    'startDate': 'From',
+    'endDate': 'To',
+    'totalSales': 'Total sales',
+    'numberOfSales': 'No. of sales',
+    'salesByPaymentMethod': 'By payment method',
+    'topProductsByRevenue': 'Top products',
+    'product': 'Product',
+    'quantitySold': 'Qty sold',
+    'revenue': 'Revenue',
+    'currentStock': 'Current stock',
+    'reorderPoint': 'Reorder point',
+    'inventoryValue': 'Inventory value',
+    'lowStockAlert': 'Low stock',
+    'recentMovements': 'Recent movements',
+    'reason': 'Reason',
+    'changeAmount': 'Amount',
+    'reportSale': 'Sale',
+    'reportPurchase': 'Purchase',
+    'reportWaste': 'Waste',
     'discounts': 'Discounts',
     'discountCode': 'Discount code',
     'discountByProduct': 'Discount by product',

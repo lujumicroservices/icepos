@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
@@ -6,6 +8,7 @@ import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/database/seeder.dart';
 import 'package:ice_pos/src/core/services/app_update_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,30 +19,104 @@ import 'package:ice_pos/src/features/admin/presentation/product_management_scree
 import 'package:ice_pos/src/features/admin/presentation/supply_management_screen.dart';
 import 'package:ice_pos/src/features/inventory/presentation/inventory_screen.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/pos/presentation/close_shift_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/printer_setup_screen.dart';
+import 'package:ice_pos/src/features/movements/presentation/movements_screen.dart';
+import 'package:ice_pos/src/features/reports/presentation/reports_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/sales_history_screen.dart';
+import 'package:ice_pos/src/core/auth/auth_session_provider.dart';
+import 'package:ice_pos/src/core/auth/user_role_provider.dart';
+import 'package:ice_pos/src/core/utils/error_logger.dart';
 
 final selectedTabIndexProvider = StateProvider<int>((ref) => 0);
+
+/// So we only run sync once after login (RLS may require session).
+final _hasSyncedAfterLoginProvider = StateProvider<bool>((ref) => false);
+
+/// Error from sync at startup (read once from prefs and show in UI).
+final _startupSyncErrorProvider = FutureProvider<String?>((ref) => CloudSyncService.takeStartupSyncError());
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  static const _screens = [
+  static const _screensAdmin = [
     PosScreen(),
     InventoryScreen(),
     SalesHistoryScreen(),
   ];
 
+  /// En web solo mostramos pantallas administrativas (sin POS, impresora ni escáner).
+  static const _screensAdminWeb = [
+    InventoryScreen(),
+    SalesHistoryScreen(),
+  ];
+
+  static const _screensEmployeeWeb = [
+    SalesHistoryScreen(onlyToday: true),
+  ];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<AsyncValue<String?>>(_startupSyncErrorProvider, (prev, next) {
+      next.whenData((err) {
+        if (err != null && err.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Sincronización al arranque: $err'),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  duration: const Duration(seconds: 8),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              ref.invalidate(_startupSyncErrorProvider);
+            }
+          });
+        }
+      });
+    });
+    // Sync once after login (Supabase RLS may require authenticated session to read).
+    ref.listen(userRoleProvider, (prev, role) {
+      if (CloudSyncService.isEnabled && !ref.read(_hasSyncedAfterLoginProvider)) {
+        ref.read(_hasSyncedAfterLoginProvider.notifier).state = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final db = ref.read(appDatabaseProvider);
+          final err = await CloudSyncService.syncFromCloud(db);
+          ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+          if (context.mounted && err != null) {
+            final loc = ref.read(appLocalizationsProvider);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${loc.syncError}: $err'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 6),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        });
+      }
+    });
+    final role = ref.watch(userRoleProvider);
     final selectedIndex = ref.watch(selectedTabIndexProvider);
     final l10n = ref.watch(appLocalizationsProvider);
+    final screens = kIsWeb
+        ? (role == UserRole.admin ? _screensAdminWeb : _screensEmployeeWeb)
+        : (role == UserRole.admin
+            ? _screensAdmin
+            : [
+                const PosScreen(),
+                const SalesHistoryScreen(onlyToday: true),
+              ]);
+    final tabCount = screens.length;
+    final effectiveIndex = selectedIndex.clamp(0, tabCount - 1);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titleForIndex(selectedIndex, l10n)),
+        title: Text(_titleForIndex(effectiveIndex, role == UserRole.employee, l10n, isWeb: kIsWeb)),
       ),
       drawer: Drawer(
         child: ListView(
@@ -91,6 +168,7 @@ class HomeScreen extends ConsumerWidget {
               },
             ),
             const Divider(height: 1),
+            if (role == UserRole.admin) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Card(
@@ -157,6 +235,7 @@ class HomeScreen extends ConsumerWidget {
                                       );
                                     }
                                   } catch (e) {
+                                    logErrorToConsole(e);
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
@@ -200,6 +279,8 @@ class HomeScreen extends ConsumerWidget {
                                   );
                                   final db = ref.read(appDatabaseProvider);
                                   final err = await CloudSyncService.syncFromCloud(db);
+                                  ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+                                  if (err != null) logErrorToConsole(err);
                                   if (context.mounted) Navigator.of(context).pop();
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -221,6 +302,28 @@ class HomeScreen extends ConsumerWidget {
                               ),
                             ),
                           ],
+                        ),
+                      ],
+                      if (CloudSyncService.lastSyncError != null) ...[
+                        const SizedBox(height: 8),
+                        Card(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.warning_amber_rounded, color: Theme.of(context).colorScheme.error, size: 22),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    CloudSyncService.lastSyncError!,
+                                    style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onErrorContainer),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ],
@@ -283,18 +386,48 @@ class HomeScreen extends ConsumerWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.account_balance_wallet),
-              title: Text(l10n.closeShift),
+              leading: const Icon(Icons.swap_horiz),
+              title: Text(l10n.movements),
+              subtitle: Text(l10n.movementsSubtitle),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) => const CloseShiftScreen(),
+                    builder: (_) => const MovementsScreen(),
                   ),
                 );
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.analytics_outlined),
+              title: Text(l10n.reports),
+              subtitle: Text(l10n.reportsSubtitle),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ReportsScreen(),
+                  ),
+                );
+              },
+            ),
+            ],
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet),
+                title: Text(l10n.closeShift),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const CloseShiftScreen(),
+                    ),
+                  );
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.system_update),
               title: Text(l10n.checkUpdate),
@@ -339,10 +472,28 @@ class HomeScreen extends ConsumerWidget {
                           FilledButton.icon(
                             onPressed: () async {
                               final uri = Uri.parse(release.downloadUrl!);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              bool opened = false;
+                              try {
+                                opened = await launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              } catch (_) {}
+                              if (!opened) {
+                                try {
+                                  opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
+                                } catch (_) {}
                               }
                               if (ctx.mounted) Navigator.pop(ctx);
+                              if (ctx.mounted && !opened) {
+                                await Clipboard.setData(ClipboardData(text: release.downloadUrl!));
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(
+                                    content: Text(l10n.downloadLinkCopied),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
                             },
                             icon: const Icon(Icons.download, size: 20),
                             label: Text(l10n.download),
@@ -364,20 +515,22 @@ class HomeScreen extends ConsumerWidget {
                 }
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.print),
-              title: Text(l10n.printer),
-              subtitle: Text(l10n.printerSubtitle),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => const PrinterSetupScreen(),
-                  ),
-                );
-              },
-            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.print),
+                title: Text(l10n.printer),
+                subtitle: Text(l10n.printerSubtitle),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const PrinterSetupScreen(),
+                    ),
+                  );
+                },
+              ),
+            if (role == UserRole.admin) ...[
             if (CloudSyncService.isEnabled)
               ListTile(
                 leading: const Icon(Icons.cloud_upload),
@@ -468,6 +621,7 @@ class HomeScreen extends ConsumerWidget {
                       await seeder.seedProductsWithModifiersFromJson('assets/data/bebidas_leche_modifiers.json');
                       await seeder.seedProductsWithModifiersFromJson('assets/data/malteadas_modifiers.json');
                     } catch (e) {
+                      logErrorToConsole(e);
                       if (context.mounted) Navigator.of(context).pop();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -483,6 +637,7 @@ class HomeScreen extends ConsumerWidget {
                     err = await CloudSyncService.pushToCloud(db);
                     if (context.mounted) Navigator.of(context).pop();
                   }
+                  if (err != null) logErrorToConsole(err);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -574,6 +729,7 @@ class HomeScreen extends ConsumerWidget {
                     );
                   }
                 } catch (e) {
+                  logErrorToConsole(e);
                   if (context.mounted) Navigator.of(context).pop();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -668,6 +824,8 @@ class HomeScreen extends ConsumerWidget {
                   await ref.read(posRepositoryProvider).deleteAllLocalData();
                   final db = ref.read(appDatabaseProvider);
                   final err = await CloudSyncService.syncFromCloud(db);
+                  ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+                  if (err != null) logErrorToConsole(err);
                   if (context.mounted) Navigator.of(context).pop();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -685,40 +843,110 @@ class HomeScreen extends ConsumerWidget {
                   }
                 },
               ),
+            ],
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: Text(l10n.logout),
+              subtitle: Text(l10n.logoutHint),
+              onTap: () async {
+                Navigator.pop(context);
+                await ref.read(authSessionProvider.notifier).logout();
+              },
+            ),
+            const Divider(height: 1),
+            FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const SizedBox.shrink();
+                final info = snapshot.data!;
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  child: Text(
+                    '${l10n.versionBuild} ${info.version} (${info.buildNumber})',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
       body: IndexedStack(
-        index: selectedIndex,
-        children: _screens,
+        index: effectiveIndex,
+        children: screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: selectedIndex,
+        currentIndex: effectiveIndex,
         onTap: (index) {
           ref.read(selectedTabIndexProvider.notifier).state = index;
         },
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.point_of_sale_outlined),
-            activeIcon: const Icon(Icons.point_of_sale),
-            label: l10n.pointOfSale,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.inventory_2_outlined),
-            activeIcon: const Icon(Icons.inventory_2),
-            label: l10n.inventory,
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.history),
-            activeIcon: const Icon(Icons.history),
-            label: l10n.salesHistory,
-          ),
-        ],
+        items: role == UserRole.employee
+            ? [
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.point_of_sale_outlined),
+                  activeIcon: const Icon(Icons.point_of_sale),
+                  label: l10n.pointOfSale,
+                ),
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.history),
+                  activeIcon: const Icon(Icons.history),
+                  label: l10n.salesToday,
+                ),
+              ]
+            : [
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.point_of_sale_outlined),
+                  activeIcon: const Icon(Icons.point_of_sale),
+                  label: l10n.pointOfSale,
+                ),
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  activeIcon: const Icon(Icons.inventory_2),
+                  label: l10n.inventory,
+                ),
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.history),
+                  activeIcon: const Icon(Icons.history),
+                  label: l10n.salesHistory,
+                ),
+              ],
       ),
     );
   }
 
-  static String _titleForIndex(int index, AppLocalizations l10n) {
+  static String _titleForIndex(
+    int index,
+    bool isEmployee,
+    AppLocalizations l10n, {
+    bool isWeb = false,
+  }) {
+    if (isWeb) {
+      if (isEmployee) {
+        return index == 0 ? l10n.salesToday : l10n.appTitle;
+      }
+      switch (index) {
+        case 0:
+          return l10n.inventory;
+        case 1:
+          return l10n.salesHistory;
+        default:
+          return l10n.appTitle;
+      }
+    }
+    if (isEmployee) {
+      switch (index) {
+        case 0:
+          return l10n.pointOfSale;
+        case 1:
+          return l10n.salesToday;
+        default:
+          return l10n.appTitle;
+      }
+    }
     switch (index) {
       case 0:
         return l10n.pointOfSale;
@@ -729,5 +957,47 @@ class HomeScreen extends ConsumerWidget {
       default:
         return l10n.appTitle;
     }
+  }
+
+  /// Muestra un diálogo para ingresar PIN (4 dígitos). Retorna el PIN o null si canceló.
+  static Future<String?> _showPinDialog(
+    BuildContext context,
+    String title,
+    String cancelLabel,
+    String okLabel,
+  ) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          obscureText: true,
+          maxLength: 4,
+          decoration: const InputDecoration(
+            hintText: '****',
+            counterText: '',
+          ),
+          onSubmitted: (value) {
+            if (value.length == 4) Navigator.pop(ctx, value);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(cancelLabel),
+          ),
+          FilledButton(
+            onPressed: () {
+              final pin = controller.text.trim();
+              if (pin.length == 4) Navigator.pop(ctx, pin);
+            },
+            child: Text(okLabel),
+          ),
+        ],
+      ),
+    );
   }
 }

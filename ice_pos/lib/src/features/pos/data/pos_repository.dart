@@ -101,6 +101,7 @@ class ShiftTotalsForClosure {
     required this.creditSales,
     required this.transferSales,
     required this.expenses,
+    this.movementsCajaNet = 0,
   });
 
   final double startingFund;
@@ -109,13 +110,15 @@ class ShiftTotalsForClosure {
   final double creditSales;
   final double transferSales;
   final double expenses;
+  /// Neto de movimientos (entradas - salidas) de caja en este turno. Afecta el esperado en caja.
+  final double movementsCajaNet;
 
   double get cardSales => debitSales + creditSales;
   double get totalSales => cashSales + cardSales + transferSales;
 
-  /// Lo que debería haber en caja: fondo inicial + ventas efectivo - gastos.
+  /// Lo que debería haber en caja: fondo inicial + ventas efectivo - gastos + movimientos caja.
   double get expectedCashInDrawer =>
-      startingFund + cashSales + expensesNeg;
+      startingFund + cashSales + expensesNeg + movementsCajaNet;
   /// Gastos como número negativo (retiros).
   double get expensesNeg => -expenses.abs();
 }
@@ -707,6 +710,17 @@ class PosRepository {
     await _db.delete(_db.sales).go();
   }
 
+  /// Cancels a sale (borrado lógico: marca cancelled_at). No borra ítems ni revierte inventario. Admin only.
+  Future<void> deleteSale(int saleId) async {
+    final sale = await (_db.select(_db.sales)..where((t) => t.id.equals(saleId))).getSingleOrNull();
+    if (sale == null) return;
+    if (sale.cloudSaleId != null && CloudSyncService.isEnabled) {
+      await CloudSyncService.softCancelSaleInCloud(sale.cloudSaleId!);
+    }
+    await (_db.update(_db.sales)..where((t) => t.id.equals(saleId)))
+        .write(SalesCompanion(cancelledAt: Value(DateTime.now())));
+  }
+
   /// Deletes ALL local data in FK order. Use before "Sincronizar desde la nube" for a full reload from cloud.
   Future<void> deleteAllLocalData() async {
     await _db.delete(_db.saleItems).go();
@@ -721,6 +735,7 @@ class PosRepository {
     await _db.delete(_db.products).go();
     await _db.delete(_db.supplies).go();
     await _db.delete(_db.categories).go();
+    await _db.delete(_db.movements).go();
     await _db.delete(_db.cashMovements).go();
     await _db.delete(_db.shiftClosures).go();
     await _db.delete(_db.shifts).go();
@@ -728,7 +743,7 @@ class PosRepository {
     await _db.delete(_db.discounts).go();
   }
 
-  /// Observes sales history with items, ordered by date descending.
+  /// Observes sales history with items, ordered by date descending. Excludes cancelled sales.
   Stream<List<SaleWithItems>> watchSalesHistory() {
     final query = _db.select(_db.sales).join([
       innerJoin(
@@ -740,6 +755,7 @@ class PosRepository {
         _db.products.id.equalsExp(_db.saleItems.productId),
       ),
     ])
+      ..where(_db.sales.cancelledAt.isNull())
       ..orderBy([OrderingTerm.desc(_db.sales.date)]);
 
     return query.watch().map((rows) {
@@ -827,8 +843,9 @@ class PosRepository {
       amount = amount * (1 - discount.percentage);
     }
 
+    int? cloudSaleId;
     if (CloudSyncService.isEnabled) {
-      final err = await CloudSyncService.writeSaleToCloud(
+      final (err, id) = await CloudSyncService.writeSaleToCloud(
         items,
         totalAmount: amount,
         paymentMethod: paymentMethod,
@@ -836,6 +853,7 @@ class PosRepository {
         changeGiven: changeGiven,
       );
       if (err != null) throw StateError(err);
+      cloudSaleId = id;
     }
 
     SaleSyncPayload? payload;
@@ -933,13 +951,14 @@ class PosRepository {
         }
       }
 
-      // 2. Finally, insert the Sale record and sale items
+      // 2. Finally, insert the Sale record and sale items (store cloud id so we can cancel in cloud)
       final saleId = await _db.into(_db.sales).insert(
             SalesCompanion.insert(
               totalAmount: amount,
               paymentMethod: Value(paymentMethod),
               amountTendered: Value(amountTendered),
               changeGiven: Value(changeGiven),
+              cloudSaleId: Value(cloudSaleId),
             ),
           );
 
@@ -973,6 +992,54 @@ class PosRepository {
       );
     });
     return payload;
+  }
+
+  /// Registra un movimiento (entrada o salida) que afecta caja o banco. No es una venta.
+  /// Si account es CAJA y hay turno abierto, se asocia al turno (shiftId).
+  Future<int> insertMovement({
+    required String type,
+    required String account,
+    required double amount,
+    required String reason,
+    int? shiftId,
+  }) async {
+    return _db.into(_db.movements).insert(
+          MovementsCompanion.insert(
+            type: type,
+            account: account,
+            amount: amount,
+            reason: reason,
+            shiftId: shiftId != null ? Value(shiftId) : const Value.absent(),
+          ),
+        );
+  }
+
+  /// Lista de movimientos ordenados por fecha descendente.
+  Stream<List<Movement>> watchMovements({String? account, int limit = 200}) {
+    if (account != null) {
+      return (_db.select(_db.movements)
+            ..where((m) => m.account.equals(account))
+            ..orderBy([(m) => OrderingTerm.desc(m.date)])
+            ..limit(limit))
+          .watch();
+    }
+    return (_db.select(_db.movements)
+          ..orderBy([(m) => OrderingTerm.desc(m.date)])
+          ..limit(limit))
+        .watch();
+  }
+
+  /// Neto de movimientos de caja para un turno: sum(ENTRADA) - sum(SALIDA). Afecta el esperado en caja.
+  Future<double> getMovementsCajaNetForShift(int shiftId) async {
+    final rows = await (_db.select(_db.movements)
+          ..where((m) => m.account.equals('CAJA') & m.shiftId.equals(shiftId)))
+        .get();
+    double net = 0;
+    for (final r in rows) {
+      if (r.type == 'ENTRADA') net += r.amount;
+      else if (r.type == 'SALIDA') net -= r.amount;
+    }
+    return net;
   }
 
   /// Gets the current (open) shift, or null if none.
@@ -1022,11 +1089,12 @@ class PosRepository {
 
       final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
           _db.sales.date.isSmallerOrEqualValue(now);
+      final notCancelled = _db.sales.cancelledAt.isNull();
 
       // Cash sales
       final cashSales = await (_db.selectOnly(_db.sales)
             ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange))
+            ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
           .getSingle();
       final cashSalesTotal =
           cashSales.read(_db.sales.totalAmount.sum()) ?? 0.0;
@@ -1036,7 +1104,8 @@ class PosRepository {
             ..addColumns([_db.sales.totalAmount.sum()])
             ..where((_db.sales.paymentMethod.equals('CARD_DEBIT') |
                     _db.sales.paymentMethod.equals('CARD_CREDIT')) &
-                dateInRange))
+                dateInRange &
+                notCancelled))
           .getSingle();
       final cardSalesTotal =
           cardSalesQuery.read(_db.sales.totalAmount.sum()) ?? 0.0;
@@ -1044,7 +1113,7 @@ class PosRepository {
       // Transfer sales
       final transferSalesQuery = await (_db.selectOnly(_db.sales)
             ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange))
+            ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
           .getSingle();
       final transferSalesTotal =
           transferSalesQuery.read(_db.sales.totalAmount.sum()) ?? 0.0;
@@ -1059,9 +1128,11 @@ class PosRepository {
       // amount is negative for expenses, so expensesTotal is negative
       final expensesAbs = expensesTotal.abs();
 
-      // systemExpectedCash = startingFund + cashSales - expenses
+      final movementsCajaNet = await getMovementsCajaNetForShift(shiftId);
+
+      // systemExpectedCash = startingFund + cashSales - expenses + movimientos caja
       final systemExpectedCash =
-          shift.startingFund + cashSalesTotal + expensesTotal;
+          shift.startingFund + cashSalesTotal + expensesTotal + movementsCajaNet;
 
       final difference = declaredCash - systemExpectedCash;
 
@@ -1112,28 +1183,29 @@ class PosRepository {
     final now = DateTime.now();
     final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
         _db.sales.date.isSmallerOrEqualValue(now);
+    final notCancelled = _db.sales.cancelledAt.isNull();
 
     final cashR = await (_db.selectOnly(_db.sales)
           ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange))
+          ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
         .getSingle();
     final cashSales = cashR.read(_db.sales.totalAmount.sum()) ?? 0.0;
 
     final debitR = await (_db.selectOnly(_db.sales)
           ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange))
+          ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange & notCancelled))
         .getSingle();
     final debitSales = debitR.read(_db.sales.totalAmount.sum()) ?? 0.0;
 
     final creditR = await (_db.selectOnly(_db.sales)
           ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange))
+          ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange & notCancelled))
         .getSingle();
     final creditSales = creditR.read(_db.sales.totalAmount.sum()) ?? 0.0;
 
     final transferR = await (_db.selectOnly(_db.sales)
           ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange))
+          ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
         .getSingle();
     final transferSales = transferR.read(_db.sales.totalAmount.sum()) ?? 0.0;
 
@@ -1144,6 +1216,8 @@ class PosRepository {
     final expensesSum = expR.read(_db.cashMovements.amount.sum()) ?? 0.0;
     final expenses = expensesSum.abs();
 
+    final movementsCajaNet = await getMovementsCajaNetForShift(shiftId);
+
     return ShiftTotalsForClosure(
       startingFund: shift.startingFund,
       cashSales: cashSales,
@@ -1151,6 +1225,7 @@ class PosRepository {
       creditSales: creditSales,
       transferSales: transferSales,
       expenses: expenses,
+      movementsCajaNet: movementsCajaNet,
     );
   }
 
@@ -1167,6 +1242,7 @@ class PosRepository {
     final cashSalesResult = await (_db.selectOnly(_db.sales)
           ..addColumns([_db.sales.totalAmount.sum()])
           ..where(_db.sales.paymentMethod.equals('CASH') &
+              _db.sales.cancelledAt.isNull() &
               _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
               _db.sales.date.isSmallerOrEqualValue(now)))
         .getSingle();
@@ -1185,6 +1261,328 @@ class PosRepository {
       expenses: expenses,
     );
   }
+
+  // ----- Reportes -----
+
+  /// Cortes (cierres de turno) cuyo cierre ocurrió en el día indicado (fecha en hora local).
+  /// Incluye desglose de ventas por forma de pago y datos de caja.
+  Future<List<ClosureDayRow>> getClosuresForDay(DateTime day) async {
+    final dayStart = DateTime(day.year, day.month, day.day);
+
+    final closuresWithShifts = await (_db.select(_db.shiftClosures)
+          ..orderBy([(c) => OrderingTerm.asc(c.closingTime)]))
+        .join([
+      innerJoin(
+        _db.shifts,
+        _db.shifts.id.equalsExp(_db.shiftClosures.shiftId),
+      ),
+    ]).get();
+
+    final result = <ClosureDayRow>[];
+    for (final row in closuresWithShifts) {
+      final closure = row.readTable(_db.shiftClosures);
+      final shift = row.readTable(_db.shifts);
+      final closingLocal = closure.closingTime.toLocal();
+      final closingDate = DateTime(closingLocal.year, closingLocal.month, closingLocal.day);
+      if (closingDate != dayStart) continue;
+      final endTime = shift.endTime ?? closure.closingTime;
+      final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
+          _db.sales.date.isSmallerOrEqualValue(endTime);
+      final notCancelled = _db.sales.cancelledAt.isNull();
+
+      final cashRes = await (_db.selectOnly(_db.sales)
+            ..addColumns([_db.sales.totalAmount.sum()])
+            ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
+          .getSingle();
+      final cashSales = cashRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+      final debitRes = await (_db.selectOnly(_db.sales)
+            ..addColumns([_db.sales.totalAmount.sum()])
+            ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange & notCancelled))
+          .getSingle();
+      final cardDebit = debitRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+      final creditRes = await (_db.selectOnly(_db.sales)
+            ..addColumns([_db.sales.totalAmount.sum()])
+            ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange & notCancelled))
+          .getSingle();
+      final cardCredit = creditRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+      final transferRes = await (_db.selectOnly(_db.sales)
+            ..addColumns([_db.sales.totalAmount.sum()])
+            ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
+          .getSingle();
+      final transferSales = transferRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
+
+      final expensesRes = await (_db.selectOnly(_db.cashMovements)
+            ..addColumns([_db.cashMovements.amount.sum()])
+            ..where(_db.cashMovements.shiftId.equals(shift.id)))
+          .getSingle();
+      final expensesSum = expensesRes.read(_db.cashMovements.amount.sum()) ?? 0.0;
+      final expenses = expensesSum.abs();
+
+      result.add(ClosureDayRow(
+        shiftId: shift.id,
+        startTime: shift.startTime,
+        endTime: endTime,
+        closingTime: closure.closingTime,
+        startingFund: shift.startingFund,
+        cashSales: cashSales,
+        cardDebit: cardDebit,
+        cardCredit: cardCredit,
+        transferSales: transferSales,
+        expenses: expenses,
+        systemExpectedCash: closure.systemExpectedCash,
+        declaredCash: closure.declaredCash,
+        difference: closure.difference,
+        notes: closure.notes,
+      ));
+    }
+    return result;
+  }
+
+  /// Ventas en un rango de fechas: total, cantidad de ventas, desglose por método de pago.
+  Future<SalesReportSummary> getSalesReportSummary({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final endOfDay = DateTime(end.year, end.month, end.day, 23, 59, 59);
+    final salesInRange = await (_db.select(_db.sales)
+          ..where((s) =>
+              s.cancelledAt.isNull() &
+              s.date.isBiggerOrEqualValue(start) &
+              s.date.isSmallerOrEqualValue(endOfDay)))
+        .get();
+
+    double total = 0;
+    int count = 0;
+    double cash = 0, cardDebit = 0, cardCredit = 0, transfer = 0;
+    for (final s in salesInRange) {
+      total += s.totalAmount;
+      count++;
+      switch (s.paymentMethod) {
+        case 'CASH':
+          cash += s.totalAmount;
+          break;
+        case 'CARD_DEBIT':
+          cardDebit += s.totalAmount;
+          break;
+        case 'CARD_CREDIT':
+          cardCredit += s.totalAmount;
+          break;
+        case 'TRANSFER':
+          transfer += s.totalAmount;
+          break;
+        default:
+          cash += s.totalAmount;
+      }
+    }
+    return SalesReportSummary(
+      totalAmount: total,
+      saleCount: count,
+      cash: cash,
+      cardDebit: cardDebit,
+      cardCredit: cardCredit,
+      transfer: transfer,
+    );
+  }
+
+  /// Productos más vendidos en un rango de fechas (por monto).
+  Future<List<ProductSalesRow>> getTopProductsByDateRange({
+    required DateTime start,
+    required DateTime end,
+    int limit = 20,
+  }) async {
+    final endOfDay = DateTime(end.year, end.month, end.day, 23, 59, 59);
+    final query = _db.select(_db.saleItems).join([
+      innerJoin(_db.sales, _db.sales.id.equalsExp(_db.saleItems.saleId)),
+      innerJoin(_db.products, _db.products.id.equalsExp(_db.saleItems.productId)),
+    ])
+      ..where(_db.sales.cancelledAt.isNull() &
+          _db.sales.date.isBiggerOrEqualValue(start) &
+          _db.sales.date.isSmallerOrEqualValue(endOfDay));
+
+    final rows = await query.get();
+    final byProduct = <String, ({double qty, double revenue})>{};
+    for (final row in rows) {
+      final saleItem = row.readTable(_db.saleItems);
+      final product = row.readTable(_db.products);
+      final name = product.name;
+      final qty = saleItem.quantity;
+      final revenue = saleItem.quantity * saleItem.unitPrice;
+      final prev = byProduct[name] ?? (qty: 0.0, revenue: 0.0);
+      byProduct[name] = (qty: prev.qty + qty, revenue: prev.revenue + revenue);
+    }
+    final list = byProduct.entries
+        .map((e) => ProductSalesRow(
+              productName: e.key,
+              quantitySold: e.value.qty,
+              revenue: e.value.revenue,
+            ))
+        .toList();
+    list.sort((a, b) => b.revenue.compareTo(a.revenue));
+    return list.take(limit).toList();
+  }
+
+  /// Resumen de inventario: todos los insumos con stock actual, punto de reorden y valor.
+  Future<List<InventoryReportRow>> getInventoryReport() async {
+    final supplies = await _db.select(_db.supplies).get();
+    return supplies
+        .map((s) => InventoryReportRow(
+              supplyId: s.id,
+              supplyName: s.name,
+              unit: s.unit,
+              currentStock: s.currentStock,
+              reorderPoint: s.reorderPoint,
+              costPerUnit: s.costPerUnit,
+              category: s.category,
+            ))
+        .toList();
+  }
+
+  /// Insumos con stock por debajo del punto de reorden.
+  Future<List<InventoryReportRow>> getLowStockSupplies() async {
+    final list = await getInventoryReport();
+    return list.where((r) => r.currentStock < r.reorderPoint).toList();
+  }
+
+  /// Movimientos de inventario en un rango (SALE, PURCHASE, WASTE).
+  Future<List<InventoryLogRow>> getInventoryLogsSummary({
+    required DateTime start,
+    required DateTime end,
+    int limit = 100,
+  }) async {
+    final endOfDay = DateTime(end.year, end.month, end.day, 23, 59, 59);
+    final query = _db.select(_db.inventoryLogs).join([
+      innerJoin(_db.supplies, _db.supplies.id.equalsExp(_db.inventoryLogs.supplyId)),
+    ])
+      ..where(_db.inventoryLogs.date.isBiggerOrEqualValue(start) &
+          _db.inventoryLogs.date.isSmallerOrEqualValue(endOfDay))
+      ..orderBy([OrderingTerm.desc(_db.inventoryLogs.date)])
+      ..limit(limit);
+
+    final rows = await query.get();
+    return rows
+        .map((row) {
+          final log = row.readTable(_db.inventoryLogs);
+          final supply = row.readTable(_db.supplies);
+          return InventoryLogRow(
+            supplyName: supply.name,
+            unit: supply.unit,
+            changeAmount: log.changeAmount,
+            reason: log.reason,
+            date: log.date,
+          );
+        })
+        .toList();
+  }
+}
+
+/// Resumen de ventas para reportes.
+class SalesReportSummary {
+  const SalesReportSummary({
+    required this.totalAmount,
+    required this.saleCount,
+    required this.cash,
+    required this.cardDebit,
+    required this.cardCredit,
+    required this.transfer,
+  });
+  final double totalAmount;
+  final int saleCount;
+  final double cash;
+  final double cardDebit;
+  final double cardCredit;
+  final double transfer;
+  double get card => cardDebit + cardCredit;
+}
+
+/// Fila de ventas por producto.
+class ProductSalesRow {
+  const ProductSalesRow({
+    required this.productName,
+    required this.quantitySold,
+    required this.revenue,
+  });
+  final String productName;
+  final double quantitySold;
+  final double revenue;
+}
+
+/// Fila de reporte de inventario.
+class InventoryReportRow {
+  const InventoryReportRow({
+    required this.supplyId,
+    required this.supplyName,
+    required this.unit,
+    required this.currentStock,
+    required this.reorderPoint,
+    required this.costPerUnit,
+    this.category,
+  });
+  final int supplyId;
+  final String supplyName;
+  final String unit;
+  final double currentStock;
+  final double reorderPoint;
+  final double costPerUnit;
+  final String? category;
+  double get value => currentStock * costPerUnit;
+  bool get isLowStock => currentStock < reorderPoint;
+}
+
+/// Fila de movimiento de inventario.
+class InventoryLogRow {
+  const InventoryLogRow({
+    required this.supplyName,
+    required this.unit,
+    required this.changeAmount,
+    required this.reason,
+    required this.date,
+  });
+  final String supplyName;
+  final String unit;
+  final double changeAmount;
+  final String reason;
+  final DateTime date;
+}
+
+/// Fila del reporte Rayos X: un corte (cierre de turno) con resumen de ventas y caja.
+class ClosureDayRow {
+  const ClosureDayRow({
+    required this.shiftId,
+    required this.startTime,
+    required this.endTime,
+    required this.closingTime,
+    required this.startingFund,
+    required this.cashSales,
+    required this.cardDebit,
+    required this.cardCredit,
+    required this.transferSales,
+    required this.expenses,
+    required this.systemExpectedCash,
+    required this.declaredCash,
+    required this.difference,
+    this.notes,
+  });
+
+  final int shiftId;
+  final DateTime startTime;
+  final DateTime endTime;
+  final DateTime closingTime;
+  final double startingFund;
+  final double cashSales;
+  final double cardDebit;
+  final double cardCredit;
+  final double transferSales;
+  final double expenses;
+  final double systemExpectedCash;
+  final double declaredCash;
+  final double difference;
+  final String? notes;
+
+  double get cardSales => cardDebit + cardCredit;
+  double get totalSales => cashSales + cardSales + transferSales;
 }
 
 @riverpod
