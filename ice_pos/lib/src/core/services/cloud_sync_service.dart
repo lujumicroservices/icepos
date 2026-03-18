@@ -58,43 +58,89 @@ class CloudSyncService {
     }
   }
 
+  static const int _syncMaxAttempts = 3;
+  static const Duration _syncRetryDelay = Duration(seconds: 2);
+
+  static bool _isRetryableNetworkError(Object e) {
+    final s = e.toString();
+    return s.contains('SocketException') ||
+        s.contains('Failed host lookup') ||
+        s.contains('No address associated') ||
+        s.contains('connection abort') ||
+        s.contains('Connection refused') ||
+        s.contains('TimeoutException') ||
+        s.contains('ClientException');
+  }
+
   /// Replaces local master data with Supabase data. Does not sync sales (those are write-through).
   /// Fetches all data from cloud first; only clears local DB after a successful fetch so a failed
-  /// sync (network, RLS, etc.) never wipes local data.
+  /// sync (network, RLS, etc.) never wipes local data. Retries up to [_syncMaxAttempts] on network errors.
   static Future<String?> syncFromCloud(AppDatabase db) async {
     if (!SupabaseService.isInitialized) return null;
     final client = SupabaseService.instance.client;
 
-    // 1. Fetch everything from cloud first (no local writes). On any failure we return without touching local DB.
-    List<Map<String, dynamic>> catRows;
-    List<Map<String, dynamic>> supRows;
-    List<Map<String, dynamic>> prodRows;
-    List<Map<String, dynamic>> recRows;
-    List<Map<String, dynamic>> mgRows;
-    List<Map<String, dynamic>> pmRows;
-    List<Map<String, dynamic>> moRows;
-    List<Map<String, dynamic>> bundleRows;
-    List<Map<String, dynamic>> biRows;
-    try {
-      final catRaw = await client.from('categories').select('*').order('id');
-      catRows = _list(catRaw).map((r) => _map(r)).toList();
-      // If cloud has no categories, do not wipe local — leave data as is.
-      if (catRows.isEmpty) {
-        lastSyncError = 'La nube no tiene categorías. Sube datos desde otro dispositivo (Cargar desde JSON y enviar a la nube).';
-        return lastSyncError;
+    // 1. Fetch everything from cloud first (no local writes). Retry on network errors.
+    List<Map<String, dynamic>> catRows = [];
+    List<Map<String, dynamic>> supRows = [];
+    List<Map<String, dynamic>> prodRows = [];
+    List<Map<String, dynamic>> recRows = [];
+    List<Map<String, dynamic>> mgRows = [];
+    List<Map<String, dynamic>> pmRows = [];
+    List<Map<String, dynamic>> moRows = [];
+    List<Map<String, dynamic>> bundleRows = [];
+    List<Map<String, dynamic>> biRows = [];
+
+    Object? lastError;
+    StackTrace? lastStack;
+    for (var attempt = 1; attempt <= _syncMaxAttempts; attempt++) {
+      try {
+        final catRaw = await client.from('categories').select('*').order('id');
+        catRows = _list(catRaw).map((r) => _map(r)).toList();
+        if (catRows.isEmpty) {
+          lastSyncError = 'La nube no tiene categorías. En el primer dispositivo usa Cargar menú desde JSON en el menú (≡); los datos se enviarán a la nube al guardar.';
+          return lastSyncError;
+        }
+        final rest = await Future.wait([
+          client.from('supplies').select('*').order('id'),
+          client.from('products').select('*').order('id'),
+          client.from('recipes').select('*').order('id'),
+          client.from('modifier_groups').select('*').order('id'),
+          client.from('product_modifiers').select('*'),
+          client.from('modifier_options').select('*'),
+          client.from('bundles').select('*').order('id'),
+          client.from('bundle_items').select('*'),
+        ]);
+        supRows = _list(rest[0]).map((r) => _map(r)).toList();
+        prodRows = _list(rest[1]).map((r) => _map(r)).toList();
+        recRows = _list(rest[2]).map((r) => _map(r)).toList();
+        mgRows = _list(rest[3]).map((r) => _map(r)).toList();
+        pmRows = _list(rest[4]).map((r) => _map(r)).toList();
+        moRows = _list(rest[5]).map((r) => _map(r)).toList();
+        bundleRows = _list(rest[6]).map((r) => _map(r)).toList();
+        biRows = _list(rest[7]).map((r) => _map(r)).toList();
+        lastError = null;
+        break;
+      } catch (e, st) {
+        lastError = e;
+        lastStack = st;
+        debugPrint('CloudSyncService.syncFromCloud fetch failed (intento $attempt/$_syncMaxAttempts): $e');
+        if (_isRetryableNetworkError(e) && attempt < _syncMaxAttempts) {
+          debugPrint('CloudSyncService.syncFromCloud: reintento en ${_syncRetryDelay.inSeconds}s...');
+          await Future<void>.delayed(_syncRetryDelay);
+        } else {
+          debugPrint('$st');
+          lastSyncError = e.toString();
+          return lastSyncError;
+        }
       }
-      supRows = _list(await client.from('supplies').select('*').order('id')).map((r) => _map(r)).toList();
-      prodRows = _list(await client.from('products').select('*').order('id')).map((r) => _map(r)).toList();
-      recRows = _list(await client.from('recipes').select('*').order('id')).map((r) => _map(r)).toList();
-      mgRows = _list(await client.from('modifier_groups').select('*').order('id')).map((r) => _map(r)).toList();
-      pmRows = _list(await client.from('product_modifiers').select('*')).map((r) => _map(r)).toList();
-      moRows = _list(await client.from('modifier_options').select('*')).map((r) => _map(r)).toList();
-      bundleRows = _list(await client.from('bundles').select('*').order('id')).map((r) => _map(r)).toList();
-      biRows = _list(await client.from('bundle_items').select('*')).map((r) => _map(r)).toList();
-    } catch (e, st) {
-      debugPrint('CloudSyncService.syncFromCloud fetch failed: $e');
-      debugPrint('$st');
-      lastSyncError = e.toString();
+    }
+    if (lastError != null) {
+      if (lastStack != null) debugPrint('$lastStack');
+      lastSyncError = lastError.toString();
+      return lastSyncError;
+    }
+    if (catRows.isEmpty) {
+      lastSyncError = 'No se pudo cargar datos de la nube.';
       return lastSyncError;
     }
 
@@ -118,6 +164,7 @@ class CloudSyncService {
           name: Value(row['name'] as String),
           parentId: Value(cloudParentId),
           color: Value(row['color'] as String?),
+          imageUrl: Value(row['image_url'] as String?),
         ));
       }
       for (final row in supRows) {
@@ -223,13 +270,13 @@ class CloudSyncService {
       final client = SupabaseService.instance.client;
       final (productMap, supplyMap) = await _loadIdMaps();
       if (productMap.isEmpty) {
-        return ('Falta el mapa de productos con la nube. Abre el menú (≡) y pulsa "Sincronizar" si la nube ya tiene datos, o "Enviar datos a la nube" si este dispositivo tiene el menú.', null);
+        return ('Falta el mapa de productos con la nube. Comprueba la conexión; los datos se sincronizan automáticamente. Si este es el primer dispositivo, carga el menú desde JSON en el menú (≡).', null);
       }
 
       for (final cartItem in items) {
         final cloudProductId = productMap[cartItem.productId];
         if (cloudProductId == null) {
-          return ('Producto (id ${cartItem.productId}) no está en la nube. En este dispositivo abre el menú (≡) y pulsa Sincronizar para alinear IDs con la nube.', null);
+          return ('Producto (id ${cartItem.productId}) no está en la nube. Espera a que la sincronización automática actualice los datos o comprueba la conexión.', null);
         }
         final recipeRows = await client.from('recipes').select('*').eq('product_id', cloudProductId);
         for (final r in _list(recipeRows)) {
@@ -245,7 +292,7 @@ class CloudSyncService {
           final amount = mod.quantityDeducted * cartItem.quantity;
           final cloudSupplyId = supplyMap[mod.supplyId];
           if (cloudSupplyId == null) {
-            return ('Insumo (id ${mod.supplyId}) no está en la nube. Sincroniza desde la nube.', null);
+            return ('Insumo (id ${mod.supplyId}) no está en la nube. Espera a que la sincronización automática actualice los datos.', null);
           }
           final res = await client.from('supplies').select('current_stock').eq('id', cloudSupplyId).maybeSingle();
           final cur = res == null ? 0.0 : _double(_map(res)['current_stock']);
@@ -286,7 +333,7 @@ class CloudSyncService {
       for (final item in items) {
         final cloudProductId = productMap[item.productId];
         if (cloudProductId == null) {
-          return ('Producto (id ${item.productId}) no está en la nube. En este dispositivo pulsa Sincronizar (≡) para alinear IDs con la nube.', null);
+          return ('Producto (id ${item.productId}) no está en la nube. Espera a que la sincronización automática actualice los datos o comprueba la conexión.', null);
         }
         await client.from('sale_items').insert({
           'sale_id': saleId,
@@ -331,6 +378,63 @@ class CloudSyncService {
       return null;
     } catch (e, st) {
       debugPrint('CloudSyncService.writeShiftToCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Descarga movimientos del turno desde la nube y los inserta en local si no existen (para incluir movimientos de otros dispositivos antes de cerrar turno).
+  static Future<String?> pullMovementsForShift(AppDatabase db, int shiftId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final client = SupabaseService.instance.client;
+      final res = await client
+          .from('movements')
+          .select('id, date, type, account, amount, reason, shift_id')
+          .eq('shift_id', shiftId)
+          .order('id');
+      final rows = _list(res).map((r) => _map(r)).toList();
+      for (final row in rows) {
+        final cloudId = _int(row['id'])!;
+        final existing = await (db.select(db.movements)..where((m) => m.id.equals(cloudId))).getSingleOrNull();
+        if (existing != null) continue;
+        final dateStr = row['date'] as String?;
+        final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
+        await db.into(db.movements).insert(MovementsCompanion.insert(
+              type: row['type'] as String,
+              account: row['account'] as String,
+              amount: _double(row['amount']),
+              reason: row['reason'] as String,
+              id: Value(cloudId),
+              date: Value(date ?? DateTime.now()),
+              shiftId: Value(_int(row['shift_id'])),
+            ));
+      }
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.pullMovementsForShift: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Envía un movimiento a la nube (para que otros dispositivos lo vean al hacer pull antes de cerrar turno).
+  static Future<String?> writeMovementToCloud(Movement movement) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final client = SupabaseService.instance.client;
+      await client.from('movements').upsert({
+        'id': movement.id,
+        'date': movement.date.toUtc().toIso8601String(),
+        'type': movement.type,
+        'account': movement.account,
+        'amount': movement.amount,
+        'reason': movement.reason,
+        'shift_id': movement.shiftId,
+      }, onConflict: 'id');
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.writeMovementToCloud: $e');
       debugPrint('$st');
       return e.toString();
     }
@@ -391,6 +495,343 @@ class CloudSyncService {
     return v == 1 || v == 'true';
   }
 
+  // ----- Write-through: sync single entities to cloud so other devices get changes via Realtime -----
+
+  static Future<String?> upsertCategoryToCloud({
+    required int id,
+    required String name,
+    int? parentId,
+    String? color,
+    String? imageUrl,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('categories').upsert({
+        'id': id,
+        'name': name,
+        'parent_id': parentId,
+        'color': color,
+        'image_url': imageUrl,
+      }, onConflict: 'id');
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.upsertCategoryToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteCategoryFromCloud(int id) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('categories').delete().match({'id': id});
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteCategoryFromCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> upsertProductToCloud({
+    required int id,
+    required String name,
+    required double price,
+    int? categoryId,
+    bool isActive = true,
+    String? imageUrl,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('products').upsert({
+        'id': id,
+        'name': name,
+        'price': price,
+        'category_id': categoryId,
+        'is_active': isActive,
+        'image_url': imageUrl,
+      }, onConflict: 'id');
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.upsertProductToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteProductFromCloud(int id) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('products').delete().match({'id': id});
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteProductFromCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> upsertSupplyToCloud({
+    required int id,
+    required String name,
+    required String unit,
+    required double currentStock,
+    double costPerUnit = 0,
+    double reorderPoint = 0,
+    String? category,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('supplies').upsert({
+        'id': id,
+        'name': name,
+        'unit': unit,
+        'current_stock': currentStock,
+        'cost_per_unit': costPerUnit,
+        'reorder_point': reorderPoint,
+        'category': category,
+      }, onConflict: 'id');
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.upsertSupplyToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteSupplyFromCloud(int id) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('supplies').delete().match({'id': id});
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteSupplyFromCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> upsertBundleToCloud({
+    required int id,
+    required String name,
+    required double price,
+    bool isActive = true,
+    int? categoryId,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('bundles').upsert({
+        'id': id,
+        'name': name,
+        'price': price,
+        'is_active': isActive,
+        'category_id': categoryId,
+      }, onConflict: 'id');
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.upsertBundleToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> insertBundleItemToCloud({
+    required int bundleId,
+    required int productId,
+    required double quantity,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('bundle_items').insert({
+        'bundle_id': bundleId,
+        'product_id': productId,
+        'quantity': quantity,
+      });
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.insertBundleItemToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteBundleItemsFromCloud(int bundleId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('bundle_items').delete().eq('bundle_id', bundleId);
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteBundleItemsFromCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteBundleFromCloud(int id) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('bundle_items').delete().eq('bundle_id', id);
+      await SupabaseService.instance.client.from('bundles').delete().match({'id': id});
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteBundleFromCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteRecipesForProductFromCloud(int productId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('recipes').delete().eq('product_id', productId);
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteRecipesForProductFromCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> insertRecipeToCloud({
+    required int productId,
+    required int supplyId,
+    required double quantityRequired,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('recipes').insert({
+        'product_id': productId,
+        'supply_id': supplyId,
+        'quantity_required': quantityRequired,
+      });
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.insertRecipeToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  /// Deletes modifier_options, product_modifiers, and modifier_groups for groups that are linked to this product.
+  static Future<String?> deleteModifiersForProductFromCloud(int productId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final client = SupabaseService.instance.client;
+      final pmRows = await client.from('product_modifiers').select('modifier_group_id').eq('product_id', productId);
+      final groupIds = _list(pmRows).map((r) => _int(_map(r)['modifier_group_id'])).whereType<int>().toSet();
+      for (final gid in groupIds) {
+        await client.from('modifier_options').delete().eq('modifier_group_id', gid);
+      }
+      await client.from('product_modifiers').delete().eq('product_id', productId);
+      for (final gid in groupIds) {
+        await client.from('modifier_groups').delete().match({'id': gid});
+      }
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteModifiersForProductFromCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> insertModifierGroupToCloud({
+    required int id,
+    required String name,
+    int minSelection = 0,
+    required int maxSelection,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('modifier_groups').insert({
+        'id': id,
+        'name': name,
+        'min_selection': minSelection,
+        'max_selection': maxSelection,
+      });
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.insertModifierGroupToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> insertProductModifierToCloud({
+    required int productId,
+    required int modifierGroupId,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('product_modifiers').insert({
+        'product_id': productId,
+        'modifier_group_id': modifierGroupId,
+      });
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.insertProductModifierToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> insertModifierOptionToCloud({
+    required int modifierGroupId,
+    required int supplyId,
+    required double quantityDeducted,
+    double priceExtra = 0,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('modifier_options').insert({
+        'modifier_group_id': modifierGroupId,
+        'supply_id': supplyId,
+        'quantity_deducted': quantityDeducted,
+        'price_extra': priceExtra,
+      });
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.insertModifierOptionToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  /// Write-through: sync product + its recipes + modifier groups/options from local DB to cloud.
+  static Future<String?> syncProductToCloudFull(AppDatabase db, int productId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final product = await (db.select(db.products)..where((p) => p.id.equals(productId))).getSingleOrNull();
+      if (product == null) return null;
+      var err = await upsertProductToCloud(
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        categoryId: product.categoryId,
+        isActive: product.isActive,
+        imageUrl: product.imageUrl,
+      );
+      if (err != null) return err;
+
+      err = await deleteRecipesForProductFromCloud(productId);
+      if (err != null) return err;
+      final recipes = await (db.select(db.recipes)..where((r) => r.productId.equals(productId))).get();
+      for (final r in recipes) {
+        err = await insertRecipeToCloud(productId: r.productId, supplyId: r.supplyId, quantityRequired: r.quantityRequired);
+        if (err != null) return err;
+      }
+
+      err = await deleteModifiersForProductFromCloud(productId);
+      if (err != null) return err;
+      final pms = await (db.select(db.productModifiers)..where((pm) => pm.productId.equals(productId))).get();
+      for (final pm in pms) {
+        final group = await (db.select(db.modifierGroups)..where((g) => g.id.equals(pm.modifierGroupId))).getSingleOrNull();
+        if (group == null) continue;
+        err = await insertModifierGroupToCloud(id: group.id, name: group.name, minSelection: group.minSelection, maxSelection: group.maxSelection);
+        if (err != null) return err;
+        err = await insertProductModifierToCloud(productId: productId, modifierGroupId: group.id);
+        if (err != null) return err;
+        final opts = await (db.select(db.modifierOptions)..where((o) => o.modifierGroupId.equals(group.id))).get();
+        for (final o in opts) {
+          err = await insertModifierOptionToCloud(
+            modifierGroupId: o.modifierGroupId,
+            supplyId: o.supplyId,
+            quantityDeducted: o.quantityDeducted,
+            priceExtra: o.priceExtra,
+          );
+          if (err != null) return err;
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.syncProductToCloudFull: $e');
+      return e.toString();
+    }
+  }
+
   /// Pushes local master data to Supabase (use once to make cloud the source of truth).
   /// Overwrites cloud tables: categories, supplies, products, recipes, modifiers, bundles.
   static Future<String?> pushToCloud(AppDatabase db) async {
@@ -410,6 +851,7 @@ class CloudSyncService {
         'name': c.name,
         'parent_id': c.parentId,
         'color': c.color,
+        'image_url': c.imageUrl,
       }).toList();
       if (categoryRows.isNotEmpty) {
         await client.from('categories').upsert(categoryRows, onConflict: 'id');

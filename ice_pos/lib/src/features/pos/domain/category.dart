@@ -6,10 +6,12 @@ class Category {
     required this.name,
     this.parentId,
     this.color,
+    this.imageUrl,
   });
 
   final int id;
   final String name;
   final int? parentId;
   final String? color;
+  final String? imageUrl;
 }

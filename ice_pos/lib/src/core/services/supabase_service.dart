@@ -20,9 +20,17 @@ class SupabaseService {
 
   static bool get isInitialized => _instance != null;
 
+  /// Host de Supabase usado (para debug: confirmar que la app apunta al proyecto correcto).
+  static String? get debugHost => _initializedHost;
+  static String? _initializedHost;
+
+  static const int _initMaxAttempts = 3;
+  static const Duration _initRetryDelay = Duration(seconds: 2);
+
   /// Inicializa Supabase con las credenciales del archivo .env.
   /// Debe llamarse después de dotenv.load() en main().
   /// Si faltan SUPABASE_URL o SUPABASE_ANON_KEY, no inicializa (isInitialized queda false).
+  /// Reintenta hasta [_initMaxAttempts] veces ante fallos de red (host lookup, timeout).
   static Future<void> initialize() async {
     if (_instance != null) return;
 
@@ -33,8 +41,35 @@ class SupabaseService {
       return; // App works offline without Supabase
     }
 
-    await Supabase.initialize(url: url, anonKey: anonKey);
-    _instance = SupabaseService._();
+    try {
+      _initializedHost = Uri.parse(url).host;
+    } catch (_) {
+      _initializedHost = null;
+    }
+
+    Object? lastError;
+    for (var attempt = 1; attempt <= _initMaxAttempts; attempt++) {
+      try {
+        await Supabase.initialize(url: url, anonKey: anonKey);
+        _instance = SupabaseService._();
+        return;
+      } catch (e) {
+        lastError = e;
+        final msg = e.toString();
+        final retryable = msg.contains('SocketException') ||
+            msg.contains('Failed host lookup') ||
+            msg.contains('No address associated') ||
+            msg.contains('TimeoutException') ||
+            msg.contains('ClientException') ||
+            msg.contains('AuthRetryableFetchException');
+        if (retryable && attempt < _initMaxAttempts) {
+          await Future<void>.delayed(_initRetryDelay);
+        } else {
+          rethrow;
+        }
+      }
+    }
+    if (lastError != null) throw lastError!;
   }
 
   /// Cliente de Supabase para realizar operaciones.

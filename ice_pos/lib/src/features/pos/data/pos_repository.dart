@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/category_image_service.dart';
+import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart' as domain;
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
@@ -78,7 +81,7 @@ class ShiftClosureResult {
     required this.cashSales,
     required this.cardSales,
     required this.transferSales,
-    required this.expenses,
+    this.movementsCajaNet = 0,
   });
 
   final ShiftClosure closure;
@@ -86,7 +89,8 @@ class ShiftClosureResult {
   final double cashSales;
   final double cardSales;
   final double transferSales;
-  final double expenses;
+  /// Neto de movimientos (entradas - salidas) de caja en el turno cerrado.
+  final double movementsCajaNet;
 
   /// Total ventas del turno (efectivo + tarjeta + transferencia).
   double get totalSales => cashSales + cardSales + transferSales;
@@ -100,7 +104,6 @@ class ShiftTotalsForClosure {
     required this.debitSales,
     required this.creditSales,
     required this.transferSales,
-    required this.expenses,
     this.movementsCajaNet = 0,
   });
 
@@ -109,18 +112,15 @@ class ShiftTotalsForClosure {
   final double debitSales;
   final double creditSales;
   final double transferSales;
-  final double expenses;
   /// Neto de movimientos (entradas - salidas) de caja en este turno. Afecta el esperado en caja.
   final double movementsCajaNet;
 
   double get cardSales => debitSales + creditSales;
   double get totalSales => cashSales + cardSales + transferSales;
 
-  /// Lo que debería haber en caja: fondo inicial + ventas efectivo - gastos + movimientos caja.
+  /// Lo que debería haber en caja: fondo inicial + ventas efectivo + movimientos (entradas - salidas).
   double get expectedCashInDrawer =>
-      startingFund + cashSales + expensesNeg + movementsCajaNet;
-  /// Gastos como número negativo (retiros).
-  double get expensesNeg => -expenses.abs();
+      startingFund + cashSales + movementsCajaNet;
 }
 
 /// Modifier group with its options for the modifier dialog.
@@ -143,8 +143,8 @@ class PosRepository {
   /// Fetches categories. If [parentId] is null, returns root categories.
   Future<List<domain_cat.Category>> getCategories({int? parentId}) async {
     final query = parentId == null
-        ? 'SELECT id, name, parent_id, color FROM categories WHERE parent_id IS NULL'
-        : 'SELECT id, name, parent_id, color FROM categories WHERE parent_id = ?';
+        ? 'SELECT id, name, parent_id, color, image_url FROM categories WHERE parent_id IS NULL'
+        : 'SELECT id, name, parent_id, color, image_url FROM categories WHERE parent_id = ?';
     final rows = await _db.customSelect(
       query,
       variables: parentId != null
@@ -158,6 +158,7 @@ class PosRepository {
             name: row.read<String>('name'),
             parentId: row.read<int?>('parent_id'),
             color: row.read<String?>('color'),
+            imageUrl: row.read<String?>('image_url'),
           ),
         )
         .toList();
@@ -167,7 +168,7 @@ class PosRepository {
   /// Order: root first (parent_id IS NULL), then by name.
   Future<List<domain_cat.Category>> getAllCategories() async {
     const query = '''
-      SELECT id, name, parent_id, color FROM categories
+      SELECT id, name, parent_id, color, image_url FROM categories
       ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, name
     ''';
     final rows = await _db.customSelect(query).get();
@@ -178,6 +179,7 @@ class PosRepository {
             name: row.read<String>('name'),
             parentId: row.read<int?>('parent_id'),
             color: row.read<String?>('color'),
+            imageUrl: row.read<String?>('image_url'),
           ),
         )
         .toList();
@@ -193,6 +195,7 @@ class PosRepository {
       name: row.name,
       parentId: row.parentId,
       color: row.color,
+      imageUrl: row.imageUrl,
     );
   }
 
@@ -201,14 +204,44 @@ class PosRepository {
     required String name,
     int? parentId,
     String? color,
+    String? imageUrl,
+    List<int>? newImageBytes,
+    String? newImageMimeType,
   }) async {
-    return await _db.into(_db.categories).insert(
+    final id = await _db.into(_db.categories).insert(
       CategoriesCompanion.insert(
         name: name.trim(),
         parentId: Value(parentId),
         color: Value(color),
+        imageUrl: newImageBytes != null ? const Value.absent() : Value(imageUrl),
       ),
     );
+
+    if (newImageBytes != null && newImageBytes.isNotEmpty) {
+      final url = await CategoryImageService.uploadCategoryImage(
+        categoryId: id,
+        bytes: Uint8List.fromList(newImageBytes),
+        mimeType: newImageMimeType ?? 'image/jpeg',
+      );
+      if (url != null) {
+        await (_db.update(_db.categories)..where((c) => c.id.equals(id)))
+            .write(CategoriesCompanion(imageUrl: Value(url)));
+      }
+    }
+
+    if (CloudSyncService.isEnabled) {
+      final cat = await getCategory(id);
+      if (cat != null) {
+        CloudSyncService.upsertCategoryToCloud(
+          id: cat.id,
+          name: cat.name,
+          parentId: cat.parentId,
+          color: cat.color,
+          imageUrl: cat.imageUrl,
+        ).catchError((e) => null);
+      }
+    }
+    return id;
   }
 
   /// Updates an existing category.
@@ -217,14 +250,49 @@ class PosRepository {
     String? name,
     int? parentId,
     String? color,
+    String? imageUrl,
+    List<int>? newImageBytes,
+    String? newImageMimeType,
   }) async {
-    await (_db.update(_db.categories)..where((c) => c.id.equals(id))).write(
-      CategoriesCompanion(
-        name: name != null ? Value(name.trim()) : const Value.absent(),
-        parentId: parentId != null ? Value<int?>(parentId) : const Value.absent(),
-        color: color != null ? Value<String?>(color) : const Value.absent(),
-      ),
+    final companion = CategoriesCompanion(
+      name: name != null ? Value(name.trim()) : const Value.absent(),
+      parentId:
+          parentId != null ? Value<int?>(parentId) : const Value.absent(),
+      color: color != null ? Value<String?>(color) : const Value.absent(),
     );
+
+    if (newImageBytes == null) {
+      await (_db.update(_db.categories)..where((c) => c.id.equals(id))).write(
+        companion.copyWith(imageUrl: Value(imageUrl)),
+      );
+    } else {
+      await (_db.update(_db.categories)..where((c) => c.id.equals(id)))
+          .write(companion);
+    }
+
+    if (newImageBytes != null && newImageBytes.isNotEmpty) {
+      final url = await CategoryImageService.uploadCategoryImage(
+        categoryId: id,
+        bytes: Uint8List.fromList(newImageBytes),
+        mimeType: newImageMimeType ?? 'image/jpeg',
+      );
+      if (url != null) {
+        await (_db.update(_db.categories)..where((c) => c.id.equals(id)))
+            .write(CategoriesCompanion(imageUrl: Value(url)));
+      }
+    }
+    if (CloudSyncService.isEnabled) {
+      final cat = await getCategory(id);
+      if (cat != null) {
+        CloudSyncService.upsertCategoryToCloud(
+          id: cat.id,
+          name: cat.name,
+          parentId: cat.parentId,
+          color: cat.color,
+          imageUrl: cat.imageUrl,
+        ).catchError((e) => null);
+      }
+    }
   }
 
   /// Deletes a category. Fails if it has products or child categories.
@@ -249,6 +317,9 @@ class PosRepository {
       );
     }
     await (_db.delete(_db.categories)..where((c) => c.id.equals(id))).go();
+    if (CloudSyncService.isEnabled) {
+      CloudSyncService.deleteCategoryFromCloud(id).catchError((e) => null);
+    }
   }
 
   /// Counts products in a category.
@@ -297,6 +368,19 @@ class PosRepository {
   Future<void> setProductActive(int productId, bool active) async {
     await (_db.update(_db.products)..where((p) => p.id.equals(productId)))
         .write(ProductsCompanion(isActive: Value(active)));
+    if (CloudSyncService.isEnabled) {
+      final p = await getProduct(productId);
+      if (p != null) {
+        CloudSyncService.upsertProductToCloud(
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          categoryId: p.categoryId,
+          isActive: active,
+          imageUrl: p.imageUrl,
+        ).catchError((e) => null);
+      }
+    }
   }
 
   /// Deletes a product and its recipes and product_modifiers.
@@ -320,6 +404,11 @@ class PosRepository {
       await (_db.delete(_db.products)..where((p) => p.id.equals(productId)))
           .go();
     });
+    if (CloudSyncService.isEnabled) {
+      CloudSyncService.deleteModifiersForProductFromCloud(productId).catchError((e) => null);
+      CloudSyncService.deleteRecipesForProductFromCloud(productId).catchError((e) => null);
+      CloudSyncService.deleteProductFromCloud(productId).catchError((e) => null);
+    }
   }
 
   /// Gets recipes for a product with supply names.
@@ -345,11 +434,17 @@ class PosRepository {
   }
 
   /// Saves product with recipes and modifiers in a single transaction.
-  Future<void> saveProduct({
+  /// [imageUrl]: URL final si no hay [newImageBytes] (puede ser null para quitar imagen).
+  /// [newImageBytes]: si no es null, tras guardar se sube y se actualiza [image_url].
+  /// Devuelve el id del producto guardado.
+  Future<int> saveProduct({
     required int? productId,
     required String name,
     required double price,
     int? categoryId,
+    String? imageUrl,
+    List<int>? newImageBytes,
+    String? newImageMimeType,
     required List<({int supplyId, double quantityRequired})> recipeItems,
     required List<({
       String name,
@@ -358,7 +453,7 @@ class PosRepository {
       List<({int supplyId, double quantityDeducted, double priceExtra})> options,
     })> modifierGroups,
   }) async {
-    await _db.transaction(() async {
+    final savedProductId = await _db.transaction(() async {
       int id;
       if (productId == null) {
         id = await _db.into(_db.products).insert(
@@ -366,17 +461,25 @@ class PosRepository {
                 name: name,
                 price: price,
                 categoryId: Value(categoryId),
+                imageUrl: newImageBytes != null
+                    ? const Value.absent()
+                    : Value(imageUrl),
               ),
             );
       } else {
         id = productId;
-        await (_db.update(_db.products)..where((p) => p.id.equals(id))).write(
-          ProductsCompanion(
-            name: Value(name),
-            price: Value(price),
-            categoryId: Value(categoryId),
-          ),
+        final companion = ProductsCompanion(
+          name: Value(name),
+          price: Value(price),
+          categoryId: Value(categoryId),
         );
+        if (newImageBytes == null) {
+          await (_db.update(_db.products)..where((p) => p.id.equals(id))).write(
+            companion.copyWith(imageUrl: Value(imageUrl)),
+          );
+        } else {
+          await (_db.update(_db.products)..where((p) => p.id.equals(id))).write(companion);
+        }
       }
 
       // Replace recipes
@@ -436,7 +539,25 @@ class PosRepository {
               );
         }
       }
+      return id;
     });
+
+    if (newImageBytes != null && newImageBytes.isNotEmpty) {
+      final url = await ProductImageService.uploadProductImage(
+        productId: savedProductId,
+        bytes: Uint8List.fromList(newImageBytes),
+        mimeType: newImageMimeType ?? 'image/jpeg',
+      );
+      if (url != null) {
+        await (_db.update(_db.products)..where((p) => p.id.equals(savedProductId)))
+            .write(ProductsCompanion(imageUrl: Value(url)));
+      }
+    }
+
+    if (CloudSyncService.isEnabled) {
+      CloudSyncService.syncProductToCloudFull(_db, savedProductId).catchError((e) => null);
+    }
+    return savedProductId;
   }
 
   /// Observes all supplies for real-time inventory updates.
@@ -495,17 +616,17 @@ class PosRepository {
     return result;
   }
 
-  /// Saves a bundle (insert or update) with its items.
-  Future<void> saveBundle({
+  /// Saves a bundle (insert or update) with its items. Returns the bundle id.
+  Future<int> saveBundle({
     int? id,
     required String name,
     required double price,
     int? categoryId,
     required List<({int productId, double quantity})> productItems,
   }) async {
-    await _db.transaction(() async {
+    final bundleId = await _db.transaction(() async {
       if (id == null) {
-        final bundleId = await _db.into(_db.bundles).insert(
+        final newId = await _db.into(_db.bundles).insert(
           BundlesCompanion.insert(
             name: name,
             price: price,
@@ -515,12 +636,13 @@ class PosRepository {
         for (final item in productItems) {
           await _db.into(_db.bundleItems).insert(
             BundleItemsCompanion.insert(
-              bundleId: bundleId,
+              bundleId: newId,
               productId: item.productId,
               quantityRequired: Value(item.quantity),
             ),
           );
         }
+        return newId;
       } else {
         await (_db.update(_db.bundles)..where((b) => b.id.equals(id))).write(
           BundlesCompanion(
@@ -541,8 +663,27 @@ class PosRepository {
             ),
           );
         }
+        return id;
       }
     });
+    if (CloudSyncService.isEnabled) {
+      CloudSyncService.upsertBundleToCloud(
+        id: bundleId,
+        name: name,
+        price: price,
+        isActive: true,
+        categoryId: categoryId,
+      ).catchError((e) => null);
+      CloudSyncService.deleteBundleItemsFromCloud(bundleId).catchError((e) => null);
+      for (final item in productItems) {
+        CloudSyncService.insertBundleItemToCloud(
+          bundleId: bundleId,
+          productId: item.productId,
+          quantity: item.quantity,
+        ).catchError((e) => null);
+      }
+    }
+    return bundleId;
   }
 
   /// Deletes a bundle and its items.
@@ -551,6 +692,9 @@ class PosRepository {
           ..where((bi) => bi.bundleId.equals(id)))
         .go();
     await (_db.delete(_db.bundles)..where((b) => b.id.equals(id))).go();
+    if (CloudSyncService.isEnabled) {
+      CloudSyncService.deleteBundleFromCloud(id).catchError((e) => null);
+    }
   }
 
   /// Finds an active discount by code (case-insensitive).
@@ -566,8 +710,8 @@ class PosRepository {
     return null;
   }
 
-  /// Saves a supply (insert if id is null, update otherwise).
-  Future<void> saveSupply({
+  /// Saves a supply (insert if id is null, update otherwise). Returns the supply id.
+  Future<int> saveSupply({
     int? id,
     required String name,
     required String unit,
@@ -575,16 +719,32 @@ class PosRepository {
     double reorderPoint = 0,
     String? category,
   }) async {
+    final cat = category?.trim().isEmpty == true ? null : category?.trim();
     if (id == null) {
-      await _db.into(_db.supplies).insert(
+      final newId = await _db.into(_db.supplies).insert(
         SuppliesCompanion.insert(
           name: name,
           unit: unit,
           costPerUnit: Value(costPerUnit),
           reorderPoint: Value(reorderPoint),
-          category: Value(category?.trim().isEmpty == true ? null : category?.trim()),
+          category: Value(cat),
         ),
       );
+      if (CloudSyncService.isEnabled) {
+        final s = await (_db.select(_db.supplies)..where((s) => s.id.equals(newId))).getSingleOrNull();
+        if (s != null) {
+          CloudSyncService.upsertSupplyToCloud(
+            id: s.id,
+            name: s.name,
+            unit: s.unit,
+            currentStock: s.currentStock,
+            costPerUnit: s.costPerUnit,
+            reorderPoint: s.reorderPoint,
+            category: s.category,
+          ).catchError((e) => null);
+        }
+      }
+      return newId;
     } else {
       await (_db.update(_db.supplies)..where((s) => s.id.equals(id))).write(
         SuppliesCompanion(
@@ -592,15 +752,33 @@ class PosRepository {
           unit: Value(unit),
           costPerUnit: Value(costPerUnit),
           reorderPoint: Value(reorderPoint),
-          category: Value(category?.trim().isEmpty == true ? null : category?.trim()),
+          category: Value(cat),
         ),
       );
+      if (CloudSyncService.isEnabled) {
+        final s = await (_db.select(_db.supplies)..where((s) => s.id.equals(id))).getSingleOrNull();
+        if (s != null) {
+          CloudSyncService.upsertSupplyToCloud(
+            id: s.id,
+            name: s.name,
+            unit: s.unit,
+            currentStock: s.currentStock,
+            costPerUnit: s.costPerUnit,
+            reorderPoint: s.reorderPoint,
+            category: s.category,
+          ).catchError((e) => null);
+        }
+      }
+      return id;
     }
   }
 
   /// Deletes a supply by id.
   Future<void> deleteSupply(int id) async {
     await (_db.delete(_db.supplies)..where((s) => s.id.equals(id))).go();
+    if (CloudSyncService.isEnabled) {
+      CloudSyncService.deleteSupplyFromCloud(id).catchError((e) => null);
+    }
   }
 
   /// Parks the current order (saves to DB for later restore).
@@ -996,6 +1174,7 @@ class PosRepository {
 
   /// Registra un movimiento (entrada o salida) que afecta caja o banco. No es una venta.
   /// Si account es CAJA y hay turno abierto, se asocia al turno (shiftId).
+  /// Si Supabase está activo, envía el movimiento a la nube para que otros dispositivos lo vean al cerrar turno.
   Future<int> insertMovement({
     required String type,
     required String account,
@@ -1003,7 +1182,7 @@ class PosRepository {
     required String reason,
     int? shiftId,
   }) async {
-    return _db.into(_db.movements).insert(
+    final id = await _db.into(_db.movements).insert(
           MovementsCompanion.insert(
             type: type,
             account: account,
@@ -1012,6 +1191,12 @@ class PosRepository {
             shiftId: shiftId != null ? Value(shiftId) : const Value.absent(),
           ),
         );
+    if (CloudSyncService.isEnabled) {
+      final movement = await (_db.select(_db.movements)..where((m) => m.id.equals(id))).getSingle();
+      final err = await CloudSyncService.writeMovementToCloud(movement);
+      if (err != null) debugPrint('Cloud write movement: $err');
+    }
+    return id;
   }
 
   /// Lista de movimientos ordenados por fecha descendente.
@@ -1029,6 +1214,38 @@ class PosRepository {
         .watch();
   }
 
+  /// Ventas del turno por forma de pago (rango [rangeStart, rangeEnd]) y neto de movimientos de caja.
+  Future<({double cashSales, double debitSales, double creditSales, double transferSales, double movementsCajaNet})>
+      _getShiftSalesByPaymentType(int shiftId, DateTime rangeStart, DateTime rangeEnd) async {
+    final dateInRange = _db.sales.date.isBiggerOrEqualValue(rangeStart) &
+        _db.sales.date.isSmallerOrEqualValue(rangeEnd);
+    final notCancelled = _db.sales.cancelledAt.isNull();
+    final cashR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
+        .getSingle();
+    final debitR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange & notCancelled))
+        .getSingle();
+    final creditR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange & notCancelled))
+        .getSingle();
+    final transferR = await (_db.selectOnly(_db.sales)
+          ..addColumns([_db.sales.totalAmount.sum()])
+          ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
+        .getSingle();
+    final movementsCajaNet = await getMovementsCajaNetForShift(shiftId);
+    return (
+      cashSales: cashR.read(_db.sales.totalAmount.sum()) ?? 0.0,
+      debitSales: debitR.read(_db.sales.totalAmount.sum()) ?? 0.0,
+      creditSales: creditR.read(_db.sales.totalAmount.sum()) ?? 0.0,
+      transferSales: transferR.read(_db.sales.totalAmount.sum()) ?? 0.0,
+      movementsCajaNet: movementsCajaNet,
+    );
+  }
+
   /// Neto de movimientos de caja para un turno: sum(ENTRADA) - sum(SALIDA). Afecta el esperado en caja.
   Future<double> getMovementsCajaNetForShift(int shiftId) async {
     final rows = await (_db.select(_db.movements)
@@ -1036,8 +1253,11 @@ class PosRepository {
         .get();
     double net = 0;
     for (final r in rows) {
-      if (r.type == 'ENTRADA') net += r.amount;
-      else if (r.type == 'SALIDA') net -= r.amount;
+      if (r.type == 'ENTRADA') {
+        net += r.amount;
+      } else if (r.type == 'SALIDA') {
+        net -= r.amount;
+      }
     }
     return net;
   }
@@ -1067,6 +1287,13 @@ class PosRepository {
     return shift;
   }
 
+  /// Actualiza el fondo inicial del turno (hotfix: tras reinstalar la app el turno puede tener 0).
+  /// Así puedes hacer el corte con el efectivo real en caja.
+  Future<void> updateShiftStartingFund(int shiftId, double startingFund) async {
+    await (_db.update(_db.shifts)..where((s) => s.id.equals(shiftId)))
+        .write(ShiftsCompanion(startingFund: Value(startingFund)));
+  }
+
   /// Closes a shift with blind count reconciliation.
   /// Returns the ShiftClosureResult (Z-Report) for display.
   Future<ShiftClosureResult> performCloseShift({
@@ -1074,7 +1301,7 @@ class PosRepository {
     required double declaredCash,
     String? notes,
   }) async {
-    final result = await _db.transaction(() async {
+    final tx = await _db.transaction(() async {
       final shift = await (_db.select(_db.shifts)
             ..where((s) => s.id.equals(shiftId)))
           .getSingleOrNull();
@@ -1086,53 +1313,15 @@ class PosRepository {
       }
 
       final now = DateTime.now();
+      final sales = await _getShiftSalesByPaymentType(shiftId, shift.startTime, now);
+      final cashSalesTotal = sales.cashSales;
+      final cardSalesTotal = sales.debitSales + sales.creditSales;
+      final transferSalesTotal = sales.transferSales;
+      final movementsCajaNet = sales.movementsCajaNet;
 
-      final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
-          _db.sales.date.isSmallerOrEqualValue(now);
-      final notCancelled = _db.sales.cancelledAt.isNull();
-
-      // Cash sales
-      final cashSales = await (_db.selectOnly(_db.sales)
-            ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
-          .getSingle();
-      final cashSalesTotal =
-          cashSales.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-      // Card sales (débito + crédito)
-      final cardSalesQuery = await (_db.selectOnly(_db.sales)
-            ..addColumns([_db.sales.totalAmount.sum()])
-            ..where((_db.sales.paymentMethod.equals('CARD_DEBIT') |
-                    _db.sales.paymentMethod.equals('CARD_CREDIT')) &
-                dateInRange &
-                notCancelled))
-          .getSingle();
-      final cardSalesTotal =
-          cardSalesQuery.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-      // Transfer sales
-      final transferSalesQuery = await (_db.selectOnly(_db.sales)
-            ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
-          .getSingle();
-      final transferSalesTotal =
-          transferSalesQuery.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-      // Expenses: sum of cash movements (negative = out)
-      final expensesResult = await (_db.selectOnly(_db.cashMovements)
-            ..addColumns([_db.cashMovements.amount.sum()])
-            ..where(_db.cashMovements.shiftId.equals(shiftId)))
-          .getSingle();
-      final expensesTotal =
-          expensesResult.read(_db.cashMovements.amount.sum()) ?? 0.0;
-      // amount is negative for expenses, so expensesTotal is negative
-      final expensesAbs = expensesTotal.abs();
-
-      final movementsCajaNet = await getMovementsCajaNetForShift(shiftId);
-
-      // systemExpectedCash = startingFund + cashSales - expenses + movimientos caja
+      // systemExpectedCash = startingFund + cashSales + movimientos (entradas - salidas)
       final systemExpectedCash =
-          shift.startingFund + cashSalesTotal + expensesTotal + movementsCajaNet;
+          shift.startingFund + cashSalesTotal + movementsCajaNet;
 
       final difference = declaredCash - systemExpectedCash;
 
@@ -1152,26 +1341,25 @@ class PosRepository {
       final closure = await (_db.select(_db.shiftClosures)
             ..where((c) => c.id.equals(closureId)))
           .getSingle();
-      return ShiftClosureResult(
+      final result = ShiftClosureResult(
         closure: closure,
         startingFund: shift.startingFund,
         cashSales: cashSalesTotal,
         cardSales: cardSalesTotal,
         transferSales: transferSalesTotal,
-        expenses: expensesAbs,
+        movementsCajaNet: movementsCajaNet,
       );
+      final shiftWithEndTime = shift.copyWith(endTime: Value(now));
+      return (result: result, shiftForCloud: shiftWithEndTime);
     });
     if (CloudSyncService.isEnabled) {
-      final updatedShift = await (_db.select(_db.shifts)
-            ..where((s) => s.id.equals(shiftId)))
-          .getSingle();
       final err = await CloudSyncService.writeShiftClosureToCloud(
-        updatedShift,
-        result.closure,
+        tx.shiftForCloud,
+        tx.result.closure,
       );
       if (err != null) debugPrint('Cloud write shift closure: $err');
     }
-    return result;
+    return tx.result;
   }
 
   /// Totals for closure form (expected in drawer, sales by payment type). Does not close the shift.
@@ -1181,84 +1369,14 @@ class PosRepository {
         .getSingleOrNull();
     if (shift == null) return null;
     final now = DateTime.now();
-    final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
-        _db.sales.date.isSmallerOrEqualValue(now);
-    final notCancelled = _db.sales.cancelledAt.isNull();
-
-    final cashR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
-        .getSingle();
-    final cashSales = cashR.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-    final debitR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange & notCancelled))
-        .getSingle();
-    final debitSales = debitR.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-    final creditR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange & notCancelled))
-        .getSingle();
-    final creditSales = creditR.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-    final transferR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
-        .getSingle();
-    final transferSales = transferR.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-    final expR = await (_db.selectOnly(_db.cashMovements)
-          ..addColumns([_db.cashMovements.amount.sum()])
-          ..where(_db.cashMovements.shiftId.equals(shiftId)))
-        .getSingle();
-    final expensesSum = expR.read(_db.cashMovements.amount.sum()) ?? 0.0;
-    final expenses = expensesSum.abs();
-
-    final movementsCajaNet = await getMovementsCajaNetForShift(shiftId);
-
+    final sales = await _getShiftSalesByPaymentType(shiftId, shift.startTime, now);
     return ShiftTotalsForClosure(
       startingFund: shift.startingFund,
-      cashSales: cashSales,
-      debitSales: debitSales,
-      creditSales: creditSales,
-      transferSales: transferSales,
-      expenses: expenses,
-      movementsCajaNet: movementsCajaNet,
-    );
-  }
-
-  /// Gets shift summary for Z-Report display (starting fund, cash sales, expenses).
-  Future<({double startingFund, double cashSales, double expenses})>
-      getShiftSummary(int shiftId) async {
-    final shift = await (_db.select(_db.shifts)
-          ..where((s) => s.id.equals(shiftId)))
-        .getSingleOrNull();
-    if (shift == null) {
-      return (startingFund: 0.0, cashSales: 0.0, expenses: 0.0);
-    }
-    final now = DateTime.now();
-    final cashSalesResult = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CASH') &
-              _db.sales.cancelledAt.isNull() &
-              _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
-              _db.sales.date.isSmallerOrEqualValue(now)))
-        .getSingle();
-    final cashSales =
-        cashSalesResult.read(_db.sales.totalAmount.sum()) ?? 0.0;
-    final expensesResult = await (_db.selectOnly(_db.cashMovements)
-          ..addColumns([_db.cashMovements.amount.sum()])
-          ..where(_db.cashMovements.shiftId.equals(shiftId)))
-        .getSingle();
-    final expensesSum =
-        expensesResult.read(_db.cashMovements.amount.sum()) ?? 0.0;
-    final expenses = expensesSum.abs();
-    return (
-      startingFund: shift.startingFund,
-      cashSales: cashSales,
-      expenses: expenses,
+      cashSales: sales.cashSales,
+      debitSales: sales.debitSales,
+      creditSales: sales.creditSales,
+      transferSales: sales.transferSales,
+      movementsCajaNet: sales.movementsCajaNet,
     );
   }
 
@@ -1314,12 +1432,7 @@ class PosRepository {
           .getSingle();
       final transferSales = transferRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
 
-      final expensesRes = await (_db.selectOnly(_db.cashMovements)
-            ..addColumns([_db.cashMovements.amount.sum()])
-            ..where(_db.cashMovements.shiftId.equals(shift.id)))
-          .getSingle();
-      final expensesSum = expensesRes.read(_db.cashMovements.amount.sum()) ?? 0.0;
-      final expenses = expensesSum.abs();
+      final movementsCajaNet = await getMovementsCajaNetForShift(shift.id);
 
       result.add(ClosureDayRow(
         shiftId: shift.id,
@@ -1331,7 +1444,7 @@ class PosRepository {
         cardDebit: cardDebit,
         cardCredit: cardCredit,
         transferSales: transferSales,
-        expenses: expenses,
+        movementsCajaNet: movementsCajaNet,
         systemExpectedCash: closure.systemExpectedCash,
         declaredCash: closure.declaredCash,
         difference: closure.difference,
@@ -1559,7 +1672,7 @@ class ClosureDayRow {
     required this.cardDebit,
     required this.cardCredit,
     required this.transferSales,
-    required this.expenses,
+    required this.movementsCajaNet,
     required this.systemExpectedCash,
     required this.declaredCash,
     required this.difference,
@@ -1575,7 +1688,8 @@ class ClosureDayRow {
   final double cardDebit;
   final double cardCredit;
   final double transferSales;
-  final double expenses;
+  /// Neto de movimientos (entradas - salidas) de caja en ese turno.
+  final double movementsCajaNet;
   final double systemExpectedCash;
   final double declaredCash;
   final double difference;

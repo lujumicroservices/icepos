@@ -1,10 +1,15 @@
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
+import 'package:image_picker/image_picker.dart';
 
 final _suppliesStreamProvider = StreamProvider<List<Supply>>((ref) {
   return ref.watch(posRepositoryProvider).watchSupplies();
@@ -79,6 +84,10 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
   late TabController _tabController;
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  final _imageUrlController = TextEditingController();
+
+  Uint8List? _pickedImageBytes;
+  String? _pickedImageMime;
 
   List<_RecipeItem> _recipeItems = [];
   List<_ModifierGroupItem> _modifierGroups = [];
@@ -98,6 +107,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
     _tabController.dispose();
     _nameController.dispose();
     _priceController.dispose();
+    _imageUrlController.dispose();
     super.dispose();
   }
 
@@ -113,6 +123,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
 
     _nameController.text = product.name;
     _priceController.text = product.price.toStringAsFixed(2);
+    _imageUrlController.text = product.imageUrl ?? '';
     _selectedCategoryId = product.categoryId;
 
     final recipes = await repo.getRecipesForProduct(widget.productId!);
@@ -163,6 +174,46 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
     return cost;
   }
 
+  String _mimeFromPath(String path) {
+    final p = path.toLowerCase();
+    if (p.endsWith('.png')) return 'image/png';
+    if (p.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return;
+      setState(() {
+        _pickedImageBytes = bytes;
+        _pickedImageMime = _mimeFromPath(file.path);
+        _imageUrlController.clear();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo obtener la imagen: $e')),
+        );
+      }
+    }
+  }
+
+  void _clearProductImage() {
+    setState(() {
+      _pickedImageBytes = null;
+      _pickedImageMime = null;
+      _imageUrlController.clear();
+    });
+  }
+
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
@@ -180,12 +231,19 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
     }
 
     setState(() => _isSaving = true);
+    final hadPickedFile = _pickedImageBytes != null;
     try {
-      await ref.read(posRepositoryProvider).saveProduct(
+      final trimmedUrl = _imageUrlController.text.trim();
+      final savedId = await ref.read(posRepositoryProvider).saveProduct(
             productId: widget.productId,
             name: name,
             price: price,
             categoryId: _selectedCategoryId,
+            imageUrl: hadPickedFile
+                ? null
+                : (trimmedUrl.isEmpty ? null : trimmedUrl),
+            newImageBytes: _pickedImageBytes?.toList(),
+            newImageMimeType: _pickedImageMime,
             recipeItems: _recipeItems
                 .map((r) => (supplyId: r.supplyId, quantityRequired: r.quantity))
                 .toList(),
@@ -209,8 +267,24 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
                 .toList(),
           );
       if (!mounted) return;
+      var uploadFailed = false;
+      if (hadPickedFile) {
+        final p = await ref.read(posRepositoryProvider).getProduct(savedId);
+        uploadFailed = p?.imageUrl == null || p!.imageUrl!.isEmpty;
+      }
+      ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product saved')),
+        SnackBar(
+          content: Text(
+            uploadFailed
+                ? (ProductImageService.canUpload
+                    ? 'Guardado, pero la imagen no se subió. Ejecuta la migración 014 (bucket product-images) en Supabase.'
+                    : 'Guardado. Configura Supabase para subir fotos, o usa una URL de imagen.')
+                : 'Producto guardado',
+          ),
+          duration: Duration(seconds: uploadFailed ? 6 : 2),
+        ),
       );
       Navigator.of(context).pop(true);
     } finally {
@@ -261,6 +335,16 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
           _BasicInfoTab(
             nameController: _nameController,
             priceController: _priceController,
+            imageUrlController: _imageUrlController,
+            pickedImageBytes: _pickedImageBytes,
+            onImageUrlChanged: () => setState(() {
+              _pickedImageBytes = null;
+              _pickedImageMime = null;
+            }),
+            onPickGallery: () => _pickImage(ImageSource.gallery),
+            onPickCamera:
+                kIsWeb ? null : () => _pickImage(ImageSource.camera),
+            onClearImage: _clearProductImage,
             selectedCategoryId: _selectedCategoryId,
             categoriesAsync: ref.watch(_categoriesProvider),
             onCategoryChanged: (id) => setState(() => _selectedCategoryId = id),
@@ -606,6 +690,12 @@ class _BasicInfoTab extends StatelessWidget {
   const _BasicInfoTab({
     required this.nameController,
     required this.priceController,
+    required this.imageUrlController,
+    required this.pickedImageBytes,
+    required this.onImageUrlChanged,
+    required this.onPickGallery,
+    required this.onPickCamera,
+    required this.onClearImage,
     required this.selectedCategoryId,
     required this.categoriesAsync,
     required this.onCategoryChanged,
@@ -613,17 +703,120 @@ class _BasicInfoTab extends StatelessWidget {
 
   final TextEditingController nameController;
   final TextEditingController priceController;
+  final TextEditingController imageUrlController;
+  final Uint8List? pickedImageBytes;
+  final VoidCallback onImageUrlChanged;
+  final VoidCallback onPickGallery;
+  final VoidCallback? onPickCamera;
+  final VoidCallback onClearImage;
   final int? selectedCategoryId;
   final AsyncValue<List<domain_cat.Category>> categoriesAsync;
   final ValueChanged<int?> onCategoryChanged;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            'Imagen',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Sube una foto o pega una URL (https). En POS se muestra en la tarjeta del producto.',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 160,
+                height: 160,
+                color: scheme.surfaceContainerHighest,
+                child: pickedImageBytes != null
+                    ? Image.memory(
+                        pickedImageBytes!,
+                        fit: BoxFit.cover,
+                        width: 160,
+                        height: 160,
+                      )
+                    : () {
+                        final u = imageUrlController.text.trim();
+                        if (u.isNotEmpty) {
+                          return Image.network(
+                            u,
+                            fit: BoxFit.cover,
+                            width: 160,
+                            height: 160,
+                            errorBuilder: (_, __, ___) => _imagePlaceholder(
+                              context,
+                            ),
+                          );
+                        }
+                        return _imagePlaceholder(context);
+                      }(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: onPickGallery,
+                icon: const Icon(Icons.photo_library_outlined, size: 20),
+                label: const Text('Galería'),
+              ),
+              if (onPickCamera != null)
+                FilledButton.tonalIcon(
+                  onPressed: onPickCamera,
+                  icon: const Icon(Icons.camera_alt_outlined, size: 20),
+                  label: const Text('Cámara'),
+                ),
+              OutlinedButton.icon(
+                onPressed: onClearImage,
+                icon: const Icon(Icons.delete_outline, size: 20),
+                label: const Text('Quitar imagen'),
+              ),
+            ],
+          ),
+          if (!ProductImageService.canUpload) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Sin Supabase: solo puedes usar una URL pública de imagen.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: scheme.tertiary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
+          TextField(
+            controller: imageUrlController,
+            onChanged: (_) => onImageUrlChanged(),
+            decoration: const InputDecoration(
+              labelText: 'URL de imagen (opcional)',
+              hintText: 'https://...',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.link),
+            ),
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+          ),
+          const SizedBox(height: 24),
           TextField(
             controller: nameController,
             decoration: const InputDecoration(
@@ -681,6 +874,16 @@ class _BasicInfoTab extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _imagePlaceholder(BuildContext context) {
+  return Center(
+    child: Icon(
+      Icons.fastfood_outlined,
+      size: 56,
+      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+    ),
+  );
 }
 
 class _FixedRecipeTab extends StatelessWidget {

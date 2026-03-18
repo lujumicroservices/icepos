@@ -152,8 +152,8 @@ class AppLocalizations {
   String get expectedInDrawer => _('expectedInDrawer');
   String get declaredCash => _('declaredCash');
   String get difference => _('difference');
-  String get expenses => _('expenses');
   String get movements => _('movements');
+  String get movementsCajaNetLabel => _('movementsCajaNetLabel');
   String get movementsSubtitle => _('movementsSubtitle');
   String get entry => _('entry');
   String get exit => _('exit');
@@ -233,6 +233,16 @@ class AppLocalizations {
   String get goBack => _('goBack');
   String get notesOptional => _('notesOptional');
   String get validAmount => _('validAmount');
+  String get cardDeclaredRequired => _('cardDeclaredRequired');
+  String get cardMismatchTitle => _('cardMismatchTitle');
+  String get cardMismatchMessage => _('cardMismatchMessage');
+  String get cardSalesSystem => _('cardSalesSystem');
+  String get cardDeclared => _('cardDeclared');
+  String get cardTerminalHint => _('cardTerminalHint');
+  String get closureCorrect => _('closureCorrect');
+  String get closureIncorrectCardOnly => _('closureIncorrectCardOnly');
+  String get closureIncorrectCashAndCard => _('closureIncorrectCashAndCard');
+  String get differenceInCash => _('differenceInCash');
 
   static const Map<String, String> _es = {
     'appTitle': 'ICE POS',
@@ -262,7 +272,7 @@ class AppLocalizations {
     'sendingToCloud': 'Enviando datos a la nube...',
     'dataSentToCloud': 'Datos enviados a la nube',
     'loadMenuFromJson': 'Cargar menú desde JSON',
-    'loadMenuFromJsonSubtitle': 'Solo cuando la nube está vacía. Si la nube tiene datos, usa Sincronizar.',
+    'loadMenuFromJsonSubtitle': 'Solo cuando la nube está vacía. Si la nube tiene datos, se sincronizan automáticamente.',
     'loadingMenuFromJson': 'Cargando menú desde JSON...',
     'loadingMenuAndSending': 'Cargando menú y enviando a la nube...',
     'menuReloaded': 'Menú recargado (Bolis, Paletas, Nieves, Malteadas)',
@@ -270,7 +280,7 @@ class AppLocalizations {
     'reloadMenuConfirmBody': 'Se borrarán categorías y productos que pertenezcan a una categoría y se cargará desde menu_reyes_nieves.json. Los productos sin categoría se conservan.',
     'reload': 'Recargar',
     'loadJsonNotAllowedTitle': 'Cargar desde JSON no permitido',
-    'loadJsonNotAllowedBody': 'La nube ya tiene datos. Para que todos los dispositivos tengan los mismos IDs, solo se puede cargar desde JSON cuando la nube está vacía. En este dispositivo usa Sincronizar para obtener el menú.',
+    'loadJsonNotAllowedBody': 'La nube ya tiene datos. Para que todos los dispositivos tengan los mismos IDs, solo se puede cargar desde JSON cuando la nube está vacía. En este dispositivo el menú se actualiza automáticamente desde la nube.',
     'later': 'Más tarde',
     'yesLoadAndSend': 'Sí, cargar y enviar',
     'updateAvailable': 'Actualización disponible',
@@ -363,8 +373,8 @@ class AppLocalizations {
     'expectedInDrawer': 'Esperado en caja',
     'declaredCash': 'Declarado',
     'difference': 'Diferencia',
-    'expenses': 'Gastos / retiros',
     'movements': 'Movimientos',
+    'movementsCajaNetLabel': 'Movimientos (entradas - salidas)',
     'movementsSubtitle': 'Entradas y salidas de caja o banco (no son ventas)',
     'entry': 'Entrada',
     'exit': 'Salida',
@@ -436,6 +446,16 @@ class AppLocalizations {
     'goBack': 'Volver',
     'notesOptional': 'Notas (opcional)',
     'validAmount': 'Introduce una cantidad válida',
+    'cardDeclaredRequired': 'Debe ingresar el monto reportado por la terminal en débito y crédito.',
+    'cardMismatchTitle': 'Inconsistencia en tarjetas',
+    'cardMismatchMessage': 'Lo declarado (débito + crédito) no coincide con las ventas en tarjeta registradas en el sistema.',
+    'cardSalesSystem': 'Ventas en tarjeta (sistema)',
+    'cardDeclared': 'Declarado (tarjetas)',
+    'cardTerminalHint': 'Monto reportado por la terminal',
+    'closureCorrect': 'Cuadre correcto',
+    'closureIncorrectCardOnly': 'Cuadre incorrecto: inconsistencia en tarjetas',
+    'closureIncorrectCashAndCard': 'Cuadre incorrecto: diferencia en caja {amount} e inconsistencia en tarjetas',
+    'differenceInCash': 'Diferencia en caja: {amount}',
   };
 
   static const Map<String, String> _en = {
@@ -466,7 +486,7 @@ class AppLocalizations {
     'sendingToCloud': 'Sending data to cloud...',
     'dataSentToCloud': 'Data sent to cloud',
     'loadMenuFromJson': 'Load menu from JSON',
-    'loadMenuFromJsonSubtitle': 'Only when cloud is empty. If cloud has data, use Sync.',
+    'loadMenuFromJsonSubtitle': 'Only when cloud is empty. If cloud has data, data syncs automatically.',
     'loadingMenuFromJson': 'Loading menu from JSON...',
     'loadingMenuAndSending': 'Loading menu and sending to cloud...',
     'menuReloaded': 'Menu reloaded (Bolis, Paletas, Nieves, Malteadas)',
@@ -474,7 +494,7 @@ class AppLocalizations {
     'reloadMenuConfirmBody': 'This will delete all categories and products that belong to a category, then reload from menu_reyes_nieves.json. Products without a category are kept.',
     'reload': 'Reload',
     'loadJsonNotAllowedTitle': 'Load from JSON not allowed',
-    'loadJsonNotAllowedBody': 'Cloud already has data. To keep IDs in sync across devices, load from JSON is only allowed when the cloud is empty. On this device use Sync to get the menu.',
+    'loadJsonNotAllowedBody': 'Cloud already has data. To keep IDs in sync across devices, load from JSON is only allowed when the cloud is empty. On this device the menu updates automatically from the cloud.',
     'later': 'Later',
     'yesLoadAndSend': 'Yes, load and send',
     'updateAvailable': 'Update available',
@@ -567,8 +587,8 @@ class AppLocalizations {
     'expectedInDrawer': 'Expected in drawer',
     'declaredCash': 'Declared',
     'difference': 'Difference',
-    'expenses': 'Expenses / withdrawals',
     'movements': 'Movements',
+    'movementsCajaNetLabel': 'Movements (entries - exits)',
     'movementsSubtitle': 'Cash and bank entries and exits (not sales)',
     'entry': 'Entry',
     'exit': 'Exit',
@@ -640,5 +660,15 @@ class AppLocalizations {
     'goBack': 'Go back',
     'notesOptional': 'Notes (optional)',
     'validAmount': 'Enter a valid amount',
+    'cardDeclaredRequired': 'You must enter the amount reported by the terminal for debit and credit.',
+    'cardMismatchTitle': 'Card mismatch',
+    'cardMismatchMessage': 'Declared amount (debit + credit) does not match card sales recorded in the system.',
+    'cardSalesSystem': 'Card sales (system)',
+    'cardDeclared': 'Declared (cards)',
+    'cardTerminalHint': 'Amount reported by terminal',
+    'closureCorrect': 'Closure correct',
+    'closureIncorrectCardOnly': 'Closure incorrect: card mismatch',
+    'closureIncorrectCashAndCard': 'Closure incorrect: cash difference {amount} and card mismatch',
+    'differenceInCash': 'Cash difference: {amount}',
   };
 }

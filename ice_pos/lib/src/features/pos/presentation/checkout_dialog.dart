@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
+import 'package:ice_pos/src/core/utils/number_utils.dart';
 
 /// Payment method for checkout.
 enum PaymentMethod {
@@ -86,10 +87,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   }
 
   double get _amountReceived {
-    final v = double.tryParse(
-      _amountController.text.replaceFirst(',', '.'),
-    );
-    return v ?? 0.0;
+    return parseDecimal(_amountController.text) ?? 0.0;
   }
 
   bool get _canConfirm {

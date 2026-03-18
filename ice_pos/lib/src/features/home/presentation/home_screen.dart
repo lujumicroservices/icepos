@@ -212,98 +212,6 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      if (CloudSyncService.isEnabled) ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  Navigator.pop(context);
-                                  try {
-                                    await SupabaseService.instance.client
-                                        .from('categories')
-                                        .select('id')
-                                        .limit(1);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(l10n.connectionOk),
-                                          backgroundColor: Colors.green.shade700,
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    logErrorToConsole(e);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('${l10n.error}: $e'),
-                                          backgroundColor: Theme.of(context).colorScheme.error,
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                },
-                                icon: const Icon(Icons.wifi_find, size: 18),
-                                label: Text(l10n.testConnection),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: () async {
-                                  Navigator.pop(context);
-                                  showDialog<void>(
-                                    context: context,
-                                    barrierDismissible: false,
-                                    builder: (ctx) => PopScope(
-                                      canPop: false,
-                                      child: AlertDialog(
-                                        content: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                              child: CircularProgressIndicator(strokeWidth: 2),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            Text(l10n.syncingFromCloud),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                  final db = ref.read(appDatabaseProvider);
-                                  final err = await CloudSyncService.syncFromCloud(db);
-                                  ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
-                                  if (err != null) logErrorToConsole(err);
-                                  if (context.mounted) Navigator.of(context).pop();
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          err == null
-                                              ? l10n.syncSuccess
-                                              : '${l10n.syncError}: $err',
-                                        ),
-                                        backgroundColor: err != null ? Theme.of(context).colorScheme.error : Colors.green.shade700,
-                                        behavior: SnackBarBehavior.floating,
-                                        duration: Duration(seconds: err != null ? 5 : 2),
-                                      ),
-                                    );
-                                  }
-                                },
-                                icon: const Icon(Icons.cloud_download, size: 18),
-                                label: Text(l10n.sync),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                       if (CloudSyncService.lastSyncError != null) ...[
                         const SizedBox(height: 8),
                         Card(
@@ -434,10 +342,12 @@ class HomeScreen extends ConsumerWidget {
               subtitle: Text(l10n.checkUpdateSubtitle),
               onTap: () async {
                 Navigator.pop(context);
-                final release = await checkForUpdate();
+                final result = await checkForUpdate();
                 if (!context.mounted) return;
-                if (release != null) {
-                  final openUrl = release.downloadUrl != null;
+                switch (result) {
+                  case UpdateAvailable(:final info):
+                    final release = info;
+                    final openUrl = release.downloadUrl != null;
                   await showDialog<void>(
                     context: context,
                     builder: (ctx) => AlertDialog(
@@ -501,17 +411,21 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     ),
                   );
-                } else {
-                  String msg = 'Ya tienes la última versión.';
-                  if (!SupabaseService.isInitialized) {
-                    msg = 'Nube no configurada. No se puede comprobar actualizaciones.';
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(msg),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                  case AlreadyLatest():
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Ya tienes la última versión.'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  case CheckUpdateFailed(:final reason):
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(reason),
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 5),
+                      ),
+                    );
                 }
               },
             ),
@@ -531,124 +445,6 @@ class HomeScreen extends ConsumerWidget {
                 },
               ),
             if (role == UserRole.admin) ...[
-            if (CloudSyncService.isEnabled)
-              ListTile(
-                leading: const Icon(Icons.cloud_upload),
-                title: Text(l10n.sendToCloud),
-                subtitle: Text(l10n.sendToCloudSubtitle),
-                onTap: () async {
-                  Navigator.pop(context);
-                  if (!context.mounted) return;
-                  showDialog<void>(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (ctx) => AlertDialog(
-                      content: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 20),
-                          Text(l10n.sendingToCloud),
-                        ],
-                      ),
-                    ),
-                  );
-                  final db = ref.read(appDatabaseProvider);
-                  String? err = await CloudSyncService.pushToCloud(db);
-                  if (context.mounted) Navigator.of(context).pop();
-                  if (err != null && err.contains('No hay categorías locales') && context.mounted) {
-                    final cloudEmpty = await CloudSyncService.isCloudEmpty();
-                    if (!cloudEmpty && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'La nube ya tiene datos. Usa Sincronizar para obtener el menú en este dispositivo.',
-                          ),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                      return;
-                    }
-                    final loadFirst = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Sin categorías locales'),
-                        content: const Text(
-                          'No hay categorías en este dispositivo y la nube está vacía. '
-                          '¿Cargar el menú desde JSON y luego enviar a la nube? (Solo el primer dispositivo debe hacerlo.)',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Sí, cargar y enviar'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (loadFirst != true || !context.mounted) return;
-                    showDialog<void>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (ctx) => AlertDialog(
-                        content: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            const SizedBox(width: 20),
-                            Text(l10n.loadingMenuAndSending),
-                          ],
-                        ),
-                      ),
-                    );
-                    final seeder = DatabaseSeeder(db);
-                    try {
-                      await seeder.seedMenuReyesNievesForce();
-                      await seeder.seedProductWithModifiersFromJson('assets/data/bolis_modifiers.json');
-                      await seeder.seedProductsWithModifiersFromJson('assets/data/paletas_modifiers.json');
-                      await seeder.seedProductsWithModifiersFromJson('assets/data/nieves_modifiers.json');
-                      await seeder.seedProductsWithModifiersFromJson('assets/data/bebidas_leche_modifiers.json');
-                      await seeder.seedProductsWithModifiersFromJson('assets/data/malteadas_modifiers.json');
-                    } catch (e) {
-                      logErrorToConsole(e);
-                      if (context.mounted) Navigator.of(context).pop();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error al cargar menú: $e'),
-                            backgroundColor: Theme.of(context).colorScheme.error,
-                          ),
-                        );
-                      }
-                      return;
-                    }
-                    if (!context.mounted) return;
-                    err = await CloudSyncService.pushToCloud(db);
-                    if (context.mounted) Navigator.of(context).pop();
-                  }
-                  if (err != null) logErrorToConsole(err);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(err == null ? 'Datos enviados a la nube' : 'Error: $err'),
-                        backgroundColor: err != null ? Theme.of(context).colorScheme.error : null,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
-              ),
             ListTile(
               leading: const Icon(Icons.refresh),
               title: Text(l10n.loadMenuFromJson),
@@ -957,47 +753,5 @@ class HomeScreen extends ConsumerWidget {
       default:
         return l10n.appTitle;
     }
-  }
-
-  /// Muestra un diálogo para ingresar PIN (4 dígitos). Retorna el PIN o null si canceló.
-  static Future<String?> _showPinDialog(
-    BuildContext context,
-    String title,
-    String cancelLabel,
-    String okLabel,
-  ) async {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          obscureText: true,
-          maxLength: 4,
-          decoration: const InputDecoration(
-            hintText: '****',
-            counterText: '',
-          ),
-          onSubmitted: (value) {
-            if (value.length == 4) Navigator.pop(ctx, value);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(cancelLabel),
-          ),
-          FilledButton(
-            onPressed: () {
-              final pin = controller.text.trim();
-              if (pin.length == 4) Navigator.pop(ctx, pin);
-            },
-            child: Text(okLabel),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -272,7 +272,7 @@ final _cloudRayosXClosuresProvider = FutureProvider.autoDispose<List<ClosureDayR
       cardDebit: debit,
       cardCredit: credit,
       transferSales: transfer,
-      expenses: 0,
+      movementsCajaNet: 0,
       systemExpectedCash: c.systemExpectedCash,
       declaredCash: c.declaredCash,
       difference: c.difference,
@@ -882,7 +882,13 @@ class _RayosXTab extends ConsumerWidget {
                                 _rayosXRow(l10n.debit, c.cardDebit),
                                 _rayosXRow(l10n.credit, c.cardCredit),
                                 _rayosXRow(l10n.transfer, c.transferSales),
-                                _rayosXRow(l10n.expenses, -c.expenses),
+                                _rayosXRow(
+                                  l10n.movementsCajaNetLabel,
+                                  0,
+                                  trailing: c.movementsCajaNet >= 0
+                                      ? '+\$${c.movementsCajaNet.toStringAsFixed(2)}'
+                                      : '-\$${c.movementsCajaNet.abs().toStringAsFixed(2)}',
+                                ),
                                 const Divider(height: 16),
                                 _rayosXRow(l10n.expectedInDrawer, c.systemExpectedCash),
                                 _rayosXRow(l10n.declaredCash, c.declaredCash),

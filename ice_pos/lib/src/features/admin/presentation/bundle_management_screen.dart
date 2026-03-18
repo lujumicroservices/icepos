@@ -8,6 +8,7 @@ import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dar
 import 'package:ice_pos/src/features/admin/presentation/bundle_editor_screen.dart';
 
 final _bundlesProvider = FutureProvider<List<({Bundle bundle, List<BundleItem> bundleItems})>>((ref) async {
+  ref.watch(posCategoriesRefreshProvider);
   return ref.read(posRepositoryProvider).getBundlesWithItems();
 });
 

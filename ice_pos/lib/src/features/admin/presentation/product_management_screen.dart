@@ -295,7 +295,36 @@ class _ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final url = product.imageUrl?.trim();
+    final hasImage = url != null && url.isNotEmpty;
     return ListTile(
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 52,
+          height: 52,
+          child: hasImage
+              ? Image.network(
+                  url!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => ColoredBox(
+                    color: scheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : ColoredBox(
+                  color: scheme.surfaceContainerHighest,
+                  child: Icon(
+                    Icons.fastfood_outlined,
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+        ),
+      ),
       onTap: () async {
         await Navigator.push<bool>(
           context,

@@ -18,6 +18,7 @@ class Categories extends Table {
   TextColumn get name => text().withLength(min: 1, max: 100)();
   IntColumn get parentId => integer().nullable().references(Categories, #id)();
   TextColumn get color => text().nullable()();
+  TextColumn get imageUrl => text().nullable()();
 }
 
 // 2. PRODUCTS (Menu Items)
@@ -145,7 +146,7 @@ class Shifts extends Table {
   RealColumn get startingFund => real().withDefault(const Constant(0.0))();
 }
 
-// 15. CASH MOVEMENTS (Expenses, petty cash - reduce drawer)
+// 15. CASH MOVEMENTS (legacy; prefer Movements table for new flows)
 class CashMovements extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get shiftId => integer().references(Shifts, #id)();

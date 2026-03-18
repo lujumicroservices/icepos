@@ -1,10 +1,15 @@
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ice_pos/src/core/services/category_image_service.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_editor_screen.dart';
+import 'package:image_picker/image_picker.dart';
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
   ref.watch(posCategoriesRefreshProvider);
@@ -168,13 +173,37 @@ class _CategoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final barColor = category.color != null ? Color(_parseColor(category.color)) : Theme.of(context).colorScheme.primary;
     return ListTile(
-      leading: Container(
-        width: 4,
-        height: 40,
-        decoration: BoxDecoration(
-          color: barColor,
-          borderRadius: BorderRadius.circular(2),
-        ),
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 4,
+            height: 40,
+            decoration: BoxDecoration(
+              color: barColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: () {
+                final url = category.imageUrl?.trim();
+                if (url != null && url.isNotEmpty) {
+                  return Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _categoryImagePlaceholder(context),
+                  );
+                }
+                return _categoryImagePlaceholder(context);
+              }(),
+            ),
+          ),
+        ],
       ),
       title: Text(
         category.name,
@@ -223,6 +252,9 @@ class _CategoryEditorDialog extends StatefulWidget {
 class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
   late TextEditingController _nameController;
   late TextEditingController _colorController;
+  late TextEditingController _imageUrlController;
+  Uint8List? _pickedImageBytes;
+  String? _pickedImageMime;
   int? _parentId;
   bool _isSaving = false;
   String? _error;
@@ -232,6 +264,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
     super.initState();
     _nameController = TextEditingController(text: widget.category?.name ?? '');
     _colorController = TextEditingController(text: widget.category?.color ?? '#87CEEB');
+    _imageUrlController = TextEditingController(text: widget.category?.imageUrl ?? '');
     _parentId = widget.category?.parentId;
   }
 
@@ -239,7 +272,48 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
   void dispose() {
     _nameController.dispose();
     _colorController.dispose();
+    _imageUrlController.dispose();
     super.dispose();
+  }
+
+  String _mimeFromPath(String path) {
+    final p = path.toLowerCase();
+    if (p.endsWith('.png')) return 'image/png';
+    if (p.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return;
+      setState(() {
+        _pickedImageBytes = bytes;
+        _pickedImageMime = _mimeFromPath(file.path);
+        _imageUrlController.clear();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo obtener la imagen: $e')),
+        );
+      }
+    }
+  }
+
+  void _clearImage() {
+    setState(() {
+      _pickedImageBytes = null;
+      _pickedImageMime = null;
+      _imageUrlController.clear();
+    });
   }
 
   List<domain_cat.Category> get _parentCandidates {
@@ -258,11 +332,18 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
       _isSaving = true;
     });
     try {
+      final hadPickedFile = _pickedImageBytes != null;
+      final trimmedUrl = _imageUrlController.text.trim();
+      final imageUrl =
+          hadPickedFile ? null : (trimmedUrl.isEmpty ? null : trimmedUrl);
       if (widget.category == null) {
         await widget.repository.insertCategory(
           name: name,
           parentId: _parentId,
           color: _colorController.text.trim().isEmpty ? null : _colorController.text.trim(),
+          imageUrl: imageUrl,
+          newImageBytes: _pickedImageBytes?.toList(),
+          newImageMimeType: _pickedImageMime,
         );
       } else {
         await widget.repository.updateCategory(
@@ -270,6 +351,9 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
           name: name,
           parentId: _parentId,
           color: _colorController.text.trim().isEmpty ? null : _colorController.text.trim(),
+          imageUrl: imageUrl,
+          newImageBytes: _pickedImageBytes?.toList(),
+          newImageMimeType: _pickedImageMime,
         );
       }
       if (!mounted) return;
@@ -342,6 +426,14 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
               onChanged: (_) => setState(() => _error = null),
             ),
             const SizedBox(height: 16),
+            _CategoryImageEditor(
+              pickedImageBytes: _pickedImageBytes,
+              imageUrlController: _imageUrlController,
+              onPickGallery: _isSaving ? null : () => _pickImage(ImageSource.gallery),
+              onPickCamera: _isSaving || kIsWeb ? null : () => _pickImage(ImageSource.camera),
+              onClear: _isSaving ? null : _clearImage,
+            ),
+            const SizedBox(height: 16),
             InputDecorator(
               decoration: const InputDecoration(
                 labelText: 'Parent category',
@@ -390,4 +482,110 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
       ],
     );
   }
+}
+
+class _CategoryImageEditor extends StatelessWidget {
+  const _CategoryImageEditor({
+    required this.pickedImageBytes,
+    required this.imageUrlController,
+    required this.onPickGallery,
+    required this.onPickCamera,
+    required this.onClear,
+  });
+
+  final Uint8List? pickedImageBytes;
+  final TextEditingController imageUrlController;
+  final VoidCallback? onPickGallery;
+  final VoidCallback? onPickCamera;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final url = imageUrlController.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Imagen (opcional)',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 140,
+              height: 140,
+              color: scheme.surfaceContainerHighest,
+              child: pickedImageBytes != null
+                  ? Image.memory(pickedImageBytes!, fit: BoxFit.cover)
+                  : (url.isNotEmpty
+                      ? Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              _categoryImagePlaceholder(context),
+                        )
+                      : _categoryImagePlaceholder(context)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: onPickGallery,
+              icon: const Icon(Icons.photo_library_outlined, size: 20),
+              label: const Text('Galería'),
+            ),
+            if (onPickCamera != null)
+              FilledButton.tonalIcon(
+                onPressed: onPickCamera,
+                icon: const Icon(Icons.camera_alt_outlined, size: 20),
+                label: const Text('Cámara'),
+              ),
+            OutlinedButton.icon(
+              onPressed: onClear,
+              icon: const Icon(Icons.delete_outline, size: 20),
+              label: const Text('Quitar'),
+            ),
+          ],
+        ),
+        if (!CategoryImageService.canUpload) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Sin Supabase: solo puedes usar una URL pública de imagen.',
+            style: GoogleFonts.inter(fontSize: 12, color: scheme.tertiary),
+          ),
+        ],
+        const SizedBox(height: 12),
+        TextField(
+          controller: imageUrlController,
+          decoration: const InputDecoration(
+            labelText: 'URL de imagen (opcional)',
+            hintText: 'https://...',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.link),
+          ),
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+        ),
+      ],
+    );
+  }
+}
+
+Widget _categoryImagePlaceholder(BuildContext context) {
+  return Center(
+    child: Icon(
+      Icons.folder_outlined,
+      size: 56,
+      color:
+          Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+    ),
+  );
 }

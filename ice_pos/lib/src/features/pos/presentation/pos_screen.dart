@@ -147,10 +147,13 @@ class PosScreen extends ConsumerWidget {
                         ),
                       ),
                       ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: constraints.maxHeight * 0.45,
-                          minHeight: 200,
-                        ),
+                        constraints: () {
+                          final maxH = constraints.maxHeight * 0.45;
+                          return BoxConstraints(
+                            minHeight: maxH < 200 ? maxH : 200,
+                            maxHeight: maxH,
+                          );
+                        }(),
                         child: _CartSummaryPanel(
                           l10n: l10n,
                           cartState: cartState,
@@ -1093,56 +1096,73 @@ class _CategoryCard extends StatelessWidget {
     required this.onTap,
   });
 
+  static const _placeholderAsset = 'assets/images/category_placeholder.png';
+
   final Category category;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = category.color != null && category.color!.isNotEmpty
-        ? _parseColor(category.color!)
-        : Theme.of(context).colorScheme.primaryContainer;
+    final scheme = Theme.of(context).colorScheme;
+    final imageUrl = category.imageUrl?.trim();
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     return Card(
-      elevation: 2,
-      shadowColor: Colors.black26,
+      elevation: 0,
+      color: scheme.surface,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: scheme.outlineVariant.withValues(alpha: 0.6),
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.3),
-            border: Border.all(
-              color: color,
-              width: 1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ColoredBox(
+                color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                child: hasImage
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (_, __, ___) => Image.asset(
+                          _placeholderAsset,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      )
+                    : Image.asset(
+                        _placeholderAsset,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.folder,
-                size: 48,
-                color: color,
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  category.name,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+              child: Text(
+                category.name,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: scheme.onSurface,
+                  height: 1.2,
                 ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

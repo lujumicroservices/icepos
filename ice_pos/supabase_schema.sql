@@ -7,7 +7,8 @@ create table if not exists public.categories (
   id serial primary key,
   name text not null,
   parent_id int references public.categories(id),
-  color text
+  color text,
+  image_url text
 );
 
 -- 2. Supplies (raw materials)

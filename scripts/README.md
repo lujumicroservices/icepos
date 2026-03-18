@@ -1,5 +1,21 @@
 # Scripts de respaldo
 
+## Recrear la base de datos desde cero (Supabase)
+
+Para **borrar y volver a crear** todas las tablas del esquema `public` en Supabase (pierdes toda la data):
+
+1. **Desde el Dashboard:** Supabase → SQL Editor → pega o sube el contenido de `ice_pos/supabase/recreate_database.sql` y ejecuta.
+2. **Desde la terminal** (con `psql` y cadena de conexión):
+   ```powershell
+   $env:SUPABASE_DB_URL = "postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres"
+   .\scripts\recreate-database.ps1
+   ```
+   La cadena la obtienes en Supabase → Settings → Database → Connection string (URI).
+
+Más detalles en `ice_pos/supabase/README_RECREATE.md`.
+
+---
+
 ## Publicar release APK desde tu computadora
 
 Si GitHub Actions no está disponible o quieres tener un plan B, puedes generar y subir una nueva versión desde tu Mac (o cualquier máquina con Flutter y `gh`).
@@ -55,6 +71,39 @@ export SUPABASE_ANON_KEY="tu_anon_key"
 ```
 
 O añadir las mismas variables a `ice_pos/.env` (el script intenta cargarlas desde ahí si existen).
+
+### Windows (PowerShell)
+
+En la **raíz del repo** (donde están `ice_pos` y `scripts`), abre PowerShell:
+
+```powershell
+# Publicar release (versión, build, mensaje opcional)
+.\scripts\release-apk-local.ps1 1.0.12 12
+.\scripts\release-apk-local.ps1 1.0.12 12 "Corrección de impresión"
+```
+
+Si PowerShell no permite ejecutar scripts, una vez por equipo:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+O ejecutar sin cambiar la política:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\release-apk-local.ps1 1.0.12 12
+```
+
+### Probar API de actualizaciones (app_releases)
+
+Si la app dice "ya tienes la última versión" pero en Supabase la tabla tiene datos:
+
+```powershell
+cd ice_pos
+.\scripts\test_app_releases_api.ps1
+```
+
+Si devuelve `[]`, ejecuta en Supabase (SQL Editor) el contenido de `supabase/migrations/008_app_releases_rls.sql`.
 
 ### Si no tienes `gh`
 

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -9,22 +8,26 @@ import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/realtime_sync_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:ice_pos/src/core/utils/error_logger.dart';
 import 'package:ice_pos/src/core/utils/logger.dart';
 import 'package:ice_pos/src/core/auth/auth_gate.dart';
 import 'package:ice_pos/src/features/home/presentation/home_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/controllers/receipt_printer_controller.dart';
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Ensure errors are always printed to the terminal so you can copy them.
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    logErrorToConsole(details.exception, details.stack);
-  };
+void main() {
+  // runApp must run in the same zone as ensureInitialized to avoid "Zone mismatch".
   runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    // Ensure errors are always printed to the terminal so you can copy them.
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+      logErrorToConsole(details.exception, details.stack);
+    };
+
     await _runApp();
   }, (Object error, StackTrace stackTrace) {
     logErrorToConsole(error, stackTrace);
@@ -37,12 +40,15 @@ Future<void> _runApp() async {
 
   try {
     await SupabaseService.initialize();
+    if (SupabaseService.isInitialized && SupabaseService.debugHost != null) {
+      debugPrint('Supabase: host=${SupabaseService.debugHost} (mismo que en ice_pos/.env)');
+    }
   } catch (_) {
     // App works offline without Supabase
   }
 
   final database = AppDatabase();
-  // No automatic seed: data is loaded on demand via "Sincronizar" (cloud) or "Cargar menú desde JSON" (drawer).
+  // No automatic seed: with cloud enabled, data is synced at startup and kept in sync via Realtime; otherwise use "Cargar menú desde JSON" in drawer.
 
   if (CloudSyncService.isEnabled) {
     try {
@@ -69,6 +75,16 @@ Future<void> _runApp() async {
   );
 }
 
+/// Ensures Realtime sync is started once when the app has ref (so we can invalidate providers on sync).
+final _realtimeSyncInitProvider = Provider<void>((ref) {
+  if (!CloudSyncService.isEnabled) return;
+  final db = ref.read(appDatabaseProvider);
+  void onSyncDone() {
+    ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+  }
+  RealtimeSyncService.start(db, onSyncDone);
+});
+
 /// Wrapper that restores the saved printer selection once the app has started.
 class _AppWithPrinterRestore extends ConsumerStatefulWidget {
   const _AppWithPrinterRestore();
@@ -88,6 +104,7 @@ class _AppWithPrinterRestoreState extends ConsumerState<_AppWithPrinterRestore> 
 
   @override
   Widget build(BuildContext context) {
+    ref.read(_realtimeSyncInitProvider);
     final locale = ref.watch(localeProvider);
     return MaterialApp(
       title: 'ICE POS',

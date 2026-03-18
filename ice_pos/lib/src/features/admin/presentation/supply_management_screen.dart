@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/utils/number_utils.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 const _units = ['kg', 'lt', 'pz', 'pcs', 'g', 'ml'];
@@ -335,7 +336,7 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
       return;
     }
 
-    final cost = double.tryParse(_costController.text.replaceFirst(',', '.'));
+    final cost = parseDecimal(_costController.text);
     if (cost == null || cost < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Costo por unidad inválido')),
@@ -343,7 +344,7 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
       return;
     }
 
-    final reorder = double.tryParse(_reorderController.text.replaceFirst(',', '.')) ?? 0;
+    final reorder = parseDecimal(_reorderController.text) ?? 0;
     final category = _categoryController.text.trim();
     final categoryOrNull = category.isEmpty ? null : category;
 

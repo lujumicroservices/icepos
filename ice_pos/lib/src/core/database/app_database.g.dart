@@ -58,8 +58,19 @@ class $CategoriesTable extends Categories
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _imageUrlMeta = const VerificationMeta(
+    'imageUrl',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, parentId, color];
+  late final GeneratedColumn<String> imageUrl = GeneratedColumn<String>(
+    'image_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, parentId, color, imageUrl];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -95,6 +106,12 @@ class $CategoriesTable extends Categories
         color.isAcceptableOrUnknown(data['color']!, _colorMeta),
       );
     }
+    if (data.containsKey('image_url')) {
+      context.handle(
+        _imageUrlMeta,
+        imageUrl.isAcceptableOrUnknown(data['image_url']!, _imageUrlMeta),
+      );
+    }
     return context;
   }
 
@@ -120,6 +137,10 @@ class $CategoriesTable extends Categories
         DriftSqlType.string,
         data['${effectivePrefix}color'],
       ),
+      imageUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_url'],
+      ),
     );
   }
 
@@ -134,11 +155,13 @@ class Category extends DataClass implements Insertable<Category> {
   final String name;
   final int? parentId;
   final String? color;
+  final String? imageUrl;
   const Category({
     required this.id,
     required this.name,
     this.parentId,
     this.color,
+    this.imageUrl,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -150,6 +173,9 @@ class Category extends DataClass implements Insertable<Category> {
     }
     if (!nullToAbsent || color != null) {
       map['color'] = Variable<String>(color);
+    }
+    if (!nullToAbsent || imageUrl != null) {
+      map['image_url'] = Variable<String>(imageUrl);
     }
     return map;
   }
@@ -164,6 +190,9 @@ class Category extends DataClass implements Insertable<Category> {
       color: color == null && nullToAbsent
           ? const Value.absent()
           : Value(color),
+      imageUrl: imageUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imageUrl),
     );
   }
 
@@ -177,6 +206,7 @@ class Category extends DataClass implements Insertable<Category> {
       name: serializer.fromJson<String>(json['name']),
       parentId: serializer.fromJson<int?>(json['parentId']),
       color: serializer.fromJson<String?>(json['color']),
+      imageUrl: serializer.fromJson<String?>(json['imageUrl']),
     );
   }
   @override
@@ -187,6 +217,7 @@ class Category extends DataClass implements Insertable<Category> {
       'name': serializer.toJson<String>(name),
       'parentId': serializer.toJson<int?>(parentId),
       'color': serializer.toJson<String?>(color),
+      'imageUrl': serializer.toJson<String?>(imageUrl),
     };
   }
 
@@ -195,11 +226,13 @@ class Category extends DataClass implements Insertable<Category> {
     String? name,
     Value<int?> parentId = const Value.absent(),
     Value<String?> color = const Value.absent(),
+    Value<String?> imageUrl = const Value.absent(),
   }) => Category(
     id: id ?? this.id,
     name: name ?? this.name,
     parentId: parentId.present ? parentId.value : this.parentId,
     color: color.present ? color.value : this.color,
+    imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
   );
   Category copyWithCompanion(CategoriesCompanion data) {
     return Category(
@@ -207,6 +240,7 @@ class Category extends DataClass implements Insertable<Category> {
       name: data.name.present ? data.name.value : this.name,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
       color: data.color.present ? data.color.value : this.color,
+      imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
     );
   }
 
@@ -216,13 +250,14 @@ class Category extends DataClass implements Insertable<Category> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('parentId: $parentId, ')
-          ..write('color: $color')
+          ..write('color: $color, ')
+          ..write('imageUrl: $imageUrl')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, parentId, color);
+  int get hashCode => Object.hash(id, name, parentId, color, imageUrl);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -230,7 +265,8 @@ class Category extends DataClass implements Insertable<Category> {
           other.id == this.id &&
           other.name == this.name &&
           other.parentId == this.parentId &&
-          other.color == this.color);
+          other.color == this.color &&
+          other.imageUrl == this.imageUrl);
 }
 
 class CategoriesCompanion extends UpdateCompanion<Category> {
@@ -238,29 +274,34 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<String> name;
   final Value<int?> parentId;
   final Value<String?> color;
+  final Value<String?> imageUrl;
   const CategoriesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.parentId = const Value.absent(),
     this.color = const Value.absent(),
+    this.imageUrl = const Value.absent(),
   });
   CategoriesCompanion.insert({
     this.id = const Value.absent(),
     required String name,
     this.parentId = const Value.absent(),
     this.color = const Value.absent(),
+    this.imageUrl = const Value.absent(),
   }) : name = Value(name);
   static Insertable<Category> custom({
     Expression<int>? id,
     Expression<String>? name,
     Expression<int>? parentId,
     Expression<String>? color,
+    Expression<String>? imageUrl,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (parentId != null) 'parent_id': parentId,
       if (color != null) 'color': color,
+      if (imageUrl != null) 'image_url': imageUrl,
     });
   }
 
@@ -269,12 +310,14 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<String>? name,
     Value<int?>? parentId,
     Value<String?>? color,
+    Value<String?>? imageUrl,
   }) {
     return CategoriesCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
       parentId: parentId ?? this.parentId,
       color: color ?? this.color,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 
@@ -293,6 +336,9 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     if (color.present) {
       map['color'] = Variable<String>(color.value);
     }
+    if (imageUrl.present) {
+      map['image_url'] = Variable<String>(imageUrl.value);
+    }
     return map;
   }
 
@@ -302,7 +348,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('parentId: $parentId, ')
-          ..write('color: $color')
+          ..write('color: $color, ')
+          ..write('imageUrl: $imageUrl')
           ..write(')'))
         .toString();
   }
@@ -7037,6 +7084,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       required String name,
       Value<int?> parentId,
       Value<String?> color,
+      Value<String?> imageUrl,
     });
 typedef $$CategoriesTableUpdateCompanionBuilder =
     CategoriesCompanion Function({
@@ -7044,6 +7092,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<String> name,
       Value<int?> parentId,
       Value<String?> color,
+      Value<String?> imageUrl,
     });
 
 final class $$CategoriesTableReferences
@@ -7129,6 +7178,11 @@ class $$CategoriesTableFilterComposer
 
   ColumnFilters<String> get color => $composableBuilder(
     column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imageUrl => $composableBuilder(
+    column: $table.imageUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7230,6 +7284,11 @@ class $$CategoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get imageUrl => $composableBuilder(
+    column: $table.imageUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CategoriesTableOrderingComposer get parentId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -7271,6 +7330,9 @@ class $$CategoriesTableAnnotationComposer
 
   GeneratedColumn<String> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<String> get imageUrl =>
+      $composableBuilder(column: $table.imageUrl, builder: (column) => column);
 
   $$CategoriesTableAnnotationComposer get parentId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
@@ -7382,11 +7444,13 @@ class $$CategoriesTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<int?> parentId = const Value.absent(),
                 Value<String?> color = const Value.absent(),
+                Value<String?> imageUrl = const Value.absent(),
               }) => CategoriesCompanion(
                 id: id,
                 name: name,
                 parentId: parentId,
                 color: color,
+                imageUrl: imageUrl,
               ),
           createCompanionCallback:
               ({
@@ -7394,11 +7458,13 @@ class $$CategoriesTableTableManager
                 required String name,
                 Value<int?> parentId = const Value.absent(),
                 Value<String?> color = const Value.absent(),
+                Value<String?> imageUrl = const Value.absent(),
               }) => CategoriesCompanion.insert(
                 id: id,
                 name: name,
                 parentId: parentId,
                 color: color,
+                imageUrl: imageUrl,
               ),
           withReferenceMapper: (p0) => p0
               .map(
