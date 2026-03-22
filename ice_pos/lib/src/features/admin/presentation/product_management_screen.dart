@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
@@ -15,6 +18,8 @@ final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
   ref.watch(posCategoriesRefreshProvider);
   return ref.read(posRepositoryProvider).getAllCategories();
 });
+
+final _adminProductSearchQueryProvider = StateProvider<String>((ref) => '');
 
 /// One section: category name, optional color, and products.
 class _CategorySection {
@@ -57,6 +62,34 @@ List<_CategorySection> _groupProductsByCategory(
   return sections;
 }
 
+List<_CategorySection> _filterProductSections(
+  List<_CategorySection> sections,
+  String query,
+) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return sections;
+  return sections
+      .map(
+        (s) => _CategorySection(
+          name: s.name,
+          color: s.color,
+          products: s.products
+              .where((p) => p.name.toLowerCase().contains(q))
+              .toList(),
+        ),
+      )
+      .where((s) => s.products.isNotEmpty)
+      .toList();
+}
+
+List<Product> _filterProductsFlat(List<Product> products, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return products;
+  final list = products.where((p) => p.name.toLowerCase().contains(q)).toList()
+    ..sort((a, b) => a.name.compareTo(b.name));
+  return list;
+}
+
 class ProductManagementScreen extends ConsumerWidget {
   const ProductManagementScreen({super.key});
 
@@ -64,6 +97,8 @@ class ProductManagementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(_allProductsStreamProvider);
     final categoriesAsync = ref.watch(_categoriesProvider);
+    final l10n = ref.watch(appLocalizationsProvider);
+    final searchQ = ref.watch(_adminProductSearchQueryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -75,7 +110,16 @@ class ProductManagementScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: productsAsync.when(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListSearchBar(
+            queryProvider: _adminProductSearchQueryProvider,
+            hintText: l10n.quickSearchHint,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          ),
+          Expanded(
+            child: productsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
           child: Padding(
@@ -120,13 +164,39 @@ class ProductManagementScreen extends ConsumerWidget {
           }
           return categoriesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) => _flatProductList(context, ref, products),
+            error: (_, __) {
+              final filtered = _filterProductsFlat(products, searchQ);
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Text(
+                    l10n.searchNoResults,
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }
+              return _flatProductList(context, ref, filtered);
+            },
             data: (categories) {
               final sections = _groupProductsByCategory(products, categories);
+              final filtered = _filterProductSections(sections, searchQ);
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Text(
+                    l10n.searchNoResults,
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }
               return ListView(
                 padding: const EdgeInsets.only(bottom: 80),
                 children: [
-                  for (final section in sections) ...[
+                  for (final section in filtered) ...[
                     _SectionHeader(
                       name: section.name,
                       count: section.products.length,
@@ -139,6 +209,9 @@ class ProductManagementScreen extends ConsumerWidget {
             },
           );
         },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {

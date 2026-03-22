@@ -18,6 +18,8 @@ import 'package:ice_pos/src/features/pos/presentation/qr_scanner_screen.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/utils/error_logger.dart';
+import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
+import 'package:ice_pos/src/features/pos/presentation/pos_search_providers.dart';
 
 final _parkedOrdersStreamProvider = StreamProvider<List<ParkedOrder>>((ref) {
   return ref.watch(posRepositoryProvider).watchParkedOrders();
@@ -72,8 +74,10 @@ class PosScreen extends ConsumerWidget {
         children: [
           _CategoryBreadcrumbsBar(
             breadcrumbs: navState.breadcrumbs,
-            onHomeTap: () =>
-                ref.read(categoryNavigationControllerProvider.notifier).goHome(),
+            onHomeTap: () {
+              ref.read(posQuickSearchQueryProvider.notifier).state = '';
+              ref.read(categoryNavigationControllerProvider.notifier).goHome();
+            },
             onBreadcrumbTap: (index) => ref
                 .read(categoryNavigationControllerProvider.notifier)
                 .goToBreadcrumbIndex(index),
@@ -87,6 +91,11 @@ class PosScreen extends ConsumerWidget {
               error: (_, __) => 0,
             ),
             onRetrieveTap: () => _showRetrieveBottomSheet(context, ref),
+          ),
+          ListSearchBar(
+            queryProvider: posQuickSearchQueryProvider,
+            hintText: l10n.quickSearchHint,
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
           ),
           Expanded(
             child: LayoutBuilder(
@@ -958,6 +967,33 @@ class _CategoryOrProductsGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final searchQ = ref.watch(posQuickSearchQueryProvider).trim();
+    if (searchQ.isNotEmpty) {
+      final l10n = ref.watch(appLocalizationsProvider);
+      final searchAsync = ref.watch(posSearchProductsProvider);
+      return searchAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (products) {
+          if (products.isEmpty) {
+            return Center(
+              child: Text(
+                l10n.searchNoResults,
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            );
+          }
+          return _ProductsGrid(
+            productsAsync: AsyncValue.data(products),
+            onProductTap: onProductTap,
+          );
+        },
+      );
+    }
+
     final childCategoriesAsync = ref.watch(_childCategoriesProvider);
     final productsAsync = ref.watch(_gridProductsProvider);
     final directProductsAsync = ref.watch(_directCategoryProductsProvider);

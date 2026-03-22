@@ -10,6 +10,8 @@ import 'package:ice_pos/src/core/database/seeder.dart';
 import 'package:ice_pos/src/core/services/app_update_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/recipe_json_import_service.dart';
+import 'package:ice_pos/src/core/services/recipe_report_save.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -24,6 +26,7 @@ import 'package:ice_pos/src/features/pos/presentation/close_shift_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/printer_setup_screen.dart';
 import 'package:ice_pos/src/features/movements/presentation/movements_screen.dart';
+import 'package:ice_pos/src/features/monitoring/presentation/temperature_history_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/reports_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/sales_history_screen.dart';
 import 'package:ice_pos/src/core/auth/auth_session_provider.dart';
@@ -321,6 +324,20 @@ class HomeScreen extends ConsumerWidget {
                 );
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.thermostat_outlined),
+              title: Text(l10n.temperatureHistory),
+              subtitle: Text(l10n.temperatureHistorySubtitle),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TemperatureHistoryScreen(),
+                  ),
+                );
+              },
+            ),
             ],
             if (!kIsWeb)
               ListTile(
@@ -531,6 +548,128 @@ class HomeScreen extends ConsumerWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Error al recargar: $e'),
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.restaurant_menu),
+              title: Text(l10n.importRecipesFromJson),
+              subtitle: Text(l10n.importRecipesFromJsonSubtitle),
+              onTap: () async {
+                Navigator.pop(context);
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text(l10n.importRecipesConfirmTitle),
+                    content: Text(l10n.importRecipesConfirmBody),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(l10n.cancel),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text(l10n.apply),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok != true || !context.mounted) return;
+
+                var pushCloud = false;
+                if (CloudSyncService.isEnabled) {
+                  final cloud = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(l10n.importRecipesPushCloudTitle),
+                      content: Text(l10n.importRecipesPushCloudBody),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text(l10n.importRecipesPushCloudLocal),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: Text(l10n.importRecipesPushCloudYes),
+                        ),
+                      ],
+                    ),
+                  );
+                  pushCloud = cloud == true;
+                }
+
+                if (!context.mounted) return;
+                showDialog<void>(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => AlertDialog(
+                    content: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(child: Text(l10n.importingRecipes)),
+                      ],
+                    ),
+                  ),
+                );
+
+                final db = ref.read(appDatabaseProvider);
+                final importer = RecipeJsonImportService(db);
+                try {
+                  final jsonString = await rootBundle
+                      .loadString('assets/data/recetas_formato.json');
+                  final result = await importer.importRecetasFormatoJson(
+                    jsonString,
+                    assetLabel: 'assets/data/recetas_formato.json',
+                    applyChanges: true,
+                    pushUpdatedProductsToCloud: pushCloud,
+                  );
+                  final csv = RecipeImportResult.toCsv(result.rows);
+                  final savedPath = await saveRecipeImportCsv(csv);
+                  await Clipboard.setData(ClipboardData(text: csv));
+
+                  if (context.mounted) Navigator.of(context).pop();
+                  if (context.mounted) {
+                    final buf = StringBuffer()
+                      ..write(l10n.importRecipesDone)
+                      ..write(
+                        ' ${result.productsUpdated} prod., '
+                        '${result.recipeLinesInserted} líneas. ',
+                      )
+                      ..write(
+                        'Errores/abortados: ${result.productsFailed}. '
+                        'Vacíos omitidos: ${result.productsSkippedEmptyJson}. ',
+                      );
+                    if (savedPath != null) {
+                      buf.write('${l10n.importRecipesReportPath} $savedPath');
+                    } else {
+                      buf.write(l10n.importRecipesReportClipboard);
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(buf.toString()),
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 8),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  logErrorToConsole(e);
+                  if (context.mounted) Navigator.of(context).pop();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${l10n.error}: $e'),
                         backgroundColor: Theme.of(context).colorScheme.error,
                         behavior: SnackBarBehavior.floating,
                       ),

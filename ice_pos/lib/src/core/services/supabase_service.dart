@@ -1,6 +1,8 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:ice_pos/src/core/setup/supabase_config_store.dart';
+
 /// Singleton que gestiona la conexión con Supabase.
 /// Lee URL y ANON_KEY desde el archivo .env.
 class SupabaseService {
@@ -27,15 +29,19 @@ class SupabaseService {
   static const int _initMaxAttempts = 3;
   static const Duration _initRetryDelay = Duration(seconds: 2);
 
-  /// Inicializa Supabase con las credenciales del archivo .env.
+  /// Inicializa Supabase con credenciales de `.env` (prioridad) o de [SupabaseConfigStore].
   /// Debe llamarse después de dotenv.load() en main().
-  /// Si faltan SUPABASE_URL o SUPABASE_ANON_KEY, no inicializa (isInitialized queda false).
+  /// Si faltan URL y anon key en ambos sitios, no inicializa (isInitialized queda false).
   /// Reintenta hasta [_initMaxAttempts] veces ante fallos de red (host lookup, timeout).
   static Future<void> initialize() async {
     if (_instance != null) return;
 
-    final url = dotenv.env['SUPABASE_URL']?.trim();
-    final anonKey = dotenv.env['SUPABASE_ANON_KEY']?.trim();
+    final envUrl = dotenv.env['SUPABASE_URL']?.trim();
+    final envKey = dotenv.env['SUPABASE_ANON_KEY']?.trim();
+    final stored = await SupabaseConfigStore.loadCredentials();
+
+    final url = (envUrl != null && envUrl.isNotEmpty) ? envUrl : stored.url;
+    final anonKey = (envKey != null && envKey.isNotEmpty) ? envKey : stored.anonKey;
 
     if (url == null || url.isEmpty || anonKey == null || anonKey.isEmpty) {
       return; // App works offline without Supabase

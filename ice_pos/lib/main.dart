@@ -10,6 +10,7 @@ import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/realtime_sync_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
+import 'package:ice_pos/src/core/setup/presentation/supabase_bootstrap.dart';
 import 'package:ice_pos/src/core/utils/error_logger.dart';
 import 'package:ice_pos/src/core/utils/logger.dart';
 import 'package:ice_pos/src/core/auth/auth_gate.dart';
@@ -41,7 +42,9 @@ Future<void> _runApp() async {
   try {
     await SupabaseService.initialize();
     if (SupabaseService.isInitialized && SupabaseService.debugHost != null) {
-      debugPrint('Supabase: host=${SupabaseService.debugHost} (mismo que en ice_pos/.env)');
+      debugPrint(
+        'Supabase: host=${SupabaseService.debugHost} (.env o credenciales guardadas)',
+      );
     }
   } catch (_) {
     // App works offline without Supabase
@@ -70,7 +73,10 @@ Future<void> _runApp() async {
       overrides: [
         appDatabaseProvider.overrideWith((_) => database),
       ],
-      child: AuthGate(child: const _AppWithPrinterRestore()),
+      child: SupabaseBootstrap(
+        database: database,
+        child: AuthGate(child: const _AppWithPrinterRestore()),
+      ),
     ),
   );
 }

@@ -28,6 +28,16 @@ class AppLocalizations {
   String get cloudNotConfigured => _('cloudNotConfigured');
   String get syncWithSupabase => _('syncWithSupabase');
   String get syncEnvHint => _('syncEnvHint');
+  String get setupSupabaseTitle => _('setupSupabaseTitle');
+  String get setupSupabaseSubtitle => _('setupSupabaseSubtitle');
+  String get setupSupabaseUrlLabel => _('setupSupabaseUrlLabel');
+  String get setupSupabaseAnonKeyLabel => _('setupSupabaseAnonKeyLabel');
+  String get setupSupabaseConnect => _('setupSupabaseConnect');
+  String get setupSupabaseSkip => _('setupSupabaseSkip');
+  String get setupSupabaseSchemaNote => _('setupSupabaseSchemaNote');
+  String get setupSupabaseInvalidUrl => _('setupSupabaseInvalidUrl');
+  String get setupSupabaseConnecting => _('setupSupabaseConnecting');
+  String get setupSupabaseError => _('setupSupabaseError');
   String get testConnection => _('testConnection');
   String get connectionOk => _('connectionOk');
   String get sync => _('sync');
@@ -41,6 +51,18 @@ class AppLocalizations {
   String get dataSentToCloud => _('dataSentToCloud');
   String get loadMenuFromJson => _('loadMenuFromJson');
   String get loadMenuFromJsonSubtitle => _('loadMenuFromJsonSubtitle');
+  String get importRecipesFromJson => _('importRecipesFromJson');
+  String get importRecipesFromJsonSubtitle => _('importRecipesFromJsonSubtitle');
+  String get importRecipesConfirmTitle => _('importRecipesConfirmTitle');
+  String get importRecipesConfirmBody => _('importRecipesConfirmBody');
+  String get importRecipesPushCloudTitle => _('importRecipesPushCloudTitle');
+  String get importRecipesPushCloudBody => _('importRecipesPushCloudBody');
+  String get importRecipesPushCloudLocal => _('importRecipesPushCloudLocal');
+  String get importRecipesPushCloudYes => _('importRecipesPushCloudYes');
+  String get importingRecipes => _('importingRecipes');
+  String get importRecipesDone => _('importRecipesDone');
+  String get importRecipesReportPath => _('importRecipesReportPath');
+  String get importRecipesReportClipboard => _('importRecipesReportClipboard');
   String get loadingMenuFromJson => _('loadingMenuFromJson');
   String get loadingMenuAndSending => _('loadingMenuAndSending');
   String get menuReloaded => _('menuReloaded');
@@ -88,6 +110,8 @@ class AppLocalizations {
   String get removeDiscount => _('removeDiscount');
   String get applyDiscount => _('applyDiscount');
   String get scanDiscount => _('scanDiscount');
+  String get quickSearchHint => _('quickSearchHint');
+  String get searchNoResults => _('searchNoResults');
   String get park => _('park');
   String get processingSale => _('processingSale');
   String get saleComplete => _('saleComplete');
@@ -139,6 +163,31 @@ class AppLocalizations {
   // Reports
   String get reports => _('reports');
   String get reportsSubtitle => _('reportsSubtitle');
+  String get temperatureHistory => _('temperatureHistory');
+  String get temperatureHistorySubtitle => _('temperatureHistorySubtitle');
+  String get temperatureRange24h => _('temperatureRange24h');
+  String get temperatureRange7d => _('temperatureRange7d');
+  String get temperatureRange30d => _('temperatureRange30d');
+  String get temperatureSensorFilter => _('temperatureSensorFilter');
+  String get temperatureFreezerFilter => _('temperatureFreezerFilter');
+  String get temperatureFreezerAll => _('temperatureFreezerAll');
+  String get temperatureFreezer1 => _('temperatureFreezer1');
+  String get temperatureFreezer2 => _('temperatureFreezer2');
+  String get temperatureSensorAll => _('temperatureSensorAll');
+  String get temperatureUnknownSensor => _('temperatureUnknownSensor');
+  String get temperatureSensorFreezer1Right => _('temperatureSensorFreezer1Right');
+  String get temperatureSensorFreezer1Left => _('temperatureSensorFreezer1Left');
+  String get temperatureSensorFreezer2Left => _('temperatureSensorFreezer2Left');
+  String get temperatureNoData => _('temperatureNoData');
+  String get temperatureCloudRequired => _('temperatureCloudRequired');
+  String get temperatureStats => _('temperatureStats');
+  String get temperaturePoints => _('temperaturePoints');
+  String get temperatureFromTo => _('temperatureFromTo');
+  String get temperatureMinMax => _('temperatureMinMax');
+  String temperatureLastReading(String value, String at) =>
+      _('temperatureLastReading')
+          .replaceAll('{value}', value)
+          .replaceAll('{at}', at);
   String get salesReports => _('salesReports');
   String get inventoryReports => _('inventoryReports');
   String get rayosXReport => _('rayosXReport');
@@ -260,6 +309,18 @@ class AppLocalizations {
     'cloudNotConfigured': 'Nube no configurada',
     'syncWithSupabase': 'Sincronización con Supabase',
     'syncEnvHint': 'Configura SUPABASE_URL y SUPABASE_ANON_KEY en .env',
+    'setupSupabaseTitle': 'Conectar con la nube',
+    'setupSupabaseSubtitle':
+        'Introduce la URL del proyecto y la clave anónima (anon public) de Supabase. Se guardan en el dispositivo para conectar automáticamente al abrir la app.',
+    'setupSupabaseUrlLabel': 'URL del proyecto (https://…supabase.co)',
+    'setupSupabaseAnonKeyLabel': 'Clave anónima (anon key)',
+    'setupSupabaseConnect': 'Conectar y sincronizar',
+    'setupSupabaseSkip': 'Continuar sin nube',
+    'setupSupabaseSchemaNote':
+        'Las tablas y políticas deben existir en tu proyecto Supabase. En el repositorio, ejecuta los SQL de la carpeta supabase/migrations (SQL Editor o CLI). La app no puede crear el esquema solo con la clave anon.',
+    'setupSupabaseInvalidUrl': 'La URL debe empezar con https:// y ser un host válido.',
+    'setupSupabaseConnecting': 'Conectando…',
+    'setupSupabaseError': 'No se pudo conectar. Revisa URL, clave y red.',
     'testConnection': 'Probar conexión',
     'connectionOk': 'Conexión con la nube OK',
     'sync': 'Sincronizar',
@@ -273,6 +334,21 @@ class AppLocalizations {
     'dataSentToCloud': 'Datos enviados a la nube',
     'loadMenuFromJson': 'Cargar menú desde JSON',
     'loadMenuFromJsonSubtitle': 'Solo cuando la nube está vacía. Si la nube tiene datos, se sincronizan automáticamente.',
+    'importRecipesFromJson': 'Importar recetas (recetas_formato.json)',
+    'importRecipesFromJsonSubtitle':
+        'Actualiza la tabla local de recetas y genera un CSV de reporte. Los modificadores del JSON no se importan aquí.',
+    'importRecipesConfirmTitle': '¿Importar recetas?',
+    'importRecipesConfirmBody':
+        'Para cada producto del JSON con ingredientes: se borran las recetas locales de ese producto y se insertan las del archivo. Productos sin ingredientes en el JSON no se tocan. Se guardará un CSV con el detalle.',
+    'importRecipesPushCloudTitle': '¿Subir recetas a la nube?',
+    'importRecipesPushCloudBody':
+        'Se enviará cada producto actualizado a Supabase (recetas y datos del producto). Requiere conexión.',
+    'importRecipesPushCloudLocal': 'Solo local',
+    'importRecipesPushCloudYes': 'Sí, subir a la nube',
+    'importingRecipes': 'Importando recetas...',
+    'importRecipesDone': 'Importación terminada.',
+    'importRecipesReportPath': 'Reporte CSV:',
+    'importRecipesReportClipboard': 'Reporte copiado al portapapeles.',
     'loadingMenuFromJson': 'Cargando menú desde JSON...',
     'loadingMenuAndSending': 'Cargando menú y enviando a la nube...',
     'menuReloaded': 'Menú recargado (Bolis, Paletas, Nieves, Malteadas)',
@@ -360,6 +436,30 @@ class AppLocalizations {
     'saleCancelled': 'Venta cancelada',
     'reports': 'Reportes',
     'reportsSubtitle': 'Estadísticas de ventas e inventario',
+    'temperatureHistory': 'Temperatura (congelador)',
+    'temperatureHistorySubtitle':
+        'Historial desde la nube (tabla temperature_readings). Requiere Supabase configurado.',
+    'temperatureRange24h': '24 h',
+    'temperatureRange7d': '7 días',
+    'temperatureRange30d': '30 días',
+    'temperatureSensorFilter': 'Sensor',
+    'temperatureFreezerFilter': 'Congelador',
+    'temperatureFreezerAll': 'Todos los congeladores',
+    'temperatureFreezer1': 'Congelador 1 (izq. y der.)',
+    'temperatureFreezer2': 'Congelador 2',
+    'temperatureSensorAll': 'Todos los sensores',
+    'temperatureUnknownSensor': 'Sin sensor',
+    'temperatureSensorFreezer1Right': 'Congelador 1 — derecha',
+    'temperatureSensorFreezer1Left': 'Congelador 1 — izquierda',
+    'temperatureSensorFreezer2Left': 'Congelador 2 — izquierda',
+    'temperatureNoData': 'No hay lecturas en este rango.',
+    'temperatureCloudRequired':
+        'Configura SUPABASE_URL y SUPABASE_ANON_KEY en .env para ver el historial de temperatura.',
+    'temperatureStats': 'Resumen',
+    'temperaturePoints': 'Lecturas',
+    'temperatureFromTo': 'Desde — hasta',
+    'temperatureMinMax': 'Mín — máx',
+    'temperatureLastReading': 'Última lectura: {value} °C — {at}',
     'salesReports': 'Ventas',
     'inventoryReports': 'Inventario',
     'rayosXReport': 'Rayos X del día',
@@ -474,6 +574,18 @@ class AppLocalizations {
     'cloudNotConfigured': 'Cloud not configured',
     'syncWithSupabase': 'Sync with Supabase',
     'syncEnvHint': 'Set SUPABASE_URL and SUPABASE_ANON_KEY in .env',
+    'setupSupabaseTitle': 'Connect to the cloud',
+    'setupSupabaseSubtitle':
+        'Enter your Supabase project URL and anon (public) key. They are saved on this device for automatic connection.',
+    'setupSupabaseUrlLabel': 'Project URL (https://…supabase.co)',
+    'setupSupabaseAnonKeyLabel': 'Anon key',
+    'setupSupabaseConnect': 'Connect and sync',
+    'setupSupabaseSkip': 'Continue offline',
+    'setupSupabaseSchemaNote':
+        'Tables and RLS policies must exist in your Supabase project. Run the SQL files in supabase/migrations (SQL Editor or CLI). The app cannot create the schema with the anon key alone.',
+    'setupSupabaseInvalidUrl': 'URL must start with https:// and be a valid host.',
+    'setupSupabaseConnecting': 'Connecting…',
+    'setupSupabaseError': 'Could not connect. Check URL, key, and network.',
     'testConnection': 'Test connection',
     'connectionOk': 'Connection OK',
     'sync': 'Sync',
@@ -487,6 +599,21 @@ class AppLocalizations {
     'dataSentToCloud': 'Data sent to cloud',
     'loadMenuFromJson': 'Load menu from JSON',
     'loadMenuFromJsonSubtitle': 'Only when cloud is empty. If cloud has data, data syncs automatically.',
+    'importRecipesFromJson': 'Import recipes (recetas_formato.json)',
+    'importRecipesFromJsonSubtitle':
+        'Updates local recipes and writes a CSV report. Modifier blocks in the JSON are not imported here.',
+    'importRecipesConfirmTitle': 'Import recipes?',
+    'importRecipesConfirmBody':
+        'For each product in the JSON with ingredients: local recipes for that product are replaced. Products with an empty ingredient list are left unchanged. A CSV report will be saved.',
+    'importRecipesPushCloudTitle': 'Upload recipes to cloud?',
+    'importRecipesPushCloudBody':
+        'Each updated product will be pushed to Supabase (recipes + product data). Requires connectivity.',
+    'importRecipesPushCloudLocal': 'Local only',
+    'importRecipesPushCloudYes': 'Yes, upload to cloud',
+    'importingRecipes': 'Importing recipes...',
+    'importRecipesDone': 'Import finished.',
+    'importRecipesReportPath': 'CSV report:',
+    'importRecipesReportClipboard': 'Report copied to clipboard.',
     'loadingMenuFromJson': 'Loading menu from JSON...',
     'loadingMenuAndSending': 'Loading menu and sending to cloud...',
     'menuReloaded': 'Menu reloaded (Bolis, Paletas, Nieves, Malteadas)',
@@ -530,6 +657,8 @@ class AppLocalizations {
     'removeDiscount': 'Remove discount',
     'applyDiscount': 'Apply discount',
     'scanDiscount': 'Scan discount',
+    'quickSearchHint': 'Search by name…',
+    'searchNoResults': 'No results',
     'park': 'Park',
     'processingSale': 'Processing sale...',
     'saleComplete': 'Sale complete',
@@ -574,6 +703,30 @@ class AppLocalizations {
     'saleCancelled': 'Sale cancelled',
     'reports': 'Reports',
     'reportsSubtitle': 'Sales and inventory statistics',
+    'temperatureHistory': 'Freezer temperature',
+    'temperatureHistorySubtitle':
+        'History from cloud (temperature_readings table). Requires Supabase in .env.',
+    'temperatureRange24h': '24 h',
+    'temperatureRange7d': '7 days',
+    'temperatureRange30d': '30 days',
+    'temperatureSensorFilter': 'Sensor',
+    'temperatureFreezerFilter': 'Freezer',
+    'temperatureFreezerAll': 'All freezers',
+    'temperatureFreezer1': 'Freezer 1 (left & right)',
+    'temperatureFreezer2': 'Freezer 2',
+    'temperatureSensorAll': 'All sensors',
+    'temperatureUnknownSensor': 'No sensor',
+    'temperatureSensorFreezer1Right': 'Freezer 1 — right',
+    'temperatureSensorFreezer1Left': 'Freezer 1 — left',
+    'temperatureSensorFreezer2Left': 'Freezer 2 — left',
+    'temperatureNoData': 'No readings in this range.',
+    'temperatureCloudRequired':
+        'Set SUPABASE_URL and SUPABASE_ANON_KEY in .env to load temperature history.',
+    'temperatureStats': 'Summary',
+    'temperaturePoints': 'Readings',
+    'temperatureFromTo': 'From — to',
+    'temperatureMinMax': 'Min — max',
+    'temperatureLastReading': 'Last reading: {value} °C — {at}',
     'salesReports': 'Sales',
     'inventoryReports': 'Inventory',
     'rayosXReport': 'Day X-Ray',

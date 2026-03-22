@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/utils/number_utils.dart';
+import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 const _units = ['kg', 'lt', 'pz', 'pcs', 'g', 'ml'];
@@ -16,12 +19,36 @@ final _supplyCategoryNamesProvider = FutureProvider<List<String>>((ref) {
   return ref.read(posRepositoryProvider).getSupplyCategoryNames();
 });
 
+final _adminSupplySearchQueryProvider = StateProvider<String>((ref) => '');
+
+List<({String name, List<Supply> supplies})> _filterSupplySections(
+  List<({String name, List<Supply> supplies})> sections,
+  String query,
+) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return sections;
+  final out = <({String name, List<Supply> supplies})>[];
+  for (final s in sections) {
+    final sectionMatches = s.name.toLowerCase().contains(q);
+    final filtered = sectionMatches
+        ? s.supplies
+        : s.supplies
+            .where((sup) => sup.name.toLowerCase().contains(q))
+            .toList();
+    if (filtered.isEmpty) continue;
+    out.add((name: s.name, supplies: filtered));
+  }
+  return out;
+}
+
 class SupplyManagementScreen extends ConsumerWidget {
   const SupplyManagementScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final groupedAsync = ref.watch(_suppliesGroupedProvider);
+    final l10n = ref.watch(appLocalizationsProvider);
+    final searchQ = ref.watch(_adminSupplySearchQueryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -35,7 +62,16 @@ class SupplyManagementScreen extends ConsumerWidget {
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
       ),
-      body: groupedAsync.when(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListSearchBar(
+            queryProvider: _adminSupplySearchQueryProvider,
+            hintText: l10n.quickSearchHint,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          ),
+          Expanded(
+            child: groupedAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
           child: Padding(
@@ -78,10 +114,22 @@ class SupplyManagementScreen extends ConsumerWidget {
               ),
             );
           }
+          final filtered = _filterSupplySections(sections, searchQ);
+          if (filtered.isEmpty) {
+            return Center(
+              child: Text(
+                l10n.searchNoResults,
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            );
+          }
           return ListView(
             padding: const EdgeInsets.only(bottom: 80),
             children: [
-              for (final section in sections) ...[
+              for (final section in filtered) ...[
                 _SectionHeader(name: section.name, count: section.supplies.length),
                 ...section.supplies.map(
                   (supply) => _SupplyTile(
@@ -105,6 +153,9 @@ class SupplyManagementScreen extends ConsumerWidget {
             ],
           );
         },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showSupplyDialog(context: context, ref: ref),

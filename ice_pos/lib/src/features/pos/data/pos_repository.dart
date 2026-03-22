@@ -1022,6 +1022,7 @@ class PosRepository {
     }
 
     int? cloudSaleId;
+    String? cloudWriteError;
     if (CloudSyncService.isEnabled) {
       final (err, id) = await CloudSyncService.writeSaleToCloud(
         items,
@@ -1030,7 +1031,9 @@ class PosRepository {
         amountTendered: amountTendered,
         changeGiven: changeGiven,
       );
-      if (err != null) throw StateError(err);
+      if (err != null) {
+        cloudWriteError = err;
+      }
       cloudSaleId = id;
     }
 
@@ -1169,6 +1172,10 @@ class PosRepository {
             .toList(),
       );
     });
+    if (cloudWriteError != null) {
+      // Offline-safe behavior: local sale must be recorded even if cloud write fails.
+      debugPrint('CloudSyncService.writeSaleToCloud (non-blocking): $cloudWriteError');
+    }
     return payload;
   }
 
