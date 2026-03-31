@@ -87,7 +87,7 @@
       },
       "ingredientes": [
         {
-          "insumo": "Vaso Mini",
+          "insumo": "Vaso Mini 2oz nieve",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -121,7 +121,7 @@
       },
       "ingredientes": [
         {
-          "insumo": "Vaso Chico",
+          "insumo": "Vaso Chico 3oz nieve",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -155,7 +155,7 @@
       },
       "ingredientes": [
         {
-          "insumo": "Vaso Mediano",
+          "insumo": "Vaso Mediano 4oz nieve",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -189,7 +189,7 @@
       },
       "ingredientes": [
         {
-          "insumo": "Vaso Grande",
+          "insumo": "Vaso Grande 5oz nieve",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -375,8 +375,8 @@
         },
         {
           "insumo": "Polvo base malteada",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .45
         },
         {
           "insumo": "Crema batida",
@@ -389,7 +389,7 @@
           "cantidad": 1
         },
         {
-          "insumo": "Vaso Mediano",
+          "insumo": "Vaso Mediano 12oz transparente",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -439,8 +439,8 @@
         },
         {
           "insumo": "Polvo base malteada",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .60
         },
         {
           "insumo": "Crema batida",
@@ -453,7 +453,7 @@
           "cantidad": 1
         },
         {
-          "insumo": "Vaso Grande",
+          "insumo": "Vaso Grande 16oz transparente",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -469,6 +469,11 @@
         },
         {
           "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tubito galleta",
           "unidad": "pcs",
           "cantidad": 1
         }
@@ -493,7 +498,7 @@
           "cantidad": 0.35
         },
         {
-          "insumo": "Vaso Mediano",
+          "insumo": "Vaso Mediano 12oz transparente",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -533,7 +538,7 @@
           "cantidad": 0.45
         },
         {
-          "insumo": "Vaso Grande",
+          "insumo": "Vaso Grande 16oz transparente",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -559,8 +564,8 @@
       "ingredientes": [
         {
           "insumo": "Concentrado soda",
-          "unidad": "lt",
-          "cantidad": 0.025
+          "unidad": "grs",
+          "cantidad": 0.100
         },
         {
           "insumo": "Hielo",
@@ -574,11 +579,11 @@
         },
         {
           "insumo": "Agua mineral",
-          "unidad": "lt",
-          "cantidad": 0.3
+          "unidad": "pcs",
+          "cantidad": 1
         },
         {
-          "insumo": "Vaso Mediano",
+          "insumo": "Vaso Mediano 12oz transparente",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -604,8 +609,8 @@
       "ingredientes": [
         {
           "insumo": "Concentrado soda",
-          "unidad": "lt",
-          "cantidad": 0.03
+          "unidad": "grs",
+          "cantidad": 0.134
         },
         {
           "insumo": "Hielo",
@@ -619,11 +624,11 @@
         },
         {
           "insumo": "Agua mineral",
-          "unidad": "lt",
-          "cantidad": 0.4
+          "unidad": "pcs",
+          "cantidad": 1
         },
         {
-          "insumo": "Vaso Grande",
+          "insumo": "Vaso Grande 16oz transparente",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -698,7 +703,7 @@
           "cantidad": 0.05
         },
         {
-          "insumo": "Plato cartón",
+          "insumo": "plato cartón",
           "unidad": "pcs",
           "cantidad": 1
         },
@@ -759,8 +764,8 @@
         },
         {
           "insumo": "Crema batida",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": 0.05
         },
         {
           "insumo": "Baguetera",
@@ -840,7 +845,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -849,8 +854,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -863,7 +868,7 @@
       "producto": "Español",
       "ingredientes": [
         {
-          "insumo": "Chile serrano",
+          "insumo": "jamón serrano",
           "unidad": "pcs",
           "cantidad": 4
         },
@@ -876,6 +881,11 @@
           "insumo": "Pan baguette",
           "unidad": "pcs",
           "cantidad": 1
+        },
+        {
+          "insumo": "Jitomate",
+          "unidad": "pcs",
+          "cantidad": .25
         },
         {
           "insumo": "Mayonesa",
@@ -910,7 +920,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -919,8 +929,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -980,7 +990,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -989,8 +999,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -1015,7 +1025,7 @@
         {
           "insumo": "Queso panela",
           "unidad": "kg",
-          "cantidad": 0.05
+          "cantidad": 0.100
         },
         {
           "insumo": "Lechuga",
@@ -1045,7 +1055,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -1054,8 +1064,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -1080,7 +1090,7 @@
         {
           "insumo": "Queso panela",
           "unidad": "kg",
-          "cantidad": 0.05
+          "cantidad": 0.100
         },
         {
           "insumo": "Pepino",
@@ -1110,7 +1120,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -1119,8 +1129,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -1170,7 +1180,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -1179,8 +1189,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -1235,7 +1245,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -1244,8 +1254,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+          "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -1295,7 +1305,7 @@
         {
           "insumo": "Papel encerado",
           "unidad": "pcs",
-          "cantidad": 1
+          "cantidad": 2
         },
         {
           "insumo": "Aluminio",
@@ -1304,8 +1314,8 @@
         },
         {
           "insumo": "Platanitos",
-          "unidad": "pcs",
-          "cantidad": 1
+            "unidad": "grs",
+          "cantidad": .50
         },
         {
           "insumo": "Jalapeños",
@@ -1320,12 +1330,12 @@
         {
           "insumo": "Queso cheddar",
           "unidad": "kg",
-          "cantidad": 1.0
+        "cantidad": 0.05
         },
         {
           "insumo": "Pechuga de pavo",
           "unidad": "pcs",
-          "cantidad": 2.0
+          "cantidad": 3.0
         },
         {
           "insumo": "Mayonesa",
@@ -1336,6 +1346,11 @@
           "insumo": "Aluminio",
           "unidad": "pcs",
           "cantidad": 1.0
+        },  
+        {
+          "insumo": "Papel encerado",
+          "unidad": "pcs",
+          "cantidad": 2
         },
         {
           "insumo": "Lechuga",
@@ -1368,6 +1383,11 @@
           "cantidad": 1.0
         },
         {
+          "insumo": "Queso panela",
+          "unidad": "kg",
+          "cantidad": 0.15
+        },
+        {
           "insumo": "Lechuga",
           "unidad": "pcs",
           "cantidad": 1.0
@@ -1387,6 +1407,16 @@
           "unidad": "pcs",
           "cantidad": 1.0
         }
+        {
+          "insumo": "Papel encerado",
+          "unidad": "pcs",
+          "cantidad": 2
+        },
+        {
+          "insumo": "Aluminio",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
       ]
     },
     {
@@ -1396,6 +1426,46 @@
           "insumo": "Hielo",
           "unidad": "pcs",
           "cantidad": 1.0
+        },
+        {
+          "insumo": "Mango concentrado",
+          "unidad": "grs",
+          "cantidad": .60
+        },
+        {
+          "insumo": "Gengibre polvo",
+          "unidad": "grs",
+          "cantidad": .015
+        },
+        {
+          "insumo": "leche de almendras",
+          "unidad": "lt",
+          "cantidad": .100
+        },
+        {
+          "insumo": "miel abeja",
+          "unidad": "ml",
+          "cantidad": .010
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1   
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
         }
       ]
     },
@@ -1407,19 +1477,216 @@
           "unidad": "pcs",
           "cantidad": 1.0
         }
+        {
+          "insumo": "leche de almendras",
+          "unidad": "lt",
+          "cantidad": .160
+        },
+        {
+          "insumo": "Matcha polvo",
+          "unidad": "grs",
+          "cantidad": .60
+        },
+        {
+          "insumo": "miel agave",
+          "unidad": "ml",
+          "cantidad": .010
+        },
+        {
+          "insumo": "datil",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "amaranto",
+          "unidad": "grs",
+          "cantidad": .010
+        },
+        {
+          "insumo": "crema de coco",
+          "unidad": "ml",
+          "cantidad": .30
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
       ]
     },
     {
       "producto": "Coco Lover",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "leche de coco",
+          "unidad": "lt",
+          "cantidad": .160
+        },
+        {
+          "insumo": "crema de coco",
+          "unidad": "ml",
+          "cantidad": .30
+        },
+        {
+          "insumo": "nieve de coco",
+          "unidad": "grs",
+          "cantidad": .50
+        },    
+        {
+          "insumo": "coco rayado",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "coco tostado",
+          "unidad": "grs",
+          "cantidad": .15
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Coffee Energy",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "leche de almendras",
+          "unidad": "lt",
+          "cantidad": .160
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 2.5
+        },
+        {
+          "insumo": "cocoa",
+          "unidad": "grs",
+          "cantidad": .15
+        },
+        {
+          "insumo": "nuez de la india",
+          "unidad": "grs",
+          "cantidad": .20
+        },
+        {
+          "insumo": "miel agave",
+          "unidad": "ml",
+          "cantidad": .010
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Berry Special",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "leche de almendras",
+          "unidad": "lt",
+          "cantidad": .160
+        },
+        {
+          "insumo": "blueberry",
+          "unidad": "grs",
+          "cantidad": .50
+        },
+        {
+          "insumo": "fresas",
+          "unidad": "grs",
+          "cantidad": .50
+        },
+        {
+          "insumo": "consentrado frutos del bosque",
+          "unidad": "grs",
+          "cantidad": .30
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+      ]
     },
     {
       "producto": "Chocolate Caliente Mediano",
@@ -1433,7 +1700,41 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "cocoa",
+          "unidad": "grs",
+          "cantidad": .45
+        },
+        {
+          "insumo": "crema batida",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+      ]
     },
     {
       "producto": "Chocolate Caliente Grande",
@@ -1447,7 +1748,43 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .2
+        },
+        {
+          "insumo": "cocoa",
+          "unidad": "grs",
+          "cantidad": .60
+        },
+        {
+          "insumo": "crema batida",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Moka Mediano",
@@ -1461,7 +1798,43 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "dark chocolate",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "cafe",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Moka Grande",
@@ -1475,7 +1848,43 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .2
+        },
+        {
+          "insumo": "dark chocolate",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "cafe",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Matcha (Barra) Mediano",
@@ -1489,7 +1898,38 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "matcha polvo",
+          "unidad": "grs",
+          "cantidad": .45
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Matcha (Barra) Grande",
@@ -1503,7 +1943,38 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+        "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "matcha polvo",
+          "unidad": "grs",
+          "cantidad": .60
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Capuccino Mediano",
@@ -1517,8 +1988,50 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
-    },
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "cafe",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
+    },    {
+      "producto": "Capuccino Grande",
+      "modificadores": {
+        "grupo": "Tipo de leche (opcional)",
+        "elecciones_min": 0,
+        "elecciones_max": 1,
+        "descuento_por_eleccion": {
+          "unidad": "lt",
+          "cantidad": 0.1
+        },
+        "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
+      },
     {
       "producto": "Capuccino Grande",
       "modificadores": {
@@ -1531,7 +2044,38 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "cafe",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Latte Mediano",
@@ -1545,7 +2089,27 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "cafe",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+      ]
     },
     {
       "producto": "Latte Grande",
@@ -1573,7 +2137,31 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [ {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "chai polvo",
+          "unidad": "grs",
+          "cantidad": .45
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
     },
     {
       "producto": "Chai Grande",
@@ -1587,7 +2175,36 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [ {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "chai polvo",
+          "unidad": "grs",
+          "cantidad": .60
+        } ]
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
     },
     {
       "producto": "Taro (Barra) Mediano",
@@ -1601,7 +2218,38 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [ 
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "taro",
+          "unidad": "grs",
+          "cantidad": .45
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Taro (Barra) Grande",
@@ -1615,15 +2263,96 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [ {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "taro",
+          "unidad": "grs",
+          "cantidad": .60
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Tisana Mediano",
-      "ingredientes": []
+      "ingredientes": [ {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "tisana polvo",
+          "unidad": "grs",
+          "cantidad": .45
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Tisana Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "tisana polvo",
+          "unidad": "grs",
+          "cantidad": .60
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Americano Mediano",
@@ -1637,7 +2366,31 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [ {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .250
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 2.5 
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
     },
     {
       "producto": "Americano Grande",
@@ -1651,7 +2404,33 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .250
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 2.5
+        },
+        {
+          "insumo": "vaso grande 16oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Espresso Sencillo",
@@ -1665,7 +2444,31 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [ {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .250
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 2.5
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
     },
     {
       "producto": "Espresso Doble",
@@ -1679,7 +2482,33 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .250
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 2.5
+        },
+        {
+          "insumo": "vaso mediano 12oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Espresso Cortado",
@@ -1693,7 +2522,31 @@
         },
         "nota": "Opción: Leche de coco o Leche almendras. Se deduce 0.1 lt del insumo elegido; cambio +$10."
       },
-      "ingredientes": []
+      "ingredientes": [ {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .50
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 2.5
+        },
+        {
+          "insumo": "vaso 2oz cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tapa cafe",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
     },
     {
       "producto": "Paquete Amigos (3 Medios Litros)",
@@ -1706,8 +2559,29 @@
         },
         "nota": "3 medios litros (un sabor cada uno). Se deduce del insumo de cada sabor elegido. Ver insumos_guia."
       },
-      "ingredientes": []
-    },
+      "ingredientes": [ 
+        {
+          "insumo": "Bote 1/2 litro",
+          "unidad": "pcs",
+          "cantidad": 3
+        },
+        {
+          "insumo": "Tapa litro",
+          "unidad": "pcs",
+          "cantidad": 3
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 3
+        },
+        {
+          "insumo": "Bolsa",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
+    },  
     {
       "producto": "Paquete Familiar (4 Medios Litros)",
       "modificadores": {
@@ -1719,7 +2593,28 @@
         },
         "nota": "4 medios litros (un sabor cada uno). Se deduce del insumo de cada sabor elegido. Ver insumos_guia."
       },
-      "ingredientes": []
+      "ingredientes": [ 
+        {
+          "insumo": "Bote 1/2 litro",
+          "unidad": "pcs",
+          "cantidad": 4
+        },
+        {
+          "insumo": "Tapa litro",
+          "unidad": "pcs",
+          "cantidad": 4
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 4
+        },
+        {
+          "insumo": "Bolsa",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Paquete Rey (6 Medios Litros)",
@@ -1732,7 +2627,28 @@
         },
         "nota": "6 medios litros (un sabor cada uno). Se deduce del insumo de cada sabor elegido. Ver insumos_guia."
       },
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Bote 1/2 litro",
+          "unidad": "pcs",
+          "cantidad": 6
+        },
+        {
+          "insumo": "Tapa litro",
+          "unidad": "pcs",
+          "cantidad": 6
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 6
+        },
+        {
+          "insumo": "Bolsa",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Boli",
@@ -1746,8 +2662,19 @@
         },
         "nota": "Cada sabor elegido descuenta 1 pcs del insumo correspondiente (Boli Regular/Light - café, coco, chocolate, etc.). Ver opciones en bolis_modifiers.json."
       },
-      "ingredientes": []
-    },
+      "ingredientes": [
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Bolsita 1/4 papel",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
+    },        
     {
       "producto": "Paleta Agua",
       "modificadores": {
@@ -1760,7 +2687,13 @@
         },
         "nota": "Cada sabor elegido descuenta 1 pcs del insumo (Paleta Agua - limón, fresa, mango). Ver paletas_modifiers.json."
       },
-      "ingredientes": []
+      "ingredientes": [ 
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Paleta Forrada",
@@ -1774,7 +2707,13 @@
         },
         "nota": "Cada sabor elegido descuenta 1 pcs del insumo (Paleta Forrada - m&m, nuez, cookies & cream). Ver paletas_modifiers.json."
       },
-      "ingredientes": []
+      "ingredientes": [ 
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Agua",
@@ -1790,19 +2729,163 @@
     },
     {
       "producto": "Té helado mediano",
-      "ingredientes": []
-    },
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Té limon",
+          "unidad": "grs",
+          "cantidad": .30
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
+    },        
     {
       "producto": "Té helado grande",
-      "ingredientes": []
+      "ingredientes": [ 
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Té limon",
+          "unidad": "grs",
+          "cantidad": .30
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Shake Taro Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo taro",
+          "unidad": "grs",
+          "cantidad": .045
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Shake Taro Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo taro",
+          "unidad": "grs",
+          "cantidad": .060
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        } 
+      ]
     },
     {
       "producto": "Shake Matcha Mediano",
@@ -1811,122 +2894,1196 @@
           "insumo": "Hielo",
           "unidad": "pcs",
           "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo matcha",
+          "unidad": "grs",
+          "cantidad": .045
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
         }
       ]
     },
     {
       "producto": "Shake Matcha Grande",
-      "ingredientes": []
+      "ingredientes": [ 
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo matcha",
+          "unidad": "grs",
+          "cantidad": .060
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Shake Pink Flamingo Mediano",
       "ingredientes": [
         {
-          "insumo": "Agua mineral",
-          "unidad": "lt",
+          "insumo": "Hielo",
+          "unidad": "pcs",
           "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo pink flamingo",
+          "unidad": "grs",
+          "cantidad": .045
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        }
+      ]
+    }, 
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
         }
       ]
     },
     {
       "producto": "Shake Pink Flamingo Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo pink flamingo",
+          "unidad": "grs",
+          "cantidad": .060
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Shake Carbón Activado Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo carbón activado",
+          "unidad": "grs",
+          "cantidad": .045
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Shake Carbón Activado Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo carbón activado",
+          "unidad": "grs",
+          "cantidad": .060
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Shake Mango Spicy Hot Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "concentrado mango",
+          "unidad": "grs",
+          "cantidad": .045
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },  
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "banderilla",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tajin",
+          "unidad": "gr",
+          "cantidad": .005
+
+        }, {
+          "insumo": "chamoy",
+          "unidad": "ml",
+          "cantidad": .015
+
+        }
+      ]
     },
     {
       "producto": "Shake Mango Spicy Hot Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "concentrado mango",
+          "unidad": "grs",
+          "cantidad": .060
+        },
+        {
+          "insumo": "agua",
+          "unidad": "ml",
+          "cantidad": .300
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "banderilla",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "tajin",
+          "unidad": "gr",
+          "cantidad": .015
+        },
+        {
+          "insumo": "chamoy",
+          "unidad": "ml",
+          "cantidad": .025
+        }
+      ]
     },
     {
       "producto": "Cold Chai Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo chai",
+          "unidad": "grs",
+          "cantidad": .045
+        },
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },  
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Cold Chai Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo chai",
+          "unidad": "grs",
+          "cantidad": .060    
+        },
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },  
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Frapuccino Mediano",
-      "ingredientes": []
-    },
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo frapuccino",
+          "unidad": "grs",
+          "cantidad": .045
+        },
+        {
+          "insumo": "Leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "crema batida",
+          "unidad": "grs",
+          "cantidad": .200
+        },
+        {
+          "insumo": "hersheys chocolate",
+          "unidad": "grs",
+          "cantidad": .015
+        },
+        {
+          "insumo": "Tubito galleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa burbuja",
+          "unidad": "pcs",
+          "cantidad": 1
+        },  
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
+    },  
     {
       "producto": "Frapuccino Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "polvo frapuccino",
+          "unidad": "grs",
+          "cantidad": .060
+        },
+        {
+          "insumo": "Leche",
+          "unidad": "lt",
+          "cantidad": .15
+        },
+        {
+          "insumo": "crema batida",
+          "unidad": "grs",
+          "cantidad": .200
+        },
+        {
+          "insumo": "hersheys chocolate",
+          "unidad": "grs",
+          "cantidad": .015
+        },
+        {
+          "insumo": "Tubito galleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "muffin",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa burbuja",
+          "unidad": "pcs",
+          "cantidad": 1
+        },  
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Americano Helado Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .200
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Americano Helado Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "agua",
+          "unidad": "lt",
+          "cantidad": .200
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Latte Frío Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Latte Frío Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "expresso",
+          "unidad": "oz",
+          "cantidad": 3
+        },
+        {
+          "insumo": "leche",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Mojito Botánico Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de limon",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "jarabe dulce",
+          "unidad": "oz",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Mojito Botánico Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de limon",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "jarabe dulce",
+          "unidad": "oz",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Sunset Mandarina Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de mandarina",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Sunset Mandarina Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de mandarina",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Brisa de Coco Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de coco",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Brisa de Coco Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de coco",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Berry Spritz Mediano",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de frutos del bosque",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Berry Spritz Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de frutos del bosque",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Mango Tropical Mediano",
-      "ingredientes": []
+      "ingredientes": [ 
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de mango",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Mediano 12oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Mango Tropical Grande",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Hielo",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "consentrado de mango",
+          "unidad": "oz",
+          "cantidad": 2
+        },
+        {
+          "insumo": "agua mineral",
+          "unidad": "lt",
+          "cantidad": .300  //litros
+        },
+        {
+          "insumo": "Vaso Grande 16oz transparente",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Tapa lisa",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "Popote",
+          "unidad": "pcs",
+          "cantidad": 1
+        }
+      ]
     },
     {
       "producto": "Croissant Helado Monchis",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Cuernito",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "plato cartón",
+          "unidad": "pz",
+          "cantidad": 1
+        },
+        {
+          "insumo": "papel encerado",
+          "unidad": "pz",
+          "cantidad": 1  //litros
+        },
+        {
+          "insumo": "hersheys chocolate", 
+          "unidad": "grs",
+          "cantidad": .015
+        },
+        {
+          "insumo": "Nutella",
+          "unidad": "grs",
+          "cantidad": .050
+        },
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "crema batida",
+          "unidad": "grs",
+          "cantidad": .050
+        }
+      ]
     },
     {
       "producto": "Croissant Helado Sencillo",
-      "ingredientes": []
+      "ingredientes": [
+        {
+          "insumo": "Cuernito",
+          "unidad": "pcs",
+          "cantidad": 1.0
+        },
+        {
+          "insumo": "plato cartón",
+          "unidad": "pz",
+          "cantidad": 1
+        },
+        {
+          "insumo": "papel encerado",
+          "unidad": "pz",
+          "cantidad": 1  //litros
+        },
+        {
+          "insumo": "hersheys chocolate", 
+          "unidad": "grs",
+          "cantidad": .015
+        },  
+        {
+          "insumo": "Servilleta",
+          "unidad": "pcs",
+          "cantidad": 1
+        },
+        {
+          "insumo": "crema batida",
+          "unidad": "grs",
+          "cantidad": .050
+        }
+      ]
     },
     {
       "producto": "Paletas para Perritos Chica",
