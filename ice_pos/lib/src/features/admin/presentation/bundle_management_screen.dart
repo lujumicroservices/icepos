@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
@@ -177,8 +178,16 @@ class BundleManagementScreen extends ConsumerWidget {
                 ),
               );
               if (confirm == true) {
-                await ref.read(posRepositoryProvider).deleteBundle(bw.bundle.id);
-                ref.invalidate(_bundlesProvider);
+                try {
+                  await ref.read(posRepositoryProvider).deleteBundle(bw.bundle.id);
+                  ref.invalidate(_bundlesProvider);
+                } on OfflineMasterWriteException catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.message)),
+                    );
+                  }
+                }
               }
             },
           ),

@@ -1037,7 +1037,7 @@ class Supply extends DataClass implements Insertable<Supply> {
   final double reorderPoint;
   final String? category;
 
-  /// `quantity` = conteo numérico; `qualitative` = nivel alto/medio/bajo/resurtir (ver [qualitativeLevel]).
+  /// `quantity` = conteo numérico; `qualitative` = nivel alto/medio/bajo/crítico (ver [qualitativeLevel]).
   final String stockCountMode;
 
   /// Último nivel cualitativo registrado en conciliación (solo si [stockCountMode] es qualitative).
@@ -7140,6 +7140,479 @@ class AppUsersCompanion extends UpdateCompanion<AppUser> {
   }
 }
 
+class $OperationLogsTable extends OperationLogs
+    with TableInfo<$OperationLogsTable, OperationLog> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OperationLogsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _levelMeta = const VerificationMeta('level');
+  @override
+  late final GeneratedColumn<String> level = GeneratedColumn<String>(
+    'level',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 16,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 64,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _messageMeta = const VerificationMeta(
+    'message',
+  );
+  @override
+  late final GeneratedColumn<String> message = GeneratedColumn<String>(
+    'message',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contextJsonMeta = const VerificationMeta(
+    'contextJson',
+  );
+  @override
+  late final GeneratedColumn<String> contextJson = GeneratedColumn<String>(
+    'context_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stackTraceMeta = const VerificationMeta(
+    'stackTrace',
+  );
+  @override
+  late final GeneratedColumn<String> stackTrace = GeneratedColumn<String>(
+    'stack_trace',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    createdAt,
+    level,
+    operation,
+    message,
+    contextJson,
+    stackTrace,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'operation_logs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OperationLog> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('level')) {
+      context.handle(
+        _levelMeta,
+        level.isAcceptableOrUnknown(data['level']!, _levelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_levelMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_operationMeta);
+    }
+    if (data.containsKey('message')) {
+      context.handle(
+        _messageMeta,
+        message.isAcceptableOrUnknown(data['message']!, _messageMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_messageMeta);
+    }
+    if (data.containsKey('context_json')) {
+      context.handle(
+        _contextJsonMeta,
+        contextJson.isAcceptableOrUnknown(
+          data['context_json']!,
+          _contextJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stack_trace')) {
+      context.handle(
+        _stackTraceMeta,
+        stackTrace.isAcceptableOrUnknown(data['stack_trace']!, _stackTraceMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  OperationLog map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OperationLog(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      level: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}level'],
+      )!,
+      operation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation'],
+      )!,
+      message: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message'],
+      )!,
+      contextJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}context_json'],
+      ),
+      stackTrace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stack_trace'],
+      ),
+    );
+  }
+
+  @override
+  $OperationLogsTable createAlias(String alias) {
+    return $OperationLogsTable(attachedDatabase, alias);
+  }
+}
+
+class OperationLog extends DataClass implements Insertable<OperationLog> {
+  final int id;
+  final DateTime createdAt;
+
+  /// error | warning | info
+  final String level;
+
+  /// e.g. sale_transaction, sale_cloud_sync, sale_cart_complete
+  final String operation;
+  final String message;
+
+  /// JSON object: localSaleId, totalAmount, items summary, etc.
+  final String? contextJson;
+  final String? stackTrace;
+  const OperationLog({
+    required this.id,
+    required this.createdAt,
+    required this.level,
+    required this.operation,
+    required this.message,
+    this.contextJson,
+    this.stackTrace,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['level'] = Variable<String>(level);
+    map['operation'] = Variable<String>(operation);
+    map['message'] = Variable<String>(message);
+    if (!nullToAbsent || contextJson != null) {
+      map['context_json'] = Variable<String>(contextJson);
+    }
+    if (!nullToAbsent || stackTrace != null) {
+      map['stack_trace'] = Variable<String>(stackTrace);
+    }
+    return map;
+  }
+
+  OperationLogsCompanion toCompanion(bool nullToAbsent) {
+    return OperationLogsCompanion(
+      id: Value(id),
+      createdAt: Value(createdAt),
+      level: Value(level),
+      operation: Value(operation),
+      message: Value(message),
+      contextJson: contextJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contextJson),
+      stackTrace: stackTrace == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stackTrace),
+    );
+  }
+
+  factory OperationLog.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OperationLog(
+      id: serializer.fromJson<int>(json['id']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      level: serializer.fromJson<String>(json['level']),
+      operation: serializer.fromJson<String>(json['operation']),
+      message: serializer.fromJson<String>(json['message']),
+      contextJson: serializer.fromJson<String?>(json['contextJson']),
+      stackTrace: serializer.fromJson<String?>(json['stackTrace']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'level': serializer.toJson<String>(level),
+      'operation': serializer.toJson<String>(operation),
+      'message': serializer.toJson<String>(message),
+      'contextJson': serializer.toJson<String?>(contextJson),
+      'stackTrace': serializer.toJson<String?>(stackTrace),
+    };
+  }
+
+  OperationLog copyWith({
+    int? id,
+    DateTime? createdAt,
+    String? level,
+    String? operation,
+    String? message,
+    Value<String?> contextJson = const Value.absent(),
+    Value<String?> stackTrace = const Value.absent(),
+  }) => OperationLog(
+    id: id ?? this.id,
+    createdAt: createdAt ?? this.createdAt,
+    level: level ?? this.level,
+    operation: operation ?? this.operation,
+    message: message ?? this.message,
+    contextJson: contextJson.present ? contextJson.value : this.contextJson,
+    stackTrace: stackTrace.present ? stackTrace.value : this.stackTrace,
+  );
+  OperationLog copyWithCompanion(OperationLogsCompanion data) {
+    return OperationLog(
+      id: data.id.present ? data.id.value : this.id,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      level: data.level.present ? data.level.value : this.level,
+      operation: data.operation.present ? data.operation.value : this.operation,
+      message: data.message.present ? data.message.value : this.message,
+      contextJson: data.contextJson.present
+          ? data.contextJson.value
+          : this.contextJson,
+      stackTrace: data.stackTrace.present
+          ? data.stackTrace.value
+          : this.stackTrace,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OperationLog(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('level: $level, ')
+          ..write('operation: $operation, ')
+          ..write('message: $message, ')
+          ..write('contextJson: $contextJson, ')
+          ..write('stackTrace: $stackTrace')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    createdAt,
+    level,
+    operation,
+    message,
+    contextJson,
+    stackTrace,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OperationLog &&
+          other.id == this.id &&
+          other.createdAt == this.createdAt &&
+          other.level == this.level &&
+          other.operation == this.operation &&
+          other.message == this.message &&
+          other.contextJson == this.contextJson &&
+          other.stackTrace == this.stackTrace);
+}
+
+class OperationLogsCompanion extends UpdateCompanion<OperationLog> {
+  final Value<int> id;
+  final Value<DateTime> createdAt;
+  final Value<String> level;
+  final Value<String> operation;
+  final Value<String> message;
+  final Value<String?> contextJson;
+  final Value<String?> stackTrace;
+  const OperationLogsCompanion({
+    this.id = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.level = const Value.absent(),
+    this.operation = const Value.absent(),
+    this.message = const Value.absent(),
+    this.contextJson = const Value.absent(),
+    this.stackTrace = const Value.absent(),
+  });
+  OperationLogsCompanion.insert({
+    this.id = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    required String level,
+    required String operation,
+    required String message,
+    this.contextJson = const Value.absent(),
+    this.stackTrace = const Value.absent(),
+  }) : level = Value(level),
+       operation = Value(operation),
+       message = Value(message);
+  static Insertable<OperationLog> custom({
+    Expression<int>? id,
+    Expression<DateTime>? createdAt,
+    Expression<String>? level,
+    Expression<String>? operation,
+    Expression<String>? message,
+    Expression<String>? contextJson,
+    Expression<String>? stackTrace,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (createdAt != null) 'created_at': createdAt,
+      if (level != null) 'level': level,
+      if (operation != null) 'operation': operation,
+      if (message != null) 'message': message,
+      if (contextJson != null) 'context_json': contextJson,
+      if (stackTrace != null) 'stack_trace': stackTrace,
+    });
+  }
+
+  OperationLogsCompanion copyWith({
+    Value<int>? id,
+    Value<DateTime>? createdAt,
+    Value<String>? level,
+    Value<String>? operation,
+    Value<String>? message,
+    Value<String?>? contextJson,
+    Value<String?>? stackTrace,
+  }) {
+    return OperationLogsCompanion(
+      id: id ?? this.id,
+      createdAt: createdAt ?? this.createdAt,
+      level: level ?? this.level,
+      operation: operation ?? this.operation,
+      message: message ?? this.message,
+      contextJson: contextJson ?? this.contextJson,
+      stackTrace: stackTrace ?? this.stackTrace,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (level.present) {
+      map['level'] = Variable<String>(level.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
+    }
+    if (message.present) {
+      map['message'] = Variable<String>(message.value);
+    }
+    if (contextJson.present) {
+      map['context_json'] = Variable<String>(contextJson.value);
+    }
+    if (stackTrace.present) {
+      map['stack_trace'] = Variable<String>(stackTrace.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OperationLogsCompanion(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('level: $level, ')
+          ..write('operation: $operation, ')
+          ..write('message: $message, ')
+          ..write('contextJson: $contextJson, ')
+          ..write('stackTrace: $stackTrace')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -7166,6 +7639,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ShiftClosuresTable shiftClosures = $ShiftClosuresTable(this);
   late final $MovementsTable movements = $MovementsTable(this);
   late final $AppUsersTable appUsers = $AppUsersTable(this);
+  late final $OperationLogsTable operationLogs = $OperationLogsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7190,6 +7664,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     shiftClosures,
     movements,
     appUsers,
+    operationLogs,
   ];
 }
 
@@ -14520,6 +14995,242 @@ typedef $$AppUsersTableProcessedTableManager =
       AppUser,
       PrefetchHooks Function()
     >;
+typedef $$OperationLogsTableCreateCompanionBuilder =
+    OperationLogsCompanion Function({
+      Value<int> id,
+      Value<DateTime> createdAt,
+      required String level,
+      required String operation,
+      required String message,
+      Value<String?> contextJson,
+      Value<String?> stackTrace,
+    });
+typedef $$OperationLogsTableUpdateCompanionBuilder =
+    OperationLogsCompanion Function({
+      Value<int> id,
+      Value<DateTime> createdAt,
+      Value<String> level,
+      Value<String> operation,
+      Value<String> message,
+      Value<String?> contextJson,
+      Value<String?> stackTrace,
+    });
+
+class $$OperationLogsTableFilterComposer
+    extends Composer<_$AppDatabase, $OperationLogsTable> {
+  $$OperationLogsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get level => $composableBuilder(
+    column: $table.level,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contextJson => $composableBuilder(
+    column: $table.contextJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stackTrace => $composableBuilder(
+    column: $table.stackTrace,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OperationLogsTableOrderingComposer
+    extends Composer<_$AppDatabase, $OperationLogsTable> {
+  $$OperationLogsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get level => $composableBuilder(
+    column: $table.level,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contextJson => $composableBuilder(
+    column: $table.contextJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stackTrace => $composableBuilder(
+    column: $table.stackTrace,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OperationLogsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OperationLogsTable> {
+  $$OperationLogsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get level =>
+      $composableBuilder(column: $table.level, builder: (column) => column);
+
+  GeneratedColumn<String> get operation =>
+      $composableBuilder(column: $table.operation, builder: (column) => column);
+
+  GeneratedColumn<String> get message =>
+      $composableBuilder(column: $table.message, builder: (column) => column);
+
+  GeneratedColumn<String> get contextJson => $composableBuilder(
+    column: $table.contextJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stackTrace => $composableBuilder(
+    column: $table.stackTrace,
+    builder: (column) => column,
+  );
+}
+
+class $$OperationLogsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OperationLogsTable,
+          OperationLog,
+          $$OperationLogsTableFilterComposer,
+          $$OperationLogsTableOrderingComposer,
+          $$OperationLogsTableAnnotationComposer,
+          $$OperationLogsTableCreateCompanionBuilder,
+          $$OperationLogsTableUpdateCompanionBuilder,
+          (
+            OperationLog,
+            BaseReferences<_$AppDatabase, $OperationLogsTable, OperationLog>,
+          ),
+          OperationLog,
+          PrefetchHooks Function()
+        > {
+  $$OperationLogsTableTableManager(_$AppDatabase db, $OperationLogsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OperationLogsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OperationLogsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OperationLogsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> level = const Value.absent(),
+                Value<String> operation = const Value.absent(),
+                Value<String> message = const Value.absent(),
+                Value<String?> contextJson = const Value.absent(),
+                Value<String?> stackTrace = const Value.absent(),
+              }) => OperationLogsCompanion(
+                id: id,
+                createdAt: createdAt,
+                level: level,
+                operation: operation,
+                message: message,
+                contextJson: contextJson,
+                stackTrace: stackTrace,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                required String level,
+                required String operation,
+                required String message,
+                Value<String?> contextJson = const Value.absent(),
+                Value<String?> stackTrace = const Value.absent(),
+              }) => OperationLogsCompanion.insert(
+                id: id,
+                createdAt: createdAt,
+                level: level,
+                operation: operation,
+                message: message,
+                contextJson: contextJson,
+                stackTrace: stackTrace,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OperationLogsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $OperationLogsTable,
+      OperationLog,
+      $$OperationLogsTableFilterComposer,
+      $$OperationLogsTableOrderingComposer,
+      $$OperationLogsTableAnnotationComposer,
+      $$OperationLogsTableCreateCompanionBuilder,
+      $$OperationLogsTableUpdateCompanionBuilder,
+      (
+        OperationLog,
+        BaseReferences<_$AppDatabase, $OperationLogsTable, OperationLog>,
+      ),
+      OperationLog,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -14562,4 +15273,6 @@ class $AppDatabaseManager {
       $$MovementsTableTableManager(_db, _db.movements);
   $$AppUsersTableTableManager get appUsers =>
       $$AppUsersTableTableManager(_db, _db.appUsers);
+  $$OperationLogsTableTableManager get operationLogs =>
+      $$OperationLogsTableTableManager(_db, _db.operationLogs);
 }

@@ -27,17 +27,21 @@ part 'app_database.g.dart';
   ShiftClosures,
   Movements,
   AppUsers,
+  OperationLogs,
 ])
 class AppDatabase extends _$AppDatabase {
   // Constructor
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (migrator, from, to) async {
+          if (from < 19) {
+            await migrator.createTable(operationLogs);
+          }
           if (from < 18) {
             await migrator.addColumn(supplies, supplies.stockCountMode);
             await migrator.addColumn(supplies, supplies.qualitativeLevel);

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
@@ -349,6 +350,16 @@ class _ProductTile extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Producto eliminado'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on OfflineMasterWriteException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ),
         );

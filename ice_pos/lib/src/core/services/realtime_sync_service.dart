@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/connectivity_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 
 /// Listens to Supabase Realtime Postgres changes and runs [CloudSyncService.syncFromCloud],
@@ -78,6 +79,7 @@ class RealtimeSyncService {
       _debounceTimer = null;
       final db = _db;
       if (db == null) return;
+      if (!ConnectivityService.instance.isConnected) return;
       try {
         final err = await CloudSyncService.syncFromCloud(db);
         _lastSyncFromRealtime = DateTime.now();

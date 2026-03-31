@@ -182,7 +182,22 @@ class AppUsers extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-// 16. SHIFT CLOSURES (Z-Reports - reconciliation)
+// 16. OPERATION LOGS (Failed operations / warnings for diagnostics & export)
+/// Local-only audit trail: sale failures, cloud sync issues, etc.
+class OperationLogs extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  /// error | warning | info
+  TextColumn get level => text().withLength(min: 1, max: 16)();
+  /// e.g. sale_transaction, sale_cloud_sync, sale_cart_complete
+  TextColumn get operation => text().withLength(min: 1, max: 64)();
+  TextColumn get message => text()();
+  /// JSON object: localSaleId, totalAmount, items summary, etc.
+  TextColumn get contextJson => text().nullable()();
+  TextColumn get stackTrace => text().nullable()();
+}
+
+// 17. SHIFT CLOSURES (Z-Reports - reconciliation)
 class ShiftClosures extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get shiftId => integer().references(Shifts, #id)();

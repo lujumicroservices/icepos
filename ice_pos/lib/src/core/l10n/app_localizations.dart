@@ -47,6 +47,8 @@ class AppLocalizations {
   String get syncingFromCloud => _('syncingFromCloud');
   String get syncSuccess => _('syncSuccess');
   String get syncError => _('syncError');
+  String get offlineBanner => _('offlineBanner');
+  String get offlineRequiresInternet => _('offlineRequiresInternet');
   String get sendingToCloud => _('sendingToCloud');
   String get dataSentToCloud => _('dataSentToCloud');
   String get loadMenuFromJson => _('loadMenuFromJson');
@@ -75,6 +77,12 @@ class AppLocalizations {
   String get yesLoadAndSend => _('yesLoadAndSend');
   String get updateAvailable => _('updateAvailable');
   String get download => _('download');
+  String get operationLogTitle => _('operationLogTitle');
+  String get operationLogSubtitle => _('operationLogSubtitle');
+  String get operationLogEmpty => _('operationLogEmpty');
+  String get exportOperationLog => _('exportOperationLog');
+  String get clearOperationLogConfirmTitle => _('clearOperationLogConfirmTitle');
+  String get clearOperationLogConfirmBody => _('clearOperationLogConfirmBody');
   String get versionBuild => _('versionBuild');
   String get downloadHint => _('downloadHint');
   String get downloadLinkCopied => _('downloadLinkCopied');
@@ -383,6 +391,10 @@ class AppLocalizations {
     'syncingFromCloud': 'Sincronizando desde la nube...',
     'syncSuccess': 'Sincronización correcta. Datos locales actualizados desde la nube.',
     'syncError': 'Error al sincronizar',
+    'offlineBanner':
+        'Sin conexión: puedes cobrar y usar caja; el menú y administración solo con internet.',
+    'offlineRequiresInternet':
+        'Conéctate a internet para sincronizar o editar el menú.',
     'sendingToCloud': 'Enviando datos a la nube...',
     'dataSentToCloud': 'Datos enviados a la nube',
     'loadMenuFromJson': 'Cargar menú desde JSON',
@@ -414,6 +426,15 @@ class AppLocalizations {
     'yesLoadAndSend': 'Sí, cargar y enviar',
     'updateAvailable': 'Actualización disponible',
     'download': 'Descargar',
+    'operationLogTitle': 'Registro de operaciones',
+    'operationLogSubtitle':
+        'Errores de venta y sincronización con la nube (solo en este dispositivo).',
+    'operationLogEmpty':
+        'No hay entradas todavía. Si una venta falla o la nube no guarda la venta, aparecerá aquí.',
+    'exportOperationLog': 'Exportar y compartir (.txt)',
+    'clearOperationLogConfirmTitle': '¿Borrar el registro?',
+    'clearOperationLogConfirmBody':
+        'Se eliminarán todas las entradas de diagnóstico de este dispositivo.',
     'versionBuild': 'Versión',
     'downloadHint': 'Pulsa "Descargar" para abrir el enlace e instalar la nueva versión.',
     'downloadLinkCopied': 'Enlace copiado. Pégalo en el navegador para descargar.',
@@ -690,6 +711,10 @@ class AppLocalizations {
     'syncingFromCloud': 'Syncing from cloud...',
     'syncSuccess': 'Sync complete. Local data updated from cloud.',
     'syncError': 'Sync error',
+    'offlineBanner':
+        'Offline: you can ring sales and use the register; menu and admin changes need internet.',
+    'offlineRequiresInternet':
+        'Connect to the internet to sync or edit the menu.',
     'sendingToCloud': 'Sending data to cloud...',
     'dataSentToCloud': 'Data sent to cloud',
     'loadMenuFromJson': 'Load menu from JSON',
@@ -721,6 +746,15 @@ class AppLocalizations {
     'yesLoadAndSend': 'Yes, load and send',
     'updateAvailable': 'Update available',
     'download': 'Download',
+    'operationLogTitle': 'Operation log',
+    'operationLogSubtitle':
+        'Sale and cloud sync issues (this device only).',
+    'operationLogEmpty':
+        'No entries yet. Failed checkouts or cloud write issues will appear here.',
+    'exportOperationLog': 'Export and share (.txt)',
+    'clearOperationLogConfirmTitle': 'Clear log?',
+    'clearOperationLogConfirmBody':
+        'All diagnostic entries on this device will be deleted.',
     'versionBuild': 'Version',
     'downloadHint': 'Tap "Download" to open the link and install the new version.',
     'downloadLinkCopied': 'Link copied. Paste it in your browser to download.',

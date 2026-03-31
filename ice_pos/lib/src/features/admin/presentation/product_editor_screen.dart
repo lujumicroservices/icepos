@@ -9,6 +9,7 @@ import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -288,6 +289,12 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
         ),
       );
       Navigator.of(context).pop(true);
+    } on OfflineMasterWriteException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

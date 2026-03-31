@@ -59,8 +59,10 @@ dependencies:
   crypto: ^3.0.3
   image_picker: ^1.1.2
   path_provider: ^2.1.5
+  share_plus: ^10.1.4
   fl_chart: ^0.70.2
   intl: ^0.20.2
+  connectivity_plus: ^6.1.4
 
 dev_dependencies:
   flutter_test:
@@ -94,7 +96,8 @@ flutter:
   uses-material-design: true
 
   assets:
-    - .env
+    # No empaquetar .env en releases: las claves se piden al iniciar (SetupSupabase) o en preferencias.
+    # Para desarrollo con .env local, añade temporalmente:  - .env
     - assets/data/
     - assets/images/category_placeholder.png
 

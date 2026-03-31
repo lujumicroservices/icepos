@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/connectivity_service.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/core/services/category_image_service.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
@@ -148,6 +148,49 @@ class PosRepository {
 
   final AppDatabase _db;
 
+  /// Persists a diagnostic row (sale failures, cloud sync issues). Never throws.
+  Future<void> logOperationEvent({
+    required String level,
+    required String operation,
+    required String message,
+    Map<String, Object?>? context,
+    StackTrace? stackTrace,
+  }) async {
+    try {
+      String? ctxJson;
+      if (context != null && context.isNotEmpty) {
+        try {
+          ctxJson = jsonEncode(context);
+        } catch (_) {
+          ctxJson = context.toString();
+        }
+      }
+      await _db.into(_db.operationLogs).insert(
+            OperationLogsCompanion.insert(
+              level: level,
+              operation: operation,
+              message: message,
+              contextJson: Value(ctxJson),
+              stackTrace: Value(stackTrace?.toString()),
+            ),
+          );
+    } catch (e, st) {
+      debugPrint('logOperationEvent insert failed: $e\n$st');
+    }
+  }
+
+  /// Latest entries first (for diagnostics screen).
+  Future<List<OperationLog>> getOperationLogs({int limit = 500}) {
+    return (_db.select(_db.operationLogs)
+          ..orderBy([(t) => OrderingTerm.desc(t.id)])
+          ..limit(limit))
+        .get();
+  }
+
+  Future<void> clearOperationLogs() async {
+    await _db.delete(_db.operationLogs).go();
+  }
+
   /// Fetches categories. If [parentId] is null, returns root categories.
   Future<List<domain_cat.Category>> getCategories({int? parentId}) async {
     final query = parentId == null
@@ -216,6 +259,7 @@ class PosRepository {
     List<int>? newImageBytes,
     String? newImageMimeType,
   }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     final id = await _db.into(_db.categories).insert(
       CategoriesCompanion.insert(
         name: name.trim(),
@@ -262,6 +306,7 @@ class PosRepository {
     List<int>? newImageBytes,
     String? newImageMimeType,
   }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     final companion = CategoriesCompanion(
       name: name != null ? Value(name.trim()) : const Value.absent(),
       parentId:
@@ -306,6 +351,7 @@ class PosRepository {
   /// Deletes a category. Fails if it has products or child categories.
   /// Use [reassignProductCategoryId] first if needed.
   Future<void> deleteCategory(int id) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     final products = await (_db.select(_db.products)
           ..where((p) => p.categoryId.equals(id)))
         .get();
@@ -374,6 +420,7 @@ class PosRepository {
 
   /// Sets product active flag. Inactive products are hidden from POS.
   Future<void> setProductActive(int productId, bool active) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     await (_db.update(_db.products)..where((p) => p.id.equals(productId)))
         .write(ProductsCompanion(isActive: Value(active)));
     if (CloudSyncService.isEnabled) {
@@ -394,6 +441,7 @@ class PosRepository {
   /// Deletes a product and its recipes and product_modifiers.
   /// Throws StateError if the product has any sales (sale_items).
   Future<void> deleteProduct(int productId) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     await _db.transaction(() async {
       final saleCount = await (_db.selectOnly(_db.saleItems)
             ..addColumns([_db.saleItems.id.count()])
@@ -461,6 +509,7 @@ class PosRepository {
       List<({int supplyId, double quantityDeducted, double priceExtra})> options,
     })> modifierGroups,
   }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     final savedProductId = await _db.transaction(() async {
       int id;
       if (productId == null) {
@@ -642,6 +691,7 @@ class PosRepository {
     int? categoryId,
     required List<({int productId, double quantity})> productItems,
   }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     final bundleId = await _db.transaction(() async {
       if (id == null) {
         final newId = await _db.into(_db.bundles).insert(
@@ -706,6 +756,7 @@ class PosRepository {
 
   /// Deletes a bundle and its items.
   Future<void> deleteBundle(int id) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     await (_db.delete(_db.bundleItems)
           ..where((bi) => bi.bundleId.equals(id)))
         .go();
@@ -739,6 +790,7 @@ class PosRepository {
     String stockCountMode = StockCountMode.quantity,
     String? qualitativeLevel,
   }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     final cat = category?.trim().isEmpty == true ? null : category?.trim();
     final mode = stockCountMode == StockCountMode.qualitative
         ? StockCountMode.qualitative
@@ -831,6 +883,7 @@ class PosRepository {
     String? newUnit,
     required bool useQualitativeEntry,
   }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     await _db.transaction(() async {
       final supply = await (_db.select(_db.supplies)
             ..where((s) => s.id.equals(supplyId)))
@@ -920,6 +973,7 @@ class PosRepository {
 
   /// Deletes a supply by id.
   Future<void> deleteSupply(int id) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     await (_db.delete(_db.supplies)..where((s) => s.id.equals(id))).go();
     if (CloudSyncService.isEnabled) {
       CloudSyncService.deleteSupplyFromCloud(id).catchError((e) => null);
@@ -1041,7 +1095,9 @@ class PosRepository {
   Future<void> deleteSale(int saleId) async {
     final sale = await (_db.select(_db.sales)..where((t) => t.id.equals(saleId))).getSingleOrNull();
     if (sale == null) return;
-    if (sale.cloudSaleId != null && CloudSyncService.isEnabled) {
+    if (sale.cloudSaleId != null &&
+        CloudSyncService.isEnabled &&
+        ConnectivityService.instance.isConnected) {
       await CloudSyncService.softCancelSaleInCloud(sale.cloudSaleId!);
     }
     await (_db.update(_db.sales)..where((t) => t.id.equals(saleId)))
@@ -1050,6 +1106,7 @@ class PosRepository {
 
   /// Deletes ALL local data in FK order. Use before "Sincronizar desde la nube" for a full reload from cloud.
   Future<void> deleteAllLocalData() async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     await _db.delete(_db.saleItems).go();
     await _db.delete(_db.sales).go();
     await _db.delete(_db.inventoryLogs).go();
@@ -1116,6 +1173,7 @@ class PosRepository {
     required double quantity,
     required double cost,
   }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
     await _db.transaction(() async {
       final supply = await (_db.select(_db.supplies)
             ..where((s) => s.id.equals(supplyId)))
@@ -1170,23 +1228,23 @@ class PosRepository {
       amount = amount * (1 - discount.percentage);
     }
 
-    int? cloudSaleId;
+    final itemsContext = items
+        .map(
+          (i) => <String, Object?>{
+            'productId': i.productId,
+            'quantity': i.quantity,
+            'unitPrice': i.unitPrice,
+            if (i.productName != null) 'name': i.productName,
+          },
+        )
+        .toList();
+
     String? cloudWriteError;
-    if (CloudSyncService.isEnabled) {
-      final (err, id) = await CloudSyncService.writeSaleToCloud(
-        items,
-        totalAmount: amount,
-        paymentMethod: paymentMethod,
-        amountTendered: amountTendered,
-        changeGiven: changeGiven,
-      );
-      if (err != null) {
-        cloudWriteError = err;
-      }
-      cloudSaleId = id;
-    }
+    var cloudSyncExceptionLogged = false;
+    late int localSaleId;
 
     SaleSyncPayload? payload;
+    try {
     await _db.transaction(() async {
 
       // 1. Loop through each CartItem and deduct inventory (with debug)
@@ -1281,21 +1339,21 @@ class PosRepository {
         }
       }
 
-      // 2. Finally, insert the Sale record and sale items (store cloud id so we can cancel in cloud)
-      final saleId = await _db.into(_db.sales).insert(
+      // 2. Insert sale + items locally first (cloud sync after transaction if online).
+      localSaleId = await _db.into(_db.sales).insert(
             SalesCompanion.insert(
               totalAmount: amount,
               paymentMethod: Value(paymentMethod),
               amountTendered: Value(amountTendered),
               changeGiven: Value(changeGiven),
-              cloudSaleId: Value(cloudSaleId),
+              cloudSaleId: const Value.absent(),
             ),
           );
 
       for (final item in items) {
         await _db.into(_db.saleItems).insert(
               SaleItemsCompanion.insert(
-                saleId: saleId,
+                saleId: localSaleId,
                 productId: item.productId,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
@@ -1321,9 +1379,80 @@ class PosRepository {
             .toList(),
       );
     });
+    } catch (e, st) {
+      await logOperationEvent(
+        level: 'error',
+        operation: 'sale_transaction',
+        message: e.toString(),
+        context: {
+          'phase': 'local_db_transaction',
+          'totalAmount': amount,
+          'paymentMethod': paymentMethod,
+          'items': itemsContext,
+        },
+        stackTrace: st,
+      );
+      rethrow;
+    }
+
+    try {
+      if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+        final (err, cloudId) = await CloudSyncService.writeSaleToCloud(
+          items,
+          totalAmount: amount,
+          paymentMethod: paymentMethod,
+          amountTendered: amountTendered,
+          changeGiven: changeGiven,
+        );
+        if (err != null) {
+          cloudWriteError = err;
+        }
+        if (cloudId != null) {
+          await (_db.update(_db.sales)..where((s) => s.id.equals(localSaleId))).write(
+                SalesCompanion(cloudSaleId: Value(cloudId)),
+              );
+        }
+      } else if (CloudSyncService.isEnabled && !ConnectivityService.instance.isConnected) {
+        cloudWriteError =
+            'Sin conexión; la venta quedó registrada solo en este dispositivo.';
+      }
+    } catch (e, st) {
+      cloudSyncExceptionLogged = true;
+      cloudWriteError = e.toString();
+      await logOperationEvent(
+        level: 'error',
+        operation: 'sale_cloud_sync',
+        message: e.toString(),
+        context: {
+          'localSaleId': localSaleId,
+          'phase': 'writeSaleToCloud_exception',
+          'totalAmount': amount,
+          'paymentMethod': paymentMethod,
+          'items': itemsContext,
+        },
+        stackTrace: st,
+      );
+    }
+
     if (cloudWriteError != null) {
-      // Offline-safe behavior: local sale must be recorded even if cloud write fails.
       debugPrint('CloudSyncService.writeSaleToCloud (non-blocking): $cloudWriteError');
+      if (!cloudSyncExceptionLogged) {
+        final err = cloudWriteError;
+        final isOfflineOnly = err.contains('Sin conexión') ||
+            err.contains('solo en este dispositivo');
+        await logOperationEvent(
+          level: isOfflineOnly ? 'info' : 'warning',
+          operation: 'sale_cloud_sync',
+          message: err,
+          context: {
+            'localSaleId': localSaleId,
+            'totalAmount': amount,
+            'paymentMethod': paymentMethod,
+            'items': itemsContext,
+            if (isOfflineOnly) 'kind': 'offline_local_only',
+          },
+        );
+      }
     }
     return payload;
   }
@@ -1347,7 +1476,7 @@ class PosRepository {
             shiftId: shiftId != null ? Value(shiftId) : const Value.absent(),
           ),
         );
-    if (CloudSyncService.isEnabled) {
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
       final movement = await (_db.select(_db.movements)..where((m) => m.id.equals(id))).getSingle();
       final err = await CloudSyncService.writeMovementToCloud(movement);
       if (err != null) debugPrint('Cloud write movement: $err');
@@ -1436,7 +1565,7 @@ class PosRepository {
         );
     final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(id)))
         .getSingle();
-    if (CloudSyncService.isEnabled) {
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
       final err = await CloudSyncService.writeShiftToCloud(shift);
       if (err != null) debugPrint('Cloud write shift: $err');
     }
@@ -1508,7 +1637,7 @@ class PosRepository {
       final shiftWithEndTime = shift.copyWith(endTime: Value(now));
       return (result: result, shiftForCloud: shiftWithEndTime);
     });
-    if (CloudSyncService.isEnabled) {
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
       final err = await CloudSyncService.writeShiftClosureToCloud(
         tx.shiftForCloud,
         tx.result.closure,

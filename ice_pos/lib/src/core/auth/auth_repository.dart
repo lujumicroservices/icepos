@@ -39,25 +39,40 @@ class AuthRepository {
     if (input.isEmpty || password.isEmpty) return null;
 
     if (_useCloud) {
-      return _loginCloud(input, password);
+      final cloud = await _loginCloud(input, password);
+      if (cloud != null) return cloud;
+      // Proyecto sin usuarios en Auth, registro desactivado, o primera instalación:
+      // la nube falla pero ya existen admin/cajero en SQLite (createDefaultAdminIfNeeded).
+      await createDefaultAdminIfNeeded();
+      return _loginLocal(input, password);
     }
+    await createDefaultAdminIfNeeded();
     return _loginLocal(input, password);
   }
 
   Future<UserRole?> _loginCloud(String email, String password) async {
     try {
-      final emailStr = email.contains('@') ? email : '$email@pos.local';
-      // Intentar login
-      var res = await SupabaseService.instance.client.auth.signInWithPassword(
-        email: emailStr,
-        password: password,
-      );
-      var session = res.session;
-      var userId = res.user?.id;
-      // Si falla (usuario no existe), intentar crear admin por defecto (solo para admin@pos.local / admin)
-      if ((session == null || userId == null) &&
-          emailStr == 'admin@pos.local' &&
-          password == 'admin') {
+      final trimmed = email.trim();
+      final emailStr = trimmed.contains('@')
+          ? trimmed.toLowerCase()
+          : '${trimmed.toLowerCase()}@pos.local';
+
+      dynamic res;
+      try {
+        res = await SupabaseService.instance.client.auth.signInWithPassword(
+          email: emailStr,
+          password: password,
+        );
+      } catch (_) {
+        res = null;
+      }
+
+      // Algunas versiones devuelven respuesta sin lanzar pero sin sesión.
+      var session = res?.session;
+      var userId = res?.user?.id as String?;
+
+      Future<void> tryBootstrapSignUp() async {
+        if (emailStr != 'admin@pos.local' || password != 'admin') return;
         try {
           res = await SupabaseService.instance.client.auth.signUp(
             email: emailStr,
@@ -65,15 +80,36 @@ class AuthRepository {
             data: {'role': 'admin'},
           );
           session = res.session;
-          userId = res.user?.id;
+          userId = res.user?.id as String?;
         } catch (_) {
-          // signUp deshabilitado o usuario ya existe con otra contraseña
-          return null;
+          // Usuario ya existe con otra clave, signUp deshabilitado, etc.
         }
       }
-      if (session == null || userId == null) return null;
-      final role = await _fetchCloudRole(userId);
-      return role;
+
+      if (session == null || userId == null) {
+        await tryBootstrapSignUp();
+        session = res?.session;
+        userId = res?.user?.id as String?;
+      }
+
+      // Tras signUp con "confirmar email" desactivado, a veces hace falta un segundo signIn.
+      if (session == null || userId == null) {
+        if (emailStr == 'admin@pos.local' && password == 'admin') {
+          try {
+            res = await SupabaseService.instance.client.auth.signInWithPassword(
+              email: emailStr,
+              password: password,
+            );
+            session = res.session;
+            userId = res.user?.id as String?;
+          } catch (_) {}
+        }
+      }
+
+      if (session == null) return null;
+      final resolvedUserId = userId;
+      if (resolvedUserId == null) return null;
+      return _fetchCloudRole(resolvedUserId);
     } catch (_) {
       return null;
     }
@@ -122,7 +158,10 @@ class AuthRepository {
   Future<Object?> getCurrentUserId() async {
     if (_useCloud) {
       final session = SupabaseService.instance.client.auth.currentSession;
-      return session?.user.id;
+      final uid = session?.user.id;
+      if (uid != null) return uid;
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_kSessionUserIdKey);
     }
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_kSessionUserIdKey);
@@ -133,8 +172,15 @@ class AuthRepository {
     if (_useCloud) {
       final session = SupabaseService.instance.client.auth.currentSession;
       final userId = session?.user.id;
-      if (userId == null) return null;
-      return _fetchCloudRole(userId);
+      if (userId != null) {
+        return _fetchCloudRole(userId);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final localId = prefs.getInt(_kSessionUserIdKey);
+      if (localId == null) return null;
+      final row = await (_db.select(_db.appUsers)..where((u) => u.id.equals(localId))).getSingleOrNull();
+      if (row == null) return null;
+      return row.role == 'admin' ? UserRole.admin : UserRole.employee;
     }
     final id = await getCurrentUserId();
     if (id == null) return null;
@@ -147,7 +193,14 @@ class AuthRepository {
   Future<String?> getCurrentUsername() async {
     if (_useCloud) {
       final session = SupabaseService.instance.client.auth.currentSession;
-      return session?.user.email ?? session?.user.userMetadata?['name']?.toString();
+      final email = session?.user.email ?? session?.user.userMetadata?['name']?.toString();
+      if (email != null && email.isNotEmpty) return email;
+      final id = await getCurrentUserId();
+      if (id is int) {
+        final row = await (_db.select(_db.appUsers)..where((u) => u.id.equals(id))).getSingleOrNull();
+        return row?.username;
+      }
+      return null;
     }
     final id = await getCurrentUserId();
     if (id == null) return null;
@@ -155,10 +208,9 @@ class AuthRepository {
     return row?.username;
   }
 
-  /// Si hay nube no creamos usuarios locales. Si no hay nube, creamos admin y cajero por defecto.
+  /// Crea admin/cajero en SQLite si la tabla está vacía (también con nube: respaldo offline).
   Future<void> createDefaultAdminIfNeeded() async {
-    if (_useCloud) return;
-    final count = await _db.selectOnly(_db.appUsers)..addColumns([_db.appUsers.id.count()]);
+    final count = _db.selectOnly(_db.appUsers)..addColumns([_db.appUsers.id.count()]);
     final result = await count.getSingle();
     final total = result.read(_db.appUsers.id.count()) ?? 0;
     if (total > 0) return;

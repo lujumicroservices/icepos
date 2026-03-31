@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 final _suppliesStreamProvider = StreamProvider<List<Supply>>((ref) {
@@ -58,11 +59,20 @@ class _RestockDialogState extends State<_RestockDialog> {
       return;
     }
 
-    await widget.repository.restockSupply(
-      supplyId: widget.supply.id,
-      quantity: quantity,
-      cost: cost,
-    );
+    try {
+      await widget.repository.restockSupply(
+        supplyId: widget.supply.id,
+        quantity: quantity,
+        cost: cost,
+      );
+    } on OfflineMasterWriteException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+      return;
+    }
 
     if (!mounted) return;
     Navigator.of(context).pop();

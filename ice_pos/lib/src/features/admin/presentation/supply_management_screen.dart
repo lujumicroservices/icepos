@@ -6,6 +6,8 @@ import 'package:ice_pos/src/core/constants/supply_units.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/connectivity_service.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
@@ -65,6 +67,7 @@ class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen>
   /// Trae categorías/insumos/recetas desde Supabase para que otro dispositivo vea conciliaciones.
   Future<void> _syncFromCloudAndRefresh() async {
     if (!CloudSyncService.isEnabled) return;
+    if (!ConnectivityService.instance.isConnected) return;
     final db = ref.read(appDatabaseProvider);
     final err = await CloudSyncService.syncFromCloud(db);
     if (!mounted) return;
@@ -194,7 +197,19 @@ class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen>
                             l10n: l10n,
                             onTap: () => _showSupplyDialog(context: context, ref: ref, supply: supply),
                             onDismiss: () async {
-                              await ref.read(posRepositoryProvider).deleteSupply(supply.id);
+                              try {
+                                await ref.read(posRepositoryProvider).deleteSupply(supply.id);
+                              } on OfflineMasterWriteException catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(e.message),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                                return;
+                              }
                               ref.invalidate(_suppliesGroupedProvider);
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -237,16 +252,28 @@ class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen>
         categoryNames: ref.read(_supplyCategoryNamesProvider).value ?? [],
         onSave:
             (name, unit, costPerUnit, reorderPoint, category, stockMode, qual) async {
-          await ref.read(posRepositoryProvider).saveSupply(
-                id: supply?.id,
-                name: name,
-                unit: unit,
-                costPerUnit: costPerUnit,
-                reorderPoint: reorderPoint,
-                category: category?.trim().isEmpty == true ? null : category?.trim(),
-                stockCountMode: stockMode,
-                qualitativeLevel: qual,
+          try {
+            await ref.read(posRepositoryProvider).saveSupply(
+                  id: supply?.id,
+                  name: name,
+                  unit: unit,
+                  costPerUnit: costPerUnit,
+                  reorderPoint: reorderPoint,
+                  category: category?.trim().isEmpty == true ? null : category?.trim(),
+                  stockCountMode: stockMode,
+                  qualitativeLevel: qual,
+                );
+          } on OfflineMasterWriteException catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(e.message),
+                  behavior: SnackBarBehavior.floating,
+                ),
               );
+            }
+            return;
+          }
           ref.invalidate(_suppliesGroupedProvider);
           ref.invalidate(_supplyCategoryNamesProvider);
           if (ctx.mounted) Navigator.of(ctx).pop();

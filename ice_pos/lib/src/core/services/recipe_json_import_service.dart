@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 
 /// One line of the CSV / audit report for [RecipeJsonImportService].
 class RecipeImportReportRow {
@@ -97,6 +98,9 @@ class RecipeJsonImportService {
     bool applyChanges = true,
     bool pushUpdatedProductsToCloud = false,
   }) async {
+    if (applyChanges) {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+    }
     final map = jsonDecode(jsonString) as Map<String, dynamic>;
     final rawList = map['recetas'] as List<dynamic>? ?? [];
 

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 
 final _allProductsProvider = StreamProvider<List<Product>>((ref) {
@@ -135,6 +136,12 @@ class _BundleEditorScreenState extends ConsumerState<BundleEditorScreen> {
         const SnackBar(content: Text('Bundle saved')),
       );
       Navigator.of(context).pop(true);
+    } on OfflineMasterWriteException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

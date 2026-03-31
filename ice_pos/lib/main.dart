@@ -8,6 +8,7 @@ import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/connectivity_service.dart';
 import 'package:ice_pos/src/core/services/realtime_sync_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:ice_pos/src/core/setup/presentation/supabase_bootstrap.dart';
@@ -37,7 +38,12 @@ void main() {
 
 Future<void> _runApp() async {
 
-  await dotenv.load(fileName: '.env');
+  // Sin .env en assets (recomendado en producción), esto falla en silencio; Supabase usa el asistente.
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {
+    // ignore: evita incluir credenciales en el APK/AAB.
+  }
 
   try {
     await SupabaseService.initialize();
@@ -50,10 +56,12 @@ Future<void> _runApp() async {
     // App works offline without Supabase
   }
 
+  await ConnectivityService.instance.init();
+
   final database = AppDatabase();
   // No automatic seed: with cloud enabled, data is synced at startup and kept in sync via Realtime; otherwise use "Cargar menú desde JSON" in drawer.
 
-  if (CloudSyncService.isEnabled) {
+  if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
     try {
       final err = await CloudSyncService.syncFromCloud(database);
       if (err != null) {

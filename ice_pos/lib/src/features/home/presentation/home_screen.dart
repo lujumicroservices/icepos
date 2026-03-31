@@ -10,12 +10,15 @@ import 'package:ice_pos/src/core/database/seeder.dart';
 import 'package:ice_pos/src/core/services/app_update_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/connectivity_provider.dart';
+import 'package:ice_pos/src/core/services/connectivity_service.dart';
 import 'package:ice_pos/src/core/services/recipe_json_import_service.dart';
 import 'package:ice_pos/src/core/services/recipe_report_save.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/features/admin/presentation/bundle_management_screen.dart';
+import 'package:ice_pos/src/features/admin/presentation/operation_logs_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/category_management_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_management_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/supply_management_screen.dart';
@@ -84,7 +87,9 @@ class HomeScreen extends ConsumerWidget {
     });
     // Sync once after login (Supabase RLS may require authenticated session to read).
     ref.listen(userRoleProvider, (prev, role) {
-      if (CloudSyncService.isEnabled && !ref.read(_hasSyncedAfterLoginProvider)) {
+      if (CloudSyncService.isEnabled &&
+          ConnectivityService.instance.isConnected &&
+          !ref.read(_hasSyncedAfterLoginProvider)) {
         ref.read(_hasSyncedAfterLoginProvider.notifier).state = true;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           final db = ref.read(appDatabaseProvider);
@@ -103,6 +108,29 @@ class HomeScreen extends ConsumerWidget {
           }
         });
       }
+    });
+    ref.listen(connectivityStreamProvider, (prev, next) {
+      next.whenData((online) {
+        if (!online || !CloudSyncService.isEnabled) return;
+        if (ref.read(_hasSyncedAfterLoginProvider)) return;
+        ref.read(_hasSyncedAfterLoginProvider.notifier).state = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final db = ref.read(appDatabaseProvider);
+          final err = await CloudSyncService.syncFromCloud(db);
+          ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+          if (context.mounted && err != null) {
+            final loc = ref.read(appLocalizationsProvider);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${loc.syncError}: $err'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 6),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        });
+      });
     });
     final role = ref.watch(userRoleProvider);
     final selectedIndex = ref.watch(selectedTabIndexProvider);
@@ -243,6 +271,72 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            if (CloudSyncService.isEnabled)
+              ListTile(
+                leading: const Icon(Icons.sync),
+                title: Text(l10n.syncFromCloud),
+                subtitle: Text(
+                  ref.watch(connectivityStreamProvider).when(
+                        data: (online) => online
+                            ? l10n.syncWithSupabase
+                            : l10n.offlineRequiresInternet,
+                        loading: () => '',
+                        error: (_, __) => '',
+                      ),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (!ConnectivityService.instance.isConnected) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.offlineRequiresInternet),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                  showDialog<void>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (ctx) => AlertDialog(
+                      content: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 20),
+                          Text(l10n.syncingFromCloud),
+                        ],
+                      ),
+                    ),
+                  );
+                  final db = ref.read(appDatabaseProvider);
+                  final err = await CloudSyncService.syncFromCloud(db);
+                  ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+                  if (err != null) logErrorToConsole(err);
+                  if (context.mounted) Navigator.of(context).pop();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          err == null
+                              ? l10n.syncSuccess
+                              : '${l10n.syncError}: $err',
+                        ),
+                        backgroundColor:
+                            err != null ? Theme.of(context).colorScheme.error : null,
+                        behavior: SnackBarBehavior.floating,
+                        duration: Duration(seconds: err != null ? 5 : 3),
+                      ),
+                    );
+                  }
+                },
+              ),
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.inventory),
@@ -307,6 +401,20 @@ class HomeScreen extends ConsumerWidget {
                   context,
                   MaterialPageRoute<void>(
                     builder: (_) => const BundleManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: Text(l10n.operationLogTitle),
+              subtitle: Text(l10n.operationLogSubtitle),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const OperationLogsScreen(),
                   ),
                 );
               },
@@ -483,6 +591,17 @@ class HomeScreen extends ConsumerWidget {
               subtitle: Text(l10n.loadMenuFromJsonSubtitle),
               onTap: () async {
                 Navigator.pop(context);
+                if (!ConnectivityService.instance.isConnected) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(l10n.offlineRequiresInternet),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                  return;
+                }
                 if (CloudSyncService.isEnabled) {
                   final cloudEmpty = await CloudSyncService.isCloudEmpty();
                   if (!cloudEmpty && context.mounted) {
@@ -753,6 +872,17 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   );
                   if (ok != true || !context.mounted) return;
+                  if (!ConnectivityService.instance.isConnected) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.offlineRequiresInternet),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   showDialog<void>(
                     context: context,
                     barrierDismissible: false,
@@ -825,9 +955,50 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
       ),
-      body: IndexedStack(
-        index: effectiveIndex,
-        children: screens,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ref.watch(connectivityStreamProvider).when(
+                data: (online) => online
+                    ? const SizedBox.shrink()
+                    : Material(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.wifi_off,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.onErrorContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.offlineBanner,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context).colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+          Expanded(
+            child: IndexedStack(
+              index: effectiveIndex,
+              children: screens,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: effectiveIndex,
