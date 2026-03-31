@@ -10,6 +10,11 @@ class Supplies extends Table {
   RealColumn get costPerUnit => real().withDefault(const Constant(0.0))();
   RealColumn get reorderPoint => real().withDefault(const Constant(0.0))(); // Alert threshold
   TextColumn get category => text().nullable()(); // e.g. "Lácteos", "Sabores" for grouping
+  /// `quantity` = conteo numérico; `qualitative` = nivel alto/medio/bajo/crítico (ver [qualitativeLevel]).
+  TextColumn get stockCountMode =>
+      text().withLength(min: 1, max: 20).withDefault(const Constant('quantity'))();
+  /// Último nivel cualitativo registrado en conciliación (solo si [stockCountMode] es qualitative).
+  TextColumn get qualitativeLevel => text().nullable()();
 }
 
 // 1.5 CATEGORIES (Menu navigation: Bebidas, Barra Fría, etc.)

@@ -692,7 +692,9 @@ class _InventoryReportsTab extends ConsumerWidget {
                           ? l10n.reportSale
                           : log.reason == 'PURCHASE'
                               ? l10n.reportPurchase
-                              : l10n.reportWaste;
+                              : log.reason == 'RECONCILIATION'
+                                  ? l10n.reportReconciliation
+                                  : l10n.reportWaste;
                       return ListTile(
                         dense: true,
                         title: Text(log.supplyName, style: GoogleFonts.inter(fontSize: 13)),
