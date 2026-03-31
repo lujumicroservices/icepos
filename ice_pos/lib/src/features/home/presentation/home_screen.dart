@@ -19,6 +19,7 @@ import 'package:ice_pos/src/features/admin/presentation/bundle_management_screen
 import 'package:ice_pos/src/features/admin/presentation/category_management_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_management_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/supply_management_screen.dart';
+import 'package:ice_pos/src/features/inventory/presentation/inventory_reconciliation_screen.dart';
 import 'package:ice_pos/src/features/inventory/presentation/inventory_screen.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
@@ -252,6 +253,20 @@ class HomeScreen extends ConsumerWidget {
                   context,
                   MaterialPageRoute<void>(
                     builder: (_) => const SupplyManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.fact_check_outlined),
+              title: Text(l10n.inventoryReconciliation),
+              subtitle: Text(l10n.inventoryReconciliationSubtitle),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const InventoryReconciliationScreen(),
                   ),
                 );
               },

@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ice_pos/src/core/constants/supply_units.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/database/app_database_provider.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/core/utils/number_utils.dart';
 import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
-
-const _units = ['kg', 'lt', 'pz', 'pcs', 'g', 'ml'];
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 
 final _suppliesGroupedProvider =
     FutureProvider<List<({String name, List<Supply> supplies})>>((ref) {
@@ -41,11 +45,44 @@ List<({String name, List<Supply> supplies})> _filterSupplySections(
   return out;
 }
 
-class SupplyManagementScreen extends ConsumerWidget {
+class SupplyManagementScreen extends ConsumerStatefulWidget {
   const SupplyManagementScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SupplyManagementScreen> createState() =>
+      _SupplyManagementScreenState();
+}
+
+class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncFromCloudAndRefresh();
+    });
+  }
+
+  /// Trae categorías/insumos/recetas desde Supabase para que otro dispositivo vea conciliaciones.
+  Future<void> _syncFromCloudAndRefresh() async {
+    if (!CloudSyncService.isEnabled) return;
+    final db = ref.read(appDatabaseProvider);
+    final err = await CloudSyncService.syncFromCloud(db);
+    if (!mounted) return;
+    ref.invalidate(_suppliesGroupedProvider);
+    ref.invalidate(_supplyCategoryNamesProvider);
+    ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+    if (err != null && err.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final groupedAsync = ref.watch(_suppliesGroupedProvider);
     final l10n = ref.watch(appLocalizationsProvider);
     final searchQ = ref.watch(_adminSupplySearchQueryProvider);
@@ -71,88 +108,110 @@ class SupplyManagementScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           ),
           Expanded(
-            child: groupedAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Error al cargar insumos',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  error.toString(),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-        data: (sections) {
-          if (sections.isEmpty) {
-            return Center(
-              child: Text(
-                'No hay insumos. Toca + para agregar.',
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            );
-          }
-          final filtered = _filterSupplySections(sections, searchQ);
-          if (filtered.isEmpty) {
-            return Center(
-              child: Text(
-                l10n.searchNoResults,
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            );
-          }
-          return ListView(
-            padding: const EdgeInsets.only(bottom: 80),
-            children: [
-              for (final section in filtered) ...[
-                _SectionHeader(name: section.name, count: section.supplies.length),
-                ...section.supplies.map(
-                  (supply) => _SupplyTile(
-                    supply: supply,
-                    onTap: () => _showSupplyDialog(context: context, ref: ref, supply: supply),
-                    onDismiss: () async {
-                      await ref.read(posRepositoryProvider).deleteSupply(supply.id);
-                      ref.invalidate(_suppliesGroupedProvider);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Eliminado: ${supply.name}'),
-                            behavior: SnackBarBehavior.floating,
+            child: RefreshIndicator(
+              onRefresh: _syncFromCloudAndRefresh,
+              child: groupedAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stack) => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.error,
                           ),
-                        );
-                      }
-                    },
-                  ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Error al cargar insumos',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            error.toString(),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ],
-          );
-        },
+                data: (sections) {
+                  if (sections.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 80),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'No hay insumos. Toca + para agregar.',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  final filtered = _filterSupplySections(sections, searchQ);
+                  if (filtered.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 80),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            l10n.searchNoResults,
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 80),
+                    children: [
+                      for (final section in filtered) ...[
+                        _SectionHeader(name: section.name, count: section.supplies.length),
+                        ...section.supplies.map(
+                          (supply) => _SupplyTile(
+                            supply: supply,
+                            l10n: l10n,
+                            onTap: () => _showSupplyDialog(context: context, ref: ref, supply: supply),
+                            onDismiss: () async {
+                              await ref.read(posRepositoryProvider).deleteSupply(supply.id);
+                              ref.invalidate(_suppliesGroupedProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Eliminado: ${supply.name}'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -169,12 +228,15 @@ class SupplyManagementScreen extends ConsumerWidget {
     required WidgetRef ref,
     Supply? supply,
   }) {
+    final l10n = ref.read(appLocalizationsProvider);
     showDialog<void>(
       context: context,
       builder: (ctx) => _SupplyFormDialog(
         supply: supply,
+        l10n: l10n,
         categoryNames: ref.read(_supplyCategoryNamesProvider).value ?? [],
-        onSave: (name, unit, costPerUnit, reorderPoint, category) async {
+        onSave:
+            (name, unit, costPerUnit, reorderPoint, category, stockMode, qual) async {
           await ref.read(posRepositoryProvider).saveSupply(
                 id: supply?.id,
                 name: name,
@@ -182,6 +244,8 @@ class SupplyManagementScreen extends ConsumerWidget {
                 costPerUnit: costPerUnit,
                 reorderPoint: reorderPoint,
                 category: category?.trim().isEmpty == true ? null : category?.trim(),
+                stockCountMode: stockMode,
+                qualitativeLevel: qual,
               );
           ref.invalidate(_suppliesGroupedProvider);
           ref.invalidate(_supplyCategoryNamesProvider);
@@ -247,17 +311,39 @@ class _SectionHeader extends StatelessWidget {
 class _SupplyTile extends StatelessWidget {
   const _SupplyTile({
     required this.supply,
+    required this.l10n,
     required this.onTap,
     required this.onDismiss,
   });
 
   final Supply supply;
+  final AppLocalizations l10n;
   final VoidCallback onTap;
   final Future<void> Function() onDismiss;
 
+  String _levelLabel(String code) {
+    switch (code) {
+      case QualitativeLevel.alto:
+        return l10n.qualitativeLevelAlto;
+      case QualitativeLevel.medio:
+        return l10n.qualitativeLevelMedio;
+      case QualitativeLevel.bajo:
+        return l10n.qualitativeLevelBajo;
+      case QualitativeLevel.critico:
+      case QualitativeLevel.resurtir:
+        return l10n.qualitativeLevelCritico;
+      default:
+        return code;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isLowStock = supply.currentStock <= supply.reorderPoint;
+    final isLowStock = supply.stockCountMode == StockCountMode.qualitative
+        ? (supply.qualitativeLevel == QualitativeLevel.resurtir ||
+            supply.qualitativeLevel == QualitativeLevel.critico)
+        : supply.reorderPoint > 0 &&
+            supply.currentStock <= supply.reorderPoint;
 
     return Dismissible(
       key: ValueKey(supply.id),
@@ -303,8 +389,10 @@ class _SupplyTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          '${supply.currentStock.toStringAsFixed(1)} ${supply.unit}'
-          '${supply.reorderPoint > 0 ? ' · Reorden en ${supply.reorderPoint}' : ''}',
+          supply.stockCountMode == StockCountMode.qualitative
+              ? '${l10n.stockCountModeQualitative}: ${supply.qualitativeLevel != null ? _levelLabel(supply.qualitativeLevel!) : '—'}'
+              : '${supply.currentStock.toStringAsFixed(1)} ${supply.unit}'
+                  '${supply.reorderPoint > 0 ? ' · Reorden en ${supply.reorderPoint}' : ''}',
           style: GoogleFonts.inter(
             fontSize: 14,
             color: isLowStock
@@ -328,11 +416,13 @@ class _SupplyTile extends StatelessWidget {
 class _SupplyFormDialog extends StatefulWidget {
   const _SupplyFormDialog({
     this.supply,
+    required this.l10n,
     required this.categoryNames,
     required this.onSave,
   });
 
   final Supply? supply;
+  final AppLocalizations l10n;
   final List<String> categoryNames;
   final Future<void> Function(
     String name,
@@ -340,6 +430,8 @@ class _SupplyFormDialog extends StatefulWidget {
     double costPerUnit,
     double reorderPoint,
     String? category,
+    String stockCountMode,
+    String? qualitativeLevel,
   ) onSave;
 
   @override
@@ -352,6 +444,8 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
   late final TextEditingController _reorderController;
   late final TextEditingController _categoryController;
   late String _selectedUnit;
+  late String _stockMode;
+  String? _qualitativeLevel;
   bool _isSaving = false;
 
   @override
@@ -365,8 +459,20 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
       text: widget.supply?.reorderPoint.toStringAsFixed(1) ?? '0',
     );
     _categoryController = TextEditingController(text: widget.supply?.category ?? '');
-    _selectedUnit = widget.supply?.unit ?? _units.first;
-    if (!_units.contains(_selectedUnit)) _selectedUnit = _units.first;
+    _selectedUnit = widget.supply?.unit ?? kSupplyUnitOptions.first;
+    if (!kSupplyUnitOptions.contains(_selectedUnit)) {
+      _selectedUnit = kSupplyUnitOptions.first;
+    }
+    _stockMode = widget.supply?.stockCountMode ?? StockCountMode.quantity;
+    if (_stockMode != StockCountMode.qualitative) _stockMode = StockCountMode.quantity;
+    if (QualitativeLevel.isValid(widget.supply?.qualitativeLevel)) {
+      final raw = widget.supply!.qualitativeLevel!;
+      _qualitativeLevel = raw == QualitativeLevel.resurtir
+          ? QualitativeLevel.critico
+          : raw;
+    } else {
+      _qualitativeLevel = QualitativeLevel.medio;
+    }
   }
 
   @override
@@ -376,6 +482,22 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
     _reorderController.dispose();
     _categoryController.dispose();
     super.dispose();
+  }
+
+  String _levelLabelFor(String code, AppLocalizations loc) {
+    switch (code) {
+      case QualitativeLevel.alto:
+        return loc.qualitativeLevelAlto;
+      case QualitativeLevel.medio:
+        return loc.qualitativeLevelMedio;
+      case QualitativeLevel.bajo:
+        return loc.qualitativeLevelBajo;
+      case QualitativeLevel.critico:
+      case QualitativeLevel.resurtir:
+        return loc.qualitativeLevelCritico;
+      default:
+        return code;
+    }
   }
 
   Future<void> _onSave() async {
@@ -398,14 +520,24 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
     final reorder = parseDecimal(_reorderController.text) ?? 0;
     final category = _categoryController.text.trim();
     final categoryOrNull = category.isEmpty ? null : category;
+    final qual = _stockMode == StockCountMode.qualitative ? _qualitativeLevel : null;
 
     setState(() => _isSaving = true);
-    await widget.onSave(name, _selectedUnit, cost, reorder, categoryOrNull);
+    await widget.onSave(
+      name,
+      _selectedUnit,
+      cost,
+      reorder,
+      categoryOrNull,
+      _stockMode,
+      qual,
+    );
     if (mounted) setState(() => _isSaving = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = widget.l10n;
     return AlertDialog(
       title: Text(widget.supply == null ? 'Nuevo insumo' : 'Editar insumo'),
       content: SingleChildScrollView(
@@ -442,6 +574,56 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
             ),
             const SizedBox(height: 16),
             InputDecorator(
+              decoration: InputDecoration(
+                labelText: loc.stockCountModeLabel,
+                border: const OutlineInputBorder(),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _stockMode,
+                  isExpanded: true,
+                  items: [
+                    DropdownMenuItem(
+                      value: StockCountMode.quantity,
+                      child: Text(loc.stockCountModeQuantity),
+                    ),
+                    DropdownMenuItem(
+                      value: StockCountMode.qualitative,
+                      child: Text(loc.stockCountModeQualitative),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _stockMode = v ?? StockCountMode.quantity;
+                  }),
+                ),
+              ),
+            ),
+            if (_stockMode == StockCountMode.qualitative) ...[
+              const SizedBox(height: 16),
+              InputDecorator(
+                decoration: InputDecoration(
+                  labelText: loc.reconcileSelectLevel,
+                  border: const OutlineInputBorder(),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _qualitativeLevel ?? QualitativeLevel.medio,
+                    isExpanded: true,
+                    items: QualitativeLevel.all
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(_levelLabelFor(c, loc)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _qualitativeLevel = v),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            InputDecorator(
               decoration: const InputDecoration(
                 labelText: 'Unidad',
                 border: OutlineInputBorder(),
@@ -450,11 +632,11 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
                 child: DropdownButton<String>(
                   value: _selectedUnit,
                   isExpanded: true,
-                  items: _units
+                  items: kSupplyUnitOptions
                       .map((u) => DropdownMenuItem(value: u, child: Text(u)))
                       .toList(),
-                  onChanged: (v) =>
-                      setState(() => _selectedUnit = v ?? _units.first),
+                  onChanged: (v) => setState(
+                      () => _selectedUnit = v ?? kSupplyUnitOptions.first),
                 ),
               ),
             ),

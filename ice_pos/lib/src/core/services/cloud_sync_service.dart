@@ -61,6 +61,10 @@ class CloudSyncService {
   static const int _syncMaxAttempts = 3;
   static const Duration _syncRetryDelay = Duration(seconds: 2);
 
+  /// Solo una sincronización a la vez. Si [syncFromCloud] se llama en paralelo (Realtime + Insumos + refresh),
+  /// todas esperan el mismo [Future]; sin esto dos corridas intercalan DELETE/INSERT y rompen UNIQUE (p. ej. bundles.id).
+  static Future<String?>? _syncFromCloudMutex;
+
   static bool _isRetryableNetworkError(Object e) {
     final s = e.toString();
     return s.contains('SocketException') ||
@@ -75,7 +79,23 @@ class CloudSyncService {
   /// Replaces local master data with Supabase data. Does not sync sales (those are write-through).
   /// Fetches all data from cloud first; only clears local DB after a successful fetch so a failed
   /// sync (network, RLS, etc.) never wipes local data. Retries up to [_syncMaxAttempts] on network errors.
-  static Future<String?> syncFromCloud(AppDatabase db) async {
+  ///
+  /// Llamadas concurrentes comparten una sola ejecución (mutex) para evitar condiciones de carrera en SQLite.
+  static Future<String?> syncFromCloud(AppDatabase db) {
+    final pending = _syncFromCloudMutex;
+    if (pending != null) return pending;
+
+    final future = _syncFromCloudImpl(db);
+    _syncFromCloudMutex = future;
+    future.whenComplete(() {
+      if (identical(_syncFromCloudMutex, future)) {
+        _syncFromCloudMutex = null;
+      }
+    });
+    return future;
+  }
+
+  static Future<String?> _syncFromCloudImpl(AppDatabase db) async {
     if (!SupabaseService.isInitialized) return null;
     final client = SupabaseService.instance.client;
 
@@ -144,6 +164,17 @@ class CloudSyncService {
       return lastSyncError;
     }
 
+    // PostgREST puede devolver filas duplicadas por id → UNIQUE al insertar (ej. modifier_groups.id).
+    catRows = _dedupeByIdKey(catRows, 'id');
+    supRows = _dedupeByIdKey(supRows, 'id');
+    prodRows = _dedupeByIdKey(prodRows, 'id');
+    recRows = _dedupeRecipeRows(recRows);
+    mgRows = _dedupeByIdKey(mgRows, 'id');
+    pmRows = _dedupeProductModifierRows(pmRows);
+    moRows = _dedupeModifierOptionRows(moRows);
+    bundleRows = _dedupeByIdKey(bundleRows, 'id');
+    biRows = _dedupeBundleItemRows(biRows);
+
     try {
       // 2. Now replace local master data (FK order: delete dependents first)
       await (db.delete(db.modifierOptions)).go();
@@ -169,6 +200,12 @@ class CloudSyncService {
       }
       for (final row in supRows) {
         final cloudId = _int(row['id'])!;
+        final stockModeRaw = row['stock_count_mode'];
+        final stockMode = stockModeRaw is String && stockModeRaw.isNotEmpty
+            ? stockModeRaw
+            : 'quantity';
+        final qualRaw = row['qualitative_level'];
+        final qualLevel = qualRaw is String && qualRaw.isNotEmpty ? qualRaw : null;
         await db.into(db.supplies).insert(SuppliesCompanion(
           id: Value(cloudId),
           name: Value(row['name'] as String),
@@ -177,6 +214,8 @@ class CloudSyncService {
           costPerUnit: Value(_double(row['cost_per_unit'])),
           reorderPoint: Value(_double(row['reorder_point'])),
           category: Value(row['category'] as String?),
+          stockCountMode: Value(stockMode),
+          qualitativeLevel: Value(qualLevel),
         ));
       }
       for (final row in prodRows) {
@@ -467,6 +506,71 @@ class CloudSyncService {
     }
   }
 
+  /// Una fila por id (la última gana). Evita SqliteException UNIQUE al sincronizar.
+  static List<Map<String, dynamic>> _dedupeByIdKey(
+    List<Map<String, dynamic>> rows,
+    String idKey,
+  ) {
+    final byId = <int, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final id = _int(row[idKey]);
+      if (id == null) continue;
+      byId[id] = row;
+    }
+    final keys = byId.keys.toList()..sort();
+    return [for (final k in keys) byId[k]!];
+  }
+
+  static List<Map<String, dynamic>> _dedupeRecipeRows(List<Map<String, dynamic>> rows) {
+    final key = <String, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final pid = _int(row['product_id']);
+      final sid = _int(row['supply_id']);
+      if (pid == null || sid == null) continue;
+      key['$pid:$sid'] = row;
+    }
+    return key.values.toList();
+  }
+
+  static List<Map<String, dynamic>> _dedupeProductModifierRows(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final key = <String, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final pid = _int(row['product_id']);
+      final mgid = _int(row['modifier_group_id']);
+      if (pid == null || mgid == null) continue;
+      key['$pid:$mgid'] = row;
+    }
+    return key.values.toList();
+  }
+
+  static List<Map<String, dynamic>> _dedupeModifierOptionRows(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final key = <String, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final mg = _int(row['modifier_group_id']);
+      final sid = _int(row['supply_id']);
+      if (mg == null || sid == null) continue;
+      key['$mg:$sid'] = row;
+    }
+    return key.values.toList();
+  }
+
+  static List<Map<String, dynamic>> _dedupeBundleItemRows(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final key = <String, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final bid = _int(row['bundle_id']);
+      final pid = _int(row['product_id']);
+      if (bid == null || pid == null) continue;
+      key['$bid:$pid'] = row;
+    }
+    return key.values.toList();
+  }
+
   static List<dynamic> _list(dynamic v) {
     if (v == null) return [];
     return v is List ? v : [];
@@ -575,6 +679,8 @@ class CloudSyncService {
     double costPerUnit = 0,
     double reorderPoint = 0,
     String? category,
+    String stockCountMode = 'quantity',
+    String? qualitativeLevel,
   }) async {
     if (!SupabaseService.isInitialized) return null;
     try {
@@ -586,6 +692,8 @@ class CloudSyncService {
         'cost_per_unit': costPerUnit,
         'reorder_point': reorderPoint,
         'category': category,
+        'stock_count_mode': stockCountMode,
+        'qualitative_level': qualitativeLevel,
       }, onConflict: 'id');
       return null;
     } catch (e) {
@@ -866,6 +974,8 @@ class CloudSyncService {
         'cost_per_unit': s.costPerUnit,
         'reorder_point': s.reorderPoint,
         'category': s.category,
+        'stock_count_mode': s.stockCountMode,
+        'qualitative_level': s.qualitativeLevel,
       }).toList();
       if (supplyRows.isNotEmpty) {
         await client.from('supplies').upsert(supplyRows, onConflict: 'id');

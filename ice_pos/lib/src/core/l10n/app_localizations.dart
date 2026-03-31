@@ -154,6 +154,58 @@ class AppLocalizations {
 
   // Inventory & History
   String get inventory => _('inventory');
+  String get inventoryReconciliation => _('inventoryReconciliation');
+  String get inventoryReconciliationSubtitle =>
+      _('inventoryReconciliationSubtitle');
+  String get stockCountModeLabel => _('stockCountModeLabel');
+  String get stockCountModeQuantity => _('stockCountModeQuantity');
+  String get stockCountModeQualitative => _('stockCountModeQualitative');
+  String get qualitativeLevelAlto => _('qualitativeLevelAlto');
+  String get qualitativeLevelMedio => _('qualitativeLevelMedio');
+  String get qualitativeLevelBajo => _('qualitativeLevelBajo');
+  String get qualitativeLevelResurtir => _('qualitativeLevelResurtir');
+  String get qualitativeLevelCritico => _('qualitativeLevelCritico');
+  String get qualitativeUnitOption => _('qualitativeUnitOption');
+  String reconcileCurrentStock(String qty, String unit) =>
+      _('reconcileCurrentStock')
+          .replaceAll('{qty}', qty)
+          .replaceAll('{unit}', unit);
+  String reconcileCurrentLevel(String level) => _('reconcileCurrentLevel')
+      .replaceAll('{level}', level);
+  String get reconcileCountedQuantity => _('reconcileCountedQuantity');
+  String get reconcileUnitLabel => _('reconcileUnitLabel');
+  String get reconcileModeQuantityHint => _('reconcileModeQuantityHint');
+  String get reconcileModeQualitativeHint =>
+      _('reconcileModeQualitativeHint');
+  String get reconcileSelectLevel => _('reconcileSelectLevel');
+  String get reconcileSkip => _('reconcileSkip');
+  String get reconcileSaveAndContinue => _('reconcileSaveAndContinue');
+  String get reconcileDone => _('reconcileDone');
+  String get reconcileEmpty => _('reconcileEmpty');
+  String get reconcileSaved => _('reconcileSaved');
+  String get reconcileCloudSyncFailed => _('reconcileCloudSyncFailed');
+  String reconcileGroupLabel(String name) =>
+      _('reconcileGroupLabel').replaceAll('{name}', name);
+  String reconcileGroupsCounter(int current, int total) =>
+      _('reconcileGroupsCounter')
+          .replaceAll('{current}', '$current')
+          .replaceAll('{total}', '$total');
+  String reconcileInGroupCounter(int current, int total) =>
+      _('reconcileInGroupCounter')
+          .replaceAll('{current}', '$current')
+          .replaceAll('{total}', '$total');
+  String reconcileOverallCounter(int current, int total) =>
+      _('reconcileOverallCounter')
+          .replaceAll('{current}', '$current')
+          .replaceAll('{total}', '$total');
+  String get reconcileRestart => _('reconcileRestart');
+  String get reconcileRestartConfirmTitle => _('reconcileRestartConfirmTitle');
+  String get reconcileRestartConfirmBody => _('reconcileRestartConfirmBody');
+  String get reconcilePreviousGroup => _('reconcilePreviousGroup');
+  String get reconcileNextGroup => _('reconcileNextGroup');
+  String get reconcileSelectGroup => _('reconcileSelectGroup');
+  String get reconcileSearchHint => _('reconcileSearchHint');
+  String get reconcileSearchNoResults => _('reconcileSearchNoResults');
   String get salesHistory => _('salesHistory');
   String get cancelSale => _('cancelSale');
   String get cancelSaleConfirmTitle => _('cancelSaleConfirmTitle');
@@ -236,6 +288,7 @@ class AppLocalizations {
   String get reportSale => _('reportSale');
   String get reportPurchase => _('reportPurchase');
   String get reportWaste => _('reportWaste');
+  String get reportReconciliation => _('reportReconciliation');
 
   // Descuentos
   String get discounts => _('discounts');
@@ -429,6 +482,47 @@ class AppLocalizations {
     'thisDevice': 'Este dispositivo',
     'inCloud': 'En la nube',
     'inventory': 'Inventario',
+    'inventoryReconciliation': 'Conciliación de inventario',
+    'inventoryReconciliationSubtitle':
+        'Recorrer cada insumo y ajustar cantidad o nivel',
+    'stockCountModeLabel': 'Forma de medir inventario',
+    'stockCountModeQuantity': 'Cantidad (numérica)',
+    'stockCountModeQualitative': 'Nivel (alto / medio / bajo / crítico)',
+    'qualitativeLevelAlto': 'Alto',
+    'qualitativeLevelMedio': 'Medio',
+    'qualitativeLevelBajo': 'Bajo',
+    'qualitativeLevelResurtir': 'Resurtir',
+    'qualitativeLevelCritico': 'Crítico',
+    'qualitativeUnitOption': 'Cualitativo (nivel)',
+    'reconcileCurrentStock': 'Stock en sistema: {qty} {unit}',
+    'reconcileCurrentLevel': 'Nivel en sistema: {level}',
+    'reconcileCountedQuantity': 'Cantidad física contada',
+    'reconcileUnitLabel': 'Unidad de medida',
+    'reconcileModeQuantityHint':
+        'Introduce la cantidad contada. Se registrará la diferencia respecto al sistema.',
+    'reconcileModeQualitativeHint':
+        'Elige el nivel observado. El sistema guarda un equivalente numérico para recetas.',
+    'reconcileSelectLevel': 'Nivel observado',
+    'reconcileSkip': 'Siguiente sin guardar',
+    'reconcileSaveAndContinue': 'Guardar y continuar',
+    'reconcileDone': 'Terminar',
+    'reconcileEmpty': 'No hay insumos para conciliar.',
+    'reconcileSaved': 'Inventario actualizado',
+    'reconcileCloudSyncFailed':
+        'Guardado en el dispositivo. No se pudo subir a la nube; al sincronizar puede volver el valor anterior. Detalle: ',
+    'reconcileGroupLabel': 'Grupo: {name}',
+    'reconcileGroupsCounter': 'Grupo {current} de {total}',
+    'reconcileInGroupCounter': 'En este grupo: {current} / {total}',
+    'reconcileOverallCounter': 'Total: {current} / {total}',
+    'reconcileRestart': 'Volver a empezar',
+    'reconcileRestartConfirmTitle': '¿Reiniciar conciliación?',
+    'reconcileRestartConfirmBody':
+        'Se borrará el progreso guardado en este dispositivo y volverás al primer insumo del primer grupo.',
+    'reconcilePreviousGroup': 'Grupo anterior',
+    'reconcileNextGroup': 'Siguiente grupo',
+    'reconcileSelectGroup': 'Elegir grupo',
+    'reconcileSearchHint': 'Buscar insumo en todos los grupos…',
+    'reconcileSearchNoResults': 'Ningún insumo coincide con la búsqueda.',
     'salesHistory': 'Historial de ventas',
     'cancelSale': 'Cancelar venta',
     'cancelSaleConfirmTitle': 'Cancelar venta',
@@ -508,6 +602,7 @@ class AppLocalizations {
     'reportSale': 'Venta',
     'reportPurchase': 'Compra',
     'reportWaste': 'Merma',
+    'reportReconciliation': 'Conciliación',
     'discounts': 'Descuentos',
     'discountCode': 'Código de descuento',
     'discountByProduct': 'Descuento en producto',
@@ -696,6 +791,47 @@ class AppLocalizations {
     'thisDevice': 'This device',
     'inCloud': 'In cloud',
     'inventory': 'Inventory',
+    'inventoryReconciliation': 'Inventory reconciliation',
+    'inventoryReconciliationSubtitle':
+        'Walk each supply and adjust quantity or level',
+    'stockCountModeLabel': 'How to measure stock',
+    'stockCountModeQuantity': 'Quantity (numeric)',
+    'stockCountModeQualitative': 'Level (high / medium / low / critical)',
+    'qualitativeLevelAlto': 'High',
+    'qualitativeLevelMedio': 'Medium',
+    'qualitativeLevelBajo': 'Low',
+    'qualitativeLevelResurtir': 'Reorder',
+    'qualitativeLevelCritico': 'Critical',
+    'qualitativeUnitOption': 'Qualitative (level)',
+    'reconcileCurrentStock': 'System stock: {qty} {unit}',
+    'reconcileCurrentLevel': 'System level: {level}',
+    'reconcileCountedQuantity': 'Physical count',
+    'reconcileUnitLabel': 'Unit of measure',
+    'reconcileModeQuantityHint':
+        'Enter the counted quantity. The adjustment vs. system will be logged.',
+    'reconcileModeQualitativeHint':
+        'Pick the observed level. A numeric equivalent is kept for recipes.',
+    'reconcileSelectLevel': 'Observed level',
+    'reconcileSkip': 'Next without saving',
+    'reconcileSaveAndContinue': 'Save and continue',
+    'reconcileDone': 'Done',
+    'reconcileEmpty': 'No supplies to reconcile.',
+    'reconcileSaved': 'Inventory updated',
+    'reconcileCloudSyncFailed':
+        'Saved on device. Cloud upload failed; sync may restore the old value. ',
+    'reconcileGroupLabel': 'Group: {name}',
+    'reconcileGroupsCounter': 'Group {current} of {total}',
+    'reconcileInGroupCounter': 'In this group: {current} / {total}',
+    'reconcileOverallCounter': 'Overall: {current} / {total}',
+    'reconcileRestart': 'Start over',
+    'reconcileRestartConfirmTitle': 'Restart reconciliation?',
+    'reconcileRestartConfirmBody':
+        'Saved progress on this device will be cleared and you will return to the first supply in the first group.',
+    'reconcilePreviousGroup': 'Previous group',
+    'reconcileNextGroup': 'Next group',
+    'reconcileSelectGroup': 'Choose group',
+    'reconcileSearchHint': 'Search supplies across all groups…',
+    'reconcileSearchNoResults': 'No supplies match your search.',
     'salesHistory': 'Sales history',
     'cancelSale': 'Cancel sale',
     'cancelSaleConfirmTitle': 'Cancel sale',
@@ -775,6 +911,7 @@ class AppLocalizations {
     'reportSale': 'Sale',
     'reportPurchase': 'Purchase',
     'reportWaste': 'Waste',
+    'reportReconciliation': 'Reconciliation',
     'discounts': 'Discounts',
     'discountCode': 'Discount code',
     'discountByProduct': 'Discount by product',

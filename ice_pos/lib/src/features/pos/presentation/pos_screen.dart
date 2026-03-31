@@ -59,6 +59,51 @@ final _directCategoryProductsProvider = FutureProvider<List<Product>>((ref) asyn
   return ref.read(posRepositoryProvider).getProductsByCategory(nav.currentCategoryId!);
 });
 
+/// Loads modifier groups for the **tapped** product first; only if none, falls back to
+/// another product with the same name (duplicate SKUs). Ignores groups with zero options.
+Future<void> _handlePosProductTap(
+  BuildContext context,
+  WidgetRef ref,
+  Product product,
+) async {
+  final repo = ref.read(posRepositoryProvider);
+  var productToUse = product;
+  var groups = filterModifierGroupsForPos(
+    await repo.getModifierGroupsForProduct(product.id),
+  );
+  if (groups.isEmpty) {
+    final byName = await repo.getProductWithModifiersByName(
+      product.name.trim(),
+      categoryId: product.categoryId,
+    );
+    if (byName != null) {
+      productToUse = byName.product;
+      groups = filterModifierGroupsForPos(byName.groups);
+    }
+  }
+  if (!context.mounted) return;
+  if (groups.isEmpty) {
+    ref.read(cartControllerProvider.notifier).addToCart(productToUse);
+  } else {
+    final result = await showModalBottomSheet<ModifierDialogResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ProductModifierDialog(
+        product: productToUse,
+        modifierGroups: groups,
+      ),
+    );
+    if (result != null && context.mounted) {
+      ref.read(cartControllerProvider.notifier).addToCart(
+            productToUse,
+            selectedModifiers: result.modifiers,
+            quantity: result.quantity,
+          );
+    }
+  }
+}
+
 class PosScreen extends ConsumerWidget {
   const PosScreen({super.key});
 
@@ -110,46 +155,8 @@ class PosScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: _CategoryOrProductsGrid(
-                          onProductTap: (context, product) async {
-                            // Prefer product that has modifiers when multiple share the same name (e.g. Boli)
-                            final byName = await ref
-                                .read(posRepositoryProvider)
-                                .getProductWithModifiersByName(
-                                  product.name.trim(),
-                                  categoryId: product.categoryId,
-                                );
-                            var productToUse = product;
-                            var groups = byName != null
-                                ? byName.groups
-                                : await ref
-                                    .read(posRepositoryProvider)
-                                    .getModifierGroupsForProduct(product.id);
-                            if (byName != null) productToUse = byName.product;
-                            if (!context.mounted) return;
-                            if (groups.isEmpty) {
-                              ref
-                                  .read(cartControllerProvider.notifier)
-                                  .addToCart(productToUse);
-                            } else {
-                              final result = await showModalBottomSheet<
-                                  ModifierDialogResult>(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (ctx) => ProductModifierDialog(
-                                  product: productToUse,
-                                  modifierGroups: groups,
-                                ),
-                              );
-                              if (result != null && context.mounted) {
-                                ref.read(cartControllerProvider.notifier).addToCart(
-                                      productToUse,
-                                      selectedModifiers: result.modifiers,
-                                      quantity: result.quantity,
-                                    );
-                              }
-                            }
-                          },
+                          onProductTap: (context, product) =>
+                              _handlePosProductTap(context, ref, product),
                           onCategoryTap: (category) => ref
                               .read(categoryNavigationControllerProvider.notifier)
                               .pushCategory(category),
@@ -306,46 +313,8 @@ class PosScreen extends ConsumerWidget {
                     Expanded(
                       flex: 6,
                       child: _CategoryOrProductsGrid(
-                        onProductTap: (context, product) async {
-                          // Prefer product that has modifiers when multiple share the same name (e.g. Boli)
-                          final byName = await ref
-                              .read(posRepositoryProvider)
-                              .getProductWithModifiersByName(
-                                product.name.trim(),
-                                categoryId: product.categoryId,
-                              );
-                          var productToUse = product;
-                          var groups = byName != null
-                              ? byName.groups
-                              : await ref
-                                  .read(posRepositoryProvider)
-                                  .getModifierGroupsForProduct(product.id);
-                          if (byName != null) productToUse = byName.product;
-                          if (!context.mounted) return;
-                          if (groups.isEmpty) {
-                            ref
-                                .read(cartControllerProvider.notifier)
-                                .addToCart(productToUse);
-                          } else {
-                            final result = await showModalBottomSheet<
-                                ModifierDialogResult>(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (ctx) => ProductModifierDialog(
-                                product: productToUse,
-                                modifierGroups: groups,
-                              ),
-                            );
-                            if (result != null && context.mounted) {
-                              ref.read(cartControllerProvider.notifier).addToCart(
-                                    productToUse,
-                                    selectedModifiers: result.modifiers,
-                                    quantity: result.quantity,
-                                  );
-                            }
-                          }
-                        },
+                        onProductTap: (context, product) =>
+                            _handlePosProductTap(context, ref, product),
                         onCategoryTap: (category) => ref
                             .read(categoryNavigationControllerProvider.notifier)
                             .pushCategory(category),

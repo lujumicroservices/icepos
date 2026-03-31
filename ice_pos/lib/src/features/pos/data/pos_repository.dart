@@ -9,6 +9,7 @@ import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/category_image_service.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
+import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart' as domain;
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -133,6 +134,13 @@ class ModifierGroupWithOptions {
   final ModifierGroup group;
   final List<ModifierOptionWithSupply> options;
 }
+
+/// POS: only groups with at least one option should open the modifier sheet.
+/// If every [ModifierOption] row fails the supply join, options are empty and the sheet would be useless.
+List<ModifierGroupWithOptions> filterModifierGroupsForPos(
+  List<ModifierGroupWithOptions> groups,
+) =>
+    groups.where((g) => g.options.isNotEmpty).toList();
 
 /// Repository for POS (Point of Sale) operations.
 class PosRepository {
@@ -601,6 +609,16 @@ class PosRepository {
     return result;
   }
 
+  /// Lista plana de insumos en el mismo orden que la pantalla de administración (por categoría y nombre).
+  Future<List<Supply>> getSuppliesOrderedForReconciliation() async {
+    final grouped = await getSuppliesGroupedByCategory();
+    final out = <Supply>[];
+    for (final g in grouped) {
+      out.addAll(g.supplies);
+    }
+    return out;
+  }
+
   /// Gets active bundles with their product requirements.
   Future<List<({Bundle bundle, List<BundleItem> bundleItems})>> getBundlesWithItems() async {
     final bundles = await (_db.select(_db.bundles)
@@ -718,8 +736,20 @@ class PosRepository {
     required double costPerUnit,
     double reorderPoint = 0,
     String? category,
+    String stockCountMode = StockCountMode.quantity,
+    String? qualitativeLevel,
   }) async {
     final cat = category?.trim().isEmpty == true ? null : category?.trim();
+    final mode = stockCountMode == StockCountMode.qualitative
+        ? StockCountMode.qualitative
+        : StockCountMode.quantity;
+    final qLevel = mode == StockCountMode.qualitative &&
+            qualitativeLevel != null &&
+            QualitativeLevel.isValid(qualitativeLevel)
+        ? qualitativeLevel
+        : null;
+    final qualStock = qLevel != null ? stockFromQualitativeLevel(qLevel) : null;
+
     if (id == null) {
       final newId = await _db.into(_db.supplies).insert(
         SuppliesCompanion.insert(
@@ -728,6 +758,11 @@ class PosRepository {
           costPerUnit: Value(costPerUnit),
           reorderPoint: Value(reorderPoint),
           category: Value(cat),
+          stockCountMode: Value(mode),
+          qualitativeLevel: Value(qLevel),
+          currentStock: mode == StockCountMode.qualitative && qualStock != null
+              ? Value(qualStock)
+              : const Value.absent(),
         ),
       );
       if (CloudSyncService.isEnabled) {
@@ -741,6 +776,8 @@ class PosRepository {
             costPerUnit: s.costPerUnit,
             reorderPoint: s.reorderPoint,
             category: s.category,
+            stockCountMode: s.stockCountMode,
+            qualitativeLevel: s.qualitativeLevel,
           ).catchError((e) => null);
         }
       }
@@ -753,6 +790,13 @@ class PosRepository {
           costPerUnit: Value(costPerUnit),
           reorderPoint: Value(reorderPoint),
           category: Value(cat),
+          stockCountMode: Value(mode),
+          qualitativeLevel: mode == StockCountMode.qualitative
+              ? Value(qLevel)
+              : const Value(null),
+          currentStock: mode == StockCountMode.qualitative && qualStock != null
+              ? Value(qualStock)
+              : const Value.absent(),
         ),
       );
       if (CloudSyncService.isEnabled) {
@@ -766,11 +810,112 @@ class PosRepository {
             costPerUnit: s.costPerUnit,
             reorderPoint: s.reorderPoint,
             category: s.category,
+            stockCountMode: s.stockCountMode,
+            qualitativeLevel: s.qualitativeLevel,
           ).catchError((e) => null);
         }
       }
       return id;
     }
+  }
+
+  /// Ajuste de inventario por conciliación física (cantidad o nivel cualitativo).
+  /// [useQualitativeEntry] debe coincidir con la UI: chips (nivel) vs cantidad numérica.
+  /// Unidad `qual` implica conteo por nivel; otras unidades, por cantidad.
+  /// Retorna mensaje de error de nube si el guardado local fue OK pero falló el upsert
+  /// (la sync periódica podría sobrescribir datos locales si la nube queda desactualizada).
+  Future<String?> reconcileSupply({
+    required int supplyId,
+    double? newQuantity,
+    String? qualitativeLevel,
+    String? newUnit,
+    required bool useQualitativeEntry,
+  }) async {
+    await _db.transaction(() async {
+      final supply = await (_db.select(_db.supplies)
+            ..where((s) => s.id.equals(supplyId)))
+          .getSingleOrNull();
+      if (supply == null) {
+        throw StateError('Supply id=$supplyId not found');
+      }
+
+      final trimmedUnit = newUnit?.trim();
+      final unitToSet = (trimmedUnit != null && trimmedUnit.isNotEmpty)
+          ? (trimmedUnit.length > 10
+              ? trimmedUnit.substring(0, 10)
+              : trimmedUnit)
+          : null;
+
+      if (useQualitativeEntry) {
+        final level = qualitativeLevel?.trim();
+        if (level == null || !QualitativeLevel.isValid(level)) {
+          throw ArgumentError('Nivel cualitativo inválido');
+        }
+        final newStock = stockFromQualitativeLevel(level);
+        final delta = newStock - supply.currentStock;
+        await (_db.update(_db.supplies)..where((s) => s.id.equals(supplyId)))
+            .write(
+          SuppliesCompanion(
+            currentStock: Value(newStock),
+            qualitativeLevel: Value(level),
+            stockCountMode: Value(StockCountMode.qualitative),
+            unit: unitToSet != null ? Value(unitToSet) : const Value.absent(),
+          ),
+        );
+        if (delta != 0) {
+          await _db.into(_db.inventoryLogs).insert(
+                InventoryLogsCompanion.insert(
+                  supplyId: supplyId,
+                  changeAmount: delta,
+                  reason: 'RECONCILIATION',
+                ),
+              );
+        }
+      } else {
+        final qty = newQuantity;
+        if (qty == null || qty < 0) {
+          throw ArgumentError('Cantidad inválida');
+        }
+        final delta = qty - supply.currentStock;
+        await (_db.update(_db.supplies)..where((s) => s.id.equals(supplyId)))
+            .write(
+          SuppliesCompanion(
+            currentStock: Value(qty),
+            stockCountMode: Value(StockCountMode.quantity),
+            qualitativeLevel: const Value(null),
+            unit: unitToSet != null ? Value(unitToSet) : const Value.absent(),
+          ),
+        );
+        if (delta != 0) {
+          await _db.into(_db.inventoryLogs).insert(
+                InventoryLogsCompanion.insert(
+                  supplyId: supplyId,
+                  changeAmount: delta,
+                  reason: 'RECONCILIATION',
+                ),
+              );
+        }
+      }
+    });
+
+    if (!CloudSyncService.isEnabled) return null;
+
+    final s = await (_db.select(_db.supplies)
+          ..where((s) => s.id.equals(supplyId)))
+        .getSingleOrNull();
+    if (s == null) return null;
+
+    return CloudSyncService.upsertSupplyToCloud(
+      id: s.id,
+      name: s.name,
+      unit: s.unit,
+      currentStock: s.currentStock,
+      costPerUnit: s.costPerUnit,
+      reorderPoint: s.reorderPoint,
+      category: s.category,
+      stockCountMode: s.stockCountMode,
+      qualitativeLevel: s.qualitativeLevel,
+    );
   }
 
   /// Deletes a supply by id.
@@ -825,13 +970,17 @@ class PosRepository {
     // Prefer same category, then any product with that name that has modifiers
     for (final product in products) {
       if (categoryId != null && product.categoryId != categoryId) continue;
-      final groups = await _getModifierGroupsForProductId(product.id);
+      final groups = filterModifierGroupsForPos(
+        await _getModifierGroupsForProductId(product.id),
+      );
       if (groups.isNotEmpty) {
         return (product: product, groups: groups);
       }
     }
     for (final product in products) {
-      final groups = await _getModifierGroupsForProductId(product.id);
+      final groups = filterModifierGroupsForPos(
+        await _getModifierGroupsForProductId(product.id),
+      );
       if (groups.isNotEmpty) {
         return (product: product, groups: groups);
       }

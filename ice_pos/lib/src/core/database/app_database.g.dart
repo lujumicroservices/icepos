@@ -853,6 +853,33 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _stockCountModeMeta = const VerificationMeta(
+    'stockCountMode',
+  );
+  @override
+  late final GeneratedColumn<String> stockCountMode = GeneratedColumn<String>(
+    'stock_count_mode',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 20,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('quantity'),
+  );
+  static const VerificationMeta _qualitativeLevelMeta = const VerificationMeta(
+    'qualitativeLevel',
+  );
+  @override
+  late final GeneratedColumn<String> qualitativeLevel = GeneratedColumn<String>(
+    'qualitative_level',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -862,6 +889,8 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
     costPerUnit,
     reorderPoint,
     category,
+    stockCountMode,
+    qualitativeLevel,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -927,6 +956,24 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
         category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
       );
     }
+    if (data.containsKey('stock_count_mode')) {
+      context.handle(
+        _stockCountModeMeta,
+        stockCountMode.isAcceptableOrUnknown(
+          data['stock_count_mode']!,
+          _stockCountModeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('qualitative_level')) {
+      context.handle(
+        _qualitativeLevelMeta,
+        qualitativeLevel.isAcceptableOrUnknown(
+          data['qualitative_level']!,
+          _qualitativeLevelMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -964,6 +1011,14 @@ class $SuppliesTable extends Supplies with TableInfo<$SuppliesTable, Supply> {
         DriftSqlType.string,
         data['${effectivePrefix}category'],
       ),
+      stockCountMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stock_count_mode'],
+      )!,
+      qualitativeLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}qualitative_level'],
+      ),
     );
   }
 
@@ -981,6 +1036,12 @@ class Supply extends DataClass implements Insertable<Supply> {
   final double costPerUnit;
   final double reorderPoint;
   final String? category;
+
+  /// `quantity` = conteo numérico; `qualitative` = nivel alto/medio/bajo/resurtir (ver [qualitativeLevel]).
+  final String stockCountMode;
+
+  /// Último nivel cualitativo registrado en conciliación (solo si [stockCountMode] es qualitative).
+  final String? qualitativeLevel;
   const Supply({
     required this.id,
     required this.name,
@@ -989,6 +1050,8 @@ class Supply extends DataClass implements Insertable<Supply> {
     required this.costPerUnit,
     required this.reorderPoint,
     this.category,
+    required this.stockCountMode,
+    this.qualitativeLevel,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1001,6 +1064,10 @@ class Supply extends DataClass implements Insertable<Supply> {
     map['reorder_point'] = Variable<double>(reorderPoint);
     if (!nullToAbsent || category != null) {
       map['category'] = Variable<String>(category);
+    }
+    map['stock_count_mode'] = Variable<String>(stockCountMode);
+    if (!nullToAbsent || qualitativeLevel != null) {
+      map['qualitative_level'] = Variable<String>(qualitativeLevel);
     }
     return map;
   }
@@ -1016,6 +1083,10 @@ class Supply extends DataClass implements Insertable<Supply> {
       category: category == null && nullToAbsent
           ? const Value.absent()
           : Value(category),
+      stockCountMode: Value(stockCountMode),
+      qualitativeLevel: qualitativeLevel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(qualitativeLevel),
     );
   }
 
@@ -1032,6 +1103,8 @@ class Supply extends DataClass implements Insertable<Supply> {
       costPerUnit: serializer.fromJson<double>(json['costPerUnit']),
       reorderPoint: serializer.fromJson<double>(json['reorderPoint']),
       category: serializer.fromJson<String?>(json['category']),
+      stockCountMode: serializer.fromJson<String>(json['stockCountMode']),
+      qualitativeLevel: serializer.fromJson<String?>(json['qualitativeLevel']),
     );
   }
   @override
@@ -1045,6 +1118,8 @@ class Supply extends DataClass implements Insertable<Supply> {
       'costPerUnit': serializer.toJson<double>(costPerUnit),
       'reorderPoint': serializer.toJson<double>(reorderPoint),
       'category': serializer.toJson<String?>(category),
+      'stockCountMode': serializer.toJson<String>(stockCountMode),
+      'qualitativeLevel': serializer.toJson<String?>(qualitativeLevel),
     };
   }
 
@@ -1056,6 +1131,8 @@ class Supply extends DataClass implements Insertable<Supply> {
     double? costPerUnit,
     double? reorderPoint,
     Value<String?> category = const Value.absent(),
+    String? stockCountMode,
+    Value<String?> qualitativeLevel = const Value.absent(),
   }) => Supply(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -1064,6 +1141,10 @@ class Supply extends DataClass implements Insertable<Supply> {
     costPerUnit: costPerUnit ?? this.costPerUnit,
     reorderPoint: reorderPoint ?? this.reorderPoint,
     category: category.present ? category.value : this.category,
+    stockCountMode: stockCountMode ?? this.stockCountMode,
+    qualitativeLevel: qualitativeLevel.present
+        ? qualitativeLevel.value
+        : this.qualitativeLevel,
   );
   Supply copyWithCompanion(SuppliesCompanion data) {
     return Supply(
@@ -1080,6 +1161,12 @@ class Supply extends DataClass implements Insertable<Supply> {
           ? data.reorderPoint.value
           : this.reorderPoint,
       category: data.category.present ? data.category.value : this.category,
+      stockCountMode: data.stockCountMode.present
+          ? data.stockCountMode.value
+          : this.stockCountMode,
+      qualitativeLevel: data.qualitativeLevel.present
+          ? data.qualitativeLevel.value
+          : this.qualitativeLevel,
     );
   }
 
@@ -1092,7 +1179,9 @@ class Supply extends DataClass implements Insertable<Supply> {
           ..write('unit: $unit, ')
           ..write('costPerUnit: $costPerUnit, ')
           ..write('reorderPoint: $reorderPoint, ')
-          ..write('category: $category')
+          ..write('category: $category, ')
+          ..write('stockCountMode: $stockCountMode, ')
+          ..write('qualitativeLevel: $qualitativeLevel')
           ..write(')'))
         .toString();
   }
@@ -1106,6 +1195,8 @@ class Supply extends DataClass implements Insertable<Supply> {
     costPerUnit,
     reorderPoint,
     category,
+    stockCountMode,
+    qualitativeLevel,
   );
   @override
   bool operator ==(Object other) =>
@@ -1117,7 +1208,9 @@ class Supply extends DataClass implements Insertable<Supply> {
           other.unit == this.unit &&
           other.costPerUnit == this.costPerUnit &&
           other.reorderPoint == this.reorderPoint &&
-          other.category == this.category);
+          other.category == this.category &&
+          other.stockCountMode == this.stockCountMode &&
+          other.qualitativeLevel == this.qualitativeLevel);
 }
 
 class SuppliesCompanion extends UpdateCompanion<Supply> {
@@ -1128,6 +1221,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
   final Value<double> costPerUnit;
   final Value<double> reorderPoint;
   final Value<String?> category;
+  final Value<String> stockCountMode;
+  final Value<String?> qualitativeLevel;
   const SuppliesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -1136,6 +1231,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     this.costPerUnit = const Value.absent(),
     this.reorderPoint = const Value.absent(),
     this.category = const Value.absent(),
+    this.stockCountMode = const Value.absent(),
+    this.qualitativeLevel = const Value.absent(),
   });
   SuppliesCompanion.insert({
     this.id = const Value.absent(),
@@ -1145,6 +1242,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     this.costPerUnit = const Value.absent(),
     this.reorderPoint = const Value.absent(),
     this.category = const Value.absent(),
+    this.stockCountMode = const Value.absent(),
+    this.qualitativeLevel = const Value.absent(),
   }) : name = Value(name),
        unit = Value(unit);
   static Insertable<Supply> custom({
@@ -1155,6 +1254,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     Expression<double>? costPerUnit,
     Expression<double>? reorderPoint,
     Expression<String>? category,
+    Expression<String>? stockCountMode,
+    Expression<String>? qualitativeLevel,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1164,6 +1265,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
       if (costPerUnit != null) 'cost_per_unit': costPerUnit,
       if (reorderPoint != null) 'reorder_point': reorderPoint,
       if (category != null) 'category': category,
+      if (stockCountMode != null) 'stock_count_mode': stockCountMode,
+      if (qualitativeLevel != null) 'qualitative_level': qualitativeLevel,
     });
   }
 
@@ -1175,6 +1278,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     Value<double>? costPerUnit,
     Value<double>? reorderPoint,
     Value<String?>? category,
+    Value<String>? stockCountMode,
+    Value<String?>? qualitativeLevel,
   }) {
     return SuppliesCompanion(
       id: id ?? this.id,
@@ -1184,6 +1289,8 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
       costPerUnit: costPerUnit ?? this.costPerUnit,
       reorderPoint: reorderPoint ?? this.reorderPoint,
       category: category ?? this.category,
+      stockCountMode: stockCountMode ?? this.stockCountMode,
+      qualitativeLevel: qualitativeLevel ?? this.qualitativeLevel,
     );
   }
 
@@ -1211,6 +1318,12 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
     if (category.present) {
       map['category'] = Variable<String>(category.value);
     }
+    if (stockCountMode.present) {
+      map['stock_count_mode'] = Variable<String>(stockCountMode.value);
+    }
+    if (qualitativeLevel.present) {
+      map['qualitative_level'] = Variable<String>(qualitativeLevel.value);
+    }
     return map;
   }
 
@@ -1223,7 +1336,9 @@ class SuppliesCompanion extends UpdateCompanion<Supply> {
           ..write('unit: $unit, ')
           ..write('costPerUnit: $costPerUnit, ')
           ..write('reorderPoint: $reorderPoint, ')
-          ..write('category: $category')
+          ..write('category: $category, ')
+          ..write('stockCountMode: $stockCountMode, ')
+          ..write('qualitativeLevel: $qualitativeLevel')
           ..write(')'))
         .toString();
   }
@@ -8313,6 +8428,8 @@ typedef $$SuppliesTableCreateCompanionBuilder =
       Value<double> costPerUnit,
       Value<double> reorderPoint,
       Value<String?> category,
+      Value<String> stockCountMode,
+      Value<String?> qualitativeLevel,
     });
 typedef $$SuppliesTableUpdateCompanionBuilder =
     SuppliesCompanion Function({
@@ -8323,6 +8440,8 @@ typedef $$SuppliesTableUpdateCompanionBuilder =
       Value<double> costPerUnit,
       Value<double> reorderPoint,
       Value<String?> category,
+      Value<String> stockCountMode,
+      Value<String?> qualitativeLevel,
     });
 
 final class $$SuppliesTableReferences
@@ -8431,6 +8550,16 @@ class $$SuppliesTableFilterComposer
 
   ColumnFilters<String> get category => $composableBuilder(
     column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stockCountMode => $composableBuilder(
+    column: $table.stockCountMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get qualitativeLevel => $composableBuilder(
+    column: $table.qualitativeLevel,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8553,6 +8682,16 @@ class $$SuppliesTableOrderingComposer
     column: $table.category,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get stockCountMode => $composableBuilder(
+    column: $table.stockCountMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get qualitativeLevel => $composableBuilder(
+    column: $table.qualitativeLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SuppliesTableAnnotationComposer
@@ -8590,6 +8729,16 @@ class $$SuppliesTableAnnotationComposer
 
   GeneratedColumn<String> get category =>
       $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get stockCountMode => $composableBuilder(
+    column: $table.stockCountMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get qualitativeLevel => $composableBuilder(
+    column: $table.qualitativeLevel,
+    builder: (column) => column,
+  );
 
   Expression<T> recipesRefs<T extends Object>(
     Expression<T> Function($$RecipesTableAnnotationComposer a) f,
@@ -8706,6 +8855,8 @@ class $$SuppliesTableTableManager
                 Value<double> costPerUnit = const Value.absent(),
                 Value<double> reorderPoint = const Value.absent(),
                 Value<String?> category = const Value.absent(),
+                Value<String> stockCountMode = const Value.absent(),
+                Value<String?> qualitativeLevel = const Value.absent(),
               }) => SuppliesCompanion(
                 id: id,
                 name: name,
@@ -8714,6 +8865,8 @@ class $$SuppliesTableTableManager
                 costPerUnit: costPerUnit,
                 reorderPoint: reorderPoint,
                 category: category,
+                stockCountMode: stockCountMode,
+                qualitativeLevel: qualitativeLevel,
               ),
           createCompanionCallback:
               ({
@@ -8724,6 +8877,8 @@ class $$SuppliesTableTableManager
                 Value<double> costPerUnit = const Value.absent(),
                 Value<double> reorderPoint = const Value.absent(),
                 Value<String?> category = const Value.absent(),
+                Value<String> stockCountMode = const Value.absent(),
+                Value<String?> qualitativeLevel = const Value.absent(),
               }) => SuppliesCompanion.insert(
                 id: id,
                 name: name,
@@ -8732,6 +8887,8 @@ class $$SuppliesTableTableManager
                 costPerUnit: costPerUnit,
                 reorderPoint: reorderPoint,
                 category: category,
+                stockCountMode: stockCountMode,
+                qualitativeLevel: qualitativeLevel,
               ),
           withReferenceMapper: (p0) => p0
               .map(

@@ -1,3 +1,4 @@
+import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -382,78 +383,23 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
   void _showAddRecipeDialog(BuildContext context) async {
     final supplies = await ref.read(posRepositoryProvider).getSupplies();
     if (!mounted || supplies.isEmpty) return;
+    if (!context.mounted) return;
 
-    Supply? selectedSupply = supplies.first;
-    final qtyController = TextEditingController(text: '1');
-
-    final result = await showDialog<bool>(
+    final result = await showDialog<(Supply, double)>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Add Ingredient'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Supply',
-                  border: OutlineInputBorder(),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<Supply>(
-                    value: selectedSupply,
-                    isExpanded: true,
-                    items: supplies
-                        .map((s) =>
-                            DropdownMenuItem(value: s, child: Text(s.name)))
-                        .toList(),
-                    onChanged: (s) =>
-                        setDialogState(() => selectedSupply = s),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: qtyController,
-                decoration: const InputDecoration(
-                  labelText: 'Quantity',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (selectedSupply == null) return;
-                final qty = double.tryParse(qtyController.text);
-                if (qty == null || qty <= 0) return;
-                Navigator.pop(ctx, true);
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-      ),
+      builder: (ctx) => _AddRecipeIngredientDialog(supplies: supplies),
     );
 
-    if (result == true && selectedSupply != null && mounted) {
-      final qty = double.tryParse(qtyController.text) ?? 1;
-      setState(() {
-        _recipeItems.add(_RecipeItem(
-          supplyId: selectedSupply!.id,
-          quantity: qty,
-          supplyName: selectedSupply!.name,
-          supplyUnit: selectedSupply!.unit,
-        ));
-      });
-    }
+    if (result == null || !mounted) return;
+    final (selectedSupply, qty) = result;
+    setState(() {
+      _recipeItems.add(_RecipeItem(
+        supplyId: selectedSupply.id,
+        quantity: qty,
+        supplyName: selectedSupply.name,
+        supplyUnit: selectedSupply.unit,
+      ));
+    });
   }
 
   void _showAddModifierGroupDialog(BuildContext context) async {
@@ -596,40 +542,235 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
   void _showAddModifierOptionDialog(BuildContext context, int groupIndex) async {
     final supplies = await ref.read(posRepositoryProvider).getSupplies();
     if (!mounted || supplies.isEmpty) return;
+    if (!context.mounted) return;
 
-    Supply? selectedSupply = supplies.first;
-    final qtyController = TextEditingController(text: '0.050');
-    final priceController = TextEditingController(text: '0');
-
-    final result = await showDialog<bool>(
+    final result = await showDialog<(Supply, double, double)>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Add Modifier Option'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              InputDecorator(
+      builder: (ctx) => _AddModifierOptionIngredientDialog(supplies: supplies),
+    );
+
+    if (result == null || !mounted) return;
+    final (selectedSupply, qty, price) = result;
+    setState(() {
+      _modifierGroups[groupIndex].options.add(_ModifierOptionItem(
+        supplyId: selectedSupply.id,
+        quantityDeducted: qty,
+        priceExtra: price,
+        supplyName: selectedSupply.name,
+        supplyUnit: selectedSupply.unit,
+      ));
+    });
+  }
+}
+
+/// Filtra insumos por nombre o categoría (búsqueda en editor de producto).
+List<Supply> _filterSuppliesForEditor(List<Supply> supplies, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return supplies;
+  return supplies.where((s) {
+    if (s.name.toLowerCase().contains(q)) return true;
+    final c = s.category?.trim().toLowerCase() ?? '';
+    return c.isNotEmpty && c.contains(q);
+  }).toList();
+}
+
+class _AddRecipeIngredientDialog extends StatefulWidget {
+  const _AddRecipeIngredientDialog({required this.supplies});
+
+  final List<Supply> supplies;
+
+  @override
+  State<_AddRecipeIngredientDialog> createState() =>
+      _AddRecipeIngredientDialogState();
+}
+
+class _AddRecipeIngredientDialogState extends State<_AddRecipeIngredientDialog> {
+  final _search = TextEditingController();
+  final _qty = TextEditingController(text: '1');
+  Supply? _selected;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _qty.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filterSuppliesForEditor(widget.supplies, _search.text);
+    final h = MediaQuery.of(context).size.height;
+
+    return AlertDialog(
+      title: const Text('Add Ingredient'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: min(420.0, h * 0.65),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                labelText: 'Search',
+                hintText: 'Name or category…',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No matches',
+                        style: GoogleFonts.inter(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (ctx, i) {
+                        final s = filtered[i];
+                        final selected = _selected?.id == s.id;
+                        return ListTile(
+                          selected: selected,
+                          title: Text(s.name),
+                          subtitle:
+                              (s.category != null && s.category!.trim().isNotEmpty)
+                                  ? Text(s.category!)
+                                  : null,
+                          onTap: () => setState(() => _selected = s),
+                        );
+                      },
+                    ),
+            ),
+            if (_selected != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Selected: ${_selected!.name}',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _qty,
                 decoration: const InputDecoration(
-                  labelText: 'Supply',
+                  labelText: 'Quantity',
                   border: OutlineInputBorder(),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<Supply>(
-                    value: selectedSupply,
-                    isExpanded: true,
-                    items: supplies
-                        .map((s) =>
-                            DropdownMenuItem(value: s, child: Text(s.name)))
-                        .toList(),
-                    onChanged: (s) =>
-                        setDialogState(() => selectedSupply = s),
-                  ),
-                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
-              const SizedBox(height: 16),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_selected == null) return;
+            final qty = double.tryParse(_qty.text);
+            if (qty == null || qty <= 0) return;
+            Navigator.pop(context, (_selected!, qty));
+          },
+          child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddModifierOptionIngredientDialog extends StatefulWidget {
+  const _AddModifierOptionIngredientDialog({required this.supplies});
+
+  final List<Supply> supplies;
+
+  @override
+  State<_AddModifierOptionIngredientDialog> createState() =>
+      _AddModifierOptionIngredientDialogState();
+}
+
+class _AddModifierOptionIngredientDialogState
+    extends State<_AddModifierOptionIngredientDialog> {
+  final _search = TextEditingController();
+  final _qty = TextEditingController(text: '0.050');
+  final _price = TextEditingController(text: '0');
+  Supply? _selected;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _qty.dispose();
+    _price.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filterSuppliesForEditor(widget.supplies, _search.text);
+    final h = MediaQuery.of(context).size.height;
+
+    return AlertDialog(
+      title: const Text('Add Modifier Option'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: min(460.0, h * 0.68),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                labelText: 'Search',
+                hintText: 'Name or category…',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No matches',
+                        style: GoogleFonts.inter(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (ctx, i) {
+                        final s = filtered[i];
+                        final selected = _selected?.id == s.id;
+                        return ListTile(
+                          selected: selected,
+                          title: Text(s.name),
+                          subtitle:
+                              (s.category != null && s.category!.trim().isNotEmpty)
+                                  ? Text(s.category!)
+                                  : null,
+                          onTap: () => setState(() => _selected = s),
+                        );
+                      },
+                    ),
+            ),
+            if (_selected != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Selected: ${_selected!.name}',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
               TextField(
-                controller: qtyController,
+                controller: _qty,
                 decoration: const InputDecoration(
                   labelText: 'Quantity Deducted (per selection)',
                   border: OutlineInputBorder(),
@@ -638,9 +779,9 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               TextField(
-                controller: priceController,
+                controller: _price,
                 decoration: const InputDecoration(
                   labelText: 'Extra Price (optional)',
                   border: OutlineInputBorder(),
@@ -650,39 +791,26 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
                     const TextInputType.numberWithOptions(decimal: true),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (selectedSupply == null) return;
-                final qty = double.tryParse(qtyController.text);
-                if (qty == null || qty <= 0) return;
-                Navigator.pop(ctx, true);
-              },
-              child: const Text('Add'),
-            ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_selected == null) return;
+            final qty = double.tryParse(_qty.text);
+            if (qty == null || qty <= 0) return;
+            final price = double.tryParse(_price.text) ?? 0;
+            Navigator.pop(context, (_selected!, qty, price));
+          },
+          child: const Text('Add'),
+        ),
+      ],
     );
-
-    if (result == true && selectedSupply != null && mounted) {
-      final qty = double.tryParse(qtyController.text) ?? 0.05;
-      final price = double.tryParse(priceController.text) ?? 0;
-      setState(() {
-        _modifierGroups[groupIndex].options.add(_ModifierOptionItem(
-          supplyId: selectedSupply!.id,
-          quantityDeducted: qty,
-          priceExtra: price,
-          supplyName: selectedSupply!.name,
-          supplyUnit: selectedSupply!.unit,
-        ));
-      });
-    }
   }
 }
 
