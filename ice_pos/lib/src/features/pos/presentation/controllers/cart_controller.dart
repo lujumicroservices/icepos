@@ -22,7 +22,7 @@ final currentReceiptProvider =
     return const ReceiptResult(lines: [], total: 0, standaloneSubtotal: 0);
   }
   final bundles =
-      await ref.read(pos_data.posRepositoryProvider).getBundlesWithItems();
+      await ref.read(pos_data.posRepositoryProvider)!.getBundlesWithItems();
   return computeReceipt(
     cartState.items,
     bundles,
@@ -38,7 +38,7 @@ final bundleAdjustedCartProvider = FutureProvider<BundleAdjustedCart>((ref) asyn
     return const BundleAdjustedCart(items: [], total: 0, virtualBundles: []);
   }
   final bundles =
-      await ref.read(pos_data.posRepositoryProvider).getBundlesWithItems();
+      await ref.read(pos_data.posRepositoryProvider)!.getBundlesWithItems();
   return checkForBundles(cartState.items, bundles);
 });
 
@@ -54,7 +54,7 @@ class CartController extends _$CartController {
       return const ReceiptResult(lines: [], total: 0, standaloneSubtotal: 0);
     }
     final bundles =
-        await ref.read(pos_data.posRepositoryProvider).getBundlesWithItems();
+        await ref.read(pos_data.posRepositoryProvider)!.getBundlesWithItems();
     return computeReceipt(
       state.items,
       bundles,
@@ -128,7 +128,7 @@ class CartController extends _$CartController {
   /// Applies a discount by code. Returns true if valid.
   Future<bool> applyDiscount(String code) async {
     final discount =
-        await ref.read(pos_data.posRepositoryProvider).findDiscountByCode(code);
+        await ref.read(pos_data.posRepositoryProvider)!.findDiscountByCode(code);
     if (discount == null) return false;
     state = state.copyWith(appliedDiscount: discount);
     return true;
@@ -174,7 +174,7 @@ class CartController extends _$CartController {
         .map((e) => CartItem.fromJson(e as Map<String, dynamic>))
         .toList();
     state = CartState(items: items);
-    await ref.read(pos_data.posRepositoryProvider).deleteParkedOrder(order.id);
+    await ref.read(pos_data.posRepositoryProvider)!.deleteParkedOrder(order.id);
   }
 
   /// Completes the sale and clears the cart.
@@ -194,7 +194,7 @@ class CartController extends _$CartController {
         : 0.0;
 
     final bundles =
-        await ref.read(pos_data.posRepositoryProvider).getBundlesWithItems();
+        await ref.read(pos_data.posRepositoryProvider)!.getBundlesWithItems();
     final adjusted = checkForBundles(state.items, bundles);
 
     final items = adjusted.items
@@ -209,7 +209,7 @@ class CartController extends _$CartController {
         )
         .toList();
 
-    await ref.read(pos_data.posRepositoryProvider).processSale(
+    await ref.read(pos_data.posRepositoryProvider)!.processSale(
           items,
           totalAmount: receipt.total,
           paymentMethod: paymentMethod,

@@ -7,19 +7,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
-import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/admin/data/catalog_repository.dart';
+import 'package:ice_pos/src/features/admin/data/product_editor_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:image_picker/image_picker.dart';
 
 final _suppliesStreamProvider = StreamProvider<List<Supply>>((ref) {
-  return ref.watch(posRepositoryProvider).watchSupplies();
+  return ref.watch(productEditorRepositoryProvider).watchSupplies();
 });
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
   ref.watch(posCategoriesRefreshProvider);
-  return ref.read(posRepositoryProvider).getAllCategories();
+  return ref.read(catalogRepositoryProvider).getAllCategories();
 });
 
 /// Recipe item for editing (supply + quantity).
@@ -119,7 +120,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
       setState(() => _isLoading = false);
       return;
     }
-    final repo = ref.read(posRepositoryProvider);
+    final repo = ref.read(productEditorRepositoryProvider);
     final product = await repo.getProduct(widget.productId!);
     if (product == null || !mounted) return;
 
@@ -236,7 +237,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
     final hadPickedFile = _pickedImageBytes != null;
     try {
       final trimmedUrl = _imageUrlController.text.trim();
-      final savedId = await ref.read(posRepositoryProvider).saveProduct(
+      final savedId = await ref.read(productEditorRepositoryProvider).saveProduct(
             productId: widget.productId,
             name: name,
             price: price,
@@ -271,7 +272,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
       if (!mounted) return;
       var uploadFailed = false;
       if (hadPickedFile) {
-        final p = await ref.read(posRepositoryProvider).getProduct(savedId);
+        final p = await ref.read(productEditorRepositoryProvider).getProduct(savedId);
         uploadFailed = p?.imageUrl == null || p!.imageUrl!.isEmpty;
       }
       ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
@@ -388,7 +389,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
   }
 
   void _showAddRecipeDialog(BuildContext context) async {
-    final supplies = await ref.read(posRepositoryProvider).getSupplies();
+    final supplies = await ref.read(productEditorRepositoryProvider).getSupplies();
     if (!mounted || supplies.isEmpty) return;
     if (!context.mounted) return;
 
@@ -547,7 +548,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
   }
 
   void _showAddModifierOptionDialog(BuildContext context, int groupIndex) async {
-    final supplies = await ref.read(posRepositoryProvider).getSupplies();
+    final supplies = await ref.read(productEditorRepositoryProvider).getSupplies();
     if (!mounted || supplies.isEmpty) return;
     if (!context.mounted) return;
 

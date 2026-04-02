@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:ice_pos/src/core/auth/auth_repository.dart';
 import 'package:ice_pos/src/core/auth/auth_session_provider.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
@@ -39,7 +40,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (!ok) {
-      setState(() => _error = ref.read(appLocalizationsProvider).invalidCredentials);
+      final detail = ref.read(authRepositoryProvider).lastLoginError;
+      setState(() {
+        _error = detail ?? ref.read(appLocalizationsProvider).invalidCredentials;
+      });
     }
   }
 

@@ -6,18 +6,19 @@ import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
-import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/admin/data/catalog_repository.dart';
+import 'package:ice_pos/src/features/admin/data/product_admin_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_editor_screen.dart';
 
 final _allProductsStreamProvider = StreamProvider<List<Product>>((ref) {
-  return ref.watch(posRepositoryProvider).watchAllProducts();
+  return ref.watch(productAdminRepositoryProvider).watchAllProducts();
 });
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
   ref.watch(posCategoriesRefreshProvider);
-  return ref.read(posRepositoryProvider).getAllCategories();
+  return ref.read(catalogRepositoryProvider).getAllCategories();
 });
 
 final _adminProductSearchQueryProvider = StateProvider<String>((ref) => '');
@@ -301,7 +302,7 @@ class _ProductTile extends StatelessWidget {
   final WidgetRef ref;
 
   Future<void> _toggleActive(BuildContext context, WidgetRef ref) async {
-    await ref.read(posRepositoryProvider).setProductActive(
+    await ref.read(productAdminRepositoryProvider).setProductActive(
           product.id,
           !product.isActive,
         );
@@ -344,7 +345,7 @@ class _ProductTile extends StatelessWidget {
     );
     if (confirm != true || !context.mounted) return;
     try {
-      await ref.read(posRepositoryProvider).deleteProduct(product.id);
+      await ref.read(productAdminRepositoryProvider).deleteProduct(product.id);
       ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

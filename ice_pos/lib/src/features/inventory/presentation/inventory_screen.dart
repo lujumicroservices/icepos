@@ -6,7 +6,7 @@ import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 final _suppliesStreamProvider = StreamProvider<List<Supply>>((ref) {
-  return ref.watch(posRepositoryProvider).watchSupplies();
+  return ref.watch(posRepositoryProvider)!.watchSupplies();
 });
 
 class _RestockDialog extends StatefulWidget {
@@ -183,7 +183,7 @@ class InventoryScreen extends ConsumerWidget {
             itemBuilder: (context, index) {
               final supply = supplies[index];
               final isLowStock = supply.currentStock < 10;
-              final repository = ref.read(posRepositoryProvider);
+              final repository = ref.read(posRepositoryProvider)!;
 
               return InkWell(
                 onTap: () {

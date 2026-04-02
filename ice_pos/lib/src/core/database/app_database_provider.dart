@@ -1,14 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 
-/// Provides the [AppDatabase] instance.
-/// Create and seed in main(), then override:
-/// ```dart
-/// final db = AppDatabase();
-/// await DatabaseSeeder(db).seed();
-/// runApp(ProviderScope(
-///   overrides: [appDatabaseProvider.overrideWith((_) => db)],
-///   child: MyApp(),
-/// ));
-/// ```
-final appDatabaseProvider = Provider<AppDatabase>((ref) => AppDatabase());
+/// Local Drift [AppDatabase], or null on web (web never uses SQLite; use Supabase directly).
+/// [main] overrides with [AppDatabase] or null; default is null unless overridden.
+final appDatabaseProvider = Provider<AppDatabase?>((ref) => null);

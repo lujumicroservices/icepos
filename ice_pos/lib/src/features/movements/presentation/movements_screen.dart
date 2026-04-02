@@ -3,10 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 final _filterAccountProvider = StateProvider<String?>((ref) => null);
+
+/// Supabase-backed list when there is no local Drift DB (web).
+final _cloudMovementsProvider =
+    FutureProvider.autoDispose<List<Movement>>((ref) async {
+  final filter = ref.watch(_filterAccountProvider);
+  return CloudSyncService.fetchMovementsFromCloud(account: filter);
+});
 
 class MovementsScreen extends ConsumerWidget {
   const MovementsScreen({super.key});
@@ -15,7 +25,7 @@ class MovementsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = ref.watch(appLocalizationsProvider);
     final filterAccount = ref.watch(_filterAccountProvider);
-    final stream = ref.watch(posRepositoryProvider).watchMovements(account: filterAccount);
+    final pos = ref.watch(posRepositoryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -47,80 +57,12 @@ class MovementsScreen extends ConsumerWidget {
             ),
           ),
           Expanded(
-            child: StreamBuilder<List<Movement>>(
-              stream: stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        '${l10n.error}: ${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(fontSize: 14),
-                      ),
-                    ),
-                  );
-                }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final list = snapshot.data!;
-                if (list.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No hay movimientos',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  );
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: list.length,
-                  itemBuilder: (context, i) {
-                    final m = list[i];
-                    final isEntrada = m.type == 'ENTRADA';
-                    final dateLocal = m.date.toLocal();
-                    final dateStr =
-                        '${dateLocal.day}/${dateLocal.month}/${dateLocal.year} ${dateLocal.hour.toString().padLeft(2, '0')}:${dateLocal.minute.toString().padLeft(2, '0')}';
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: isEntrada
-                              ? Colors.green.shade100
-                              : Colors.orange.shade100,
-                          child: Icon(
-                            isEntrada ? Icons.arrow_downward : Icons.arrow_upward,
-                            color: isEntrada ? Colors.green.shade800 : Colors.orange.shade800,
-                            size: 22,
-                          ),
-                        ),
-                        title: Text(
-                          m.reason,
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 14),
-                        ),
-                        subtitle: Text(
-                          '$dateStr · ${m.account == 'CAJA' ? l10n.accountCash : l10n.accountBank}',
-                          style: GoogleFonts.inter(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
-                        trailing: Text(
-                          '${isEntrada ? '+' : '-'}\$${m.amount.toStringAsFixed(2)}',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                            color: isEntrada ? Colors.green.shade700 : Colors.orange.shade700,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+            child: pos != null
+                ? _MovementsDriftBody(
+                    filterAccount: filterAccount,
+                    l10n: l10n,
+                  )
+                : _MovementsCloudBody(l10n: l10n),
           ),
         ],
       ),
@@ -133,10 +75,152 @@ class MovementsScreen extends ConsumerWidget {
   }
 }
 
+class _MovementsDriftBody extends ConsumerWidget {
+  const _MovementsDriftBody({
+    required this.filterAccount,
+    required this.l10n,
+  });
+
+  final String? filterAccount;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stream =
+        ref.watch(posRepositoryProvider)!.watchMovements(account: filterAccount);
+    return StreamBuilder<List<Movement>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                '${l10n.error}: ${snapshot.error}',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(fontSize: 14),
+              ),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return _MovementListView(list: snapshot.data!, l10n: l10n);
+      },
+    );
+  }
+}
+
+class _MovementsCloudBody extends ConsumerWidget {
+  const _MovementsCloudBody({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_cloudMovementsProvider);
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(_cloudMovementsProvider);
+      },
+      child: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                '${l10n.error}: $e',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        data: (list) => _MovementListView(list: list, l10n: l10n),
+      ),
+    );
+  }
+}
+
+class _MovementListView extends StatelessWidget {
+  const _MovementListView({
+    required this.list,
+    required this.l10n,
+  });
+
+  final List<Movement> list;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    if (list.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Center(
+              child: Text(
+                'No hay movimientos',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: list.length,
+      itemBuilder: (context, i) {
+        final m = list[i];
+        final isEntrada = m.type == 'ENTRADA';
+        final dateLocal = m.date.toLocal();
+        final dateStr =
+            '${dateLocal.day}/${dateLocal.month}/${dateLocal.year} ${dateLocal.hour.toString().padLeft(2, '0')}:${dateLocal.minute.toString().padLeft(2, '0')}';
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: isEntrada ? Colors.green.shade100 : Colors.orange.shade100,
+              child: Icon(
+                isEntrada ? Icons.arrow_downward : Icons.arrow_upward,
+                color: isEntrada ? Colors.green.shade800 : Colors.orange.shade800,
+                size: 22,
+              ),
+            ),
+            title: Text(
+              m.reason,
+              style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 14),
+            ),
+            subtitle: Text(
+              '$dateStr · ${m.account == 'CAJA' ? l10n.accountCash : l10n.accountBank}',
+              style: GoogleFonts.inter(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            trailing: Text(
+              '${isEntrada ? '+' : '-'}\$${m.amount.toStringAsFixed(2)}',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: isEntrada ? Colors.green.shade700 : Colors.orange.shade700,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 Future<void> _showAddMovementDialog(BuildContext context, WidgetRef ref) async {
   final l10n = ref.read(appLocalizationsProvider);
   final repo = ref.read(posRepositoryProvider);
-  final shift = await repo.getCurrentShift();
+  final shift = repo != null ? await repo.getCurrentShift() : null;
 
   if (!context.mounted) return;
   final type = await showDialog<String>(
@@ -236,13 +320,37 @@ Future<void> _showAddMovementDialog(BuildContext context, WidgetRef ref) async {
 
   final shiftId = result.account == 'CAJA' && shift != null ? shift.id : null;
 
-  await repo.insertMovement(
-    type: type,
-    account: result.account,
-    amount: result.amount,
-    reason: result.reason,
-    shiftId: shiftId,
-  );
+  try {
+    if (repo != null) {
+      await repo.insertMovement(
+        type: type,
+        account: result.account,
+        amount: result.amount,
+        reason: result.reason,
+        shiftId: shiftId,
+      );
+    } else {
+      final err = await CloudSyncService.insertMovementToCloud(
+        type: type,
+        account: result.account,
+        amount: result.amount,
+        reason: result.reason,
+        shiftId: shiftId,
+      );
+      if (err != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+        return;
+      }
+      ref.invalidate(_cloudMovementsProvider);
+    }
+  } on OfflineMasterWriteException catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+    return;
+  }
 
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(

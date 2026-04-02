@@ -13,8 +13,8 @@ part of 'pos_repository.dart';
 final posRepositoryProvider = PosRepositoryProvider._();
 
 final class PosRepositoryProvider
-    extends $FunctionalProvider<PosRepository, PosRepository, PosRepository>
-    with $Provider<PosRepository> {
+    extends $FunctionalProvider<PosRepository?, PosRepository?, PosRepository?>
+    with $Provider<PosRepository?> {
   PosRepositoryProvider._()
     : super(
         from: null,
@@ -31,21 +31,21 @@ final class PosRepositoryProvider
 
   @$internal
   @override
-  $ProviderElement<PosRepository> $createElement($ProviderPointer pointer) =>
+  $ProviderElement<PosRepository?> $createElement($ProviderPointer pointer) =>
       $ProviderElement(pointer);
 
   @override
-  PosRepository create(Ref ref) {
+  PosRepository? create(Ref ref) {
     return posRepository(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(PosRepository value) {
+  Override overrideWithValue(PosRepository? value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<PosRepository>(value),
+      providerOverride: $SyncValueProvider<PosRepository?>(value),
     );
   }
 }
 
-String _$posRepositoryHash() => r'4a596cb92243b06a28f8440c979f5d88d5ce714a';
+String _$posRepositoryHash() => r'29b518b0adcbf08f73e94e3e39648107108ec6a5';

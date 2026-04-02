@@ -1,11 +1,12 @@
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ice_pos/src/core/database/app_database_provider.dart';
+import 'package:ice_pos/src/core/platform/data_backend.dart';
 import 'package:ice_pos/src/core/services/category_image_service.dart';
-import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/admin/data/catalog_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_editor_screen.dart';
@@ -13,7 +14,7 @@ import 'package:image_picker/image_picker.dart';
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
   ref.watch(posCategoriesRefreshProvider);
-  return ref.read(posRepositoryProvider).getAllCategories();
+  return ref.read(catalogRepositoryProvider).getAllCategories();
 });
 
 /// Category management: list, add, edit, delete categories; add product to category.
@@ -22,15 +23,19 @@ class CategoryManagementScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final canOpenProductEditor =
+        isSupabaseOnlyBackend || ref.watch(appDatabaseProvider) != null;
     final categoriesAsync = ref.watch(_categoriesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Category Management',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 20),
-        ),
-      ),
+      appBar: isSupabaseOnlyBackend
+          ? null
+          : AppBar(
+              title: Text(
+                'Category Management',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 20),
+              ),
+            ),
       body: categoriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(
@@ -83,7 +88,9 @@ class CategoryManagementScreen extends ConsumerWidget {
                   category: root,
                   productCount: ref.watch(_productCountProvider(root.id)),
                   onTap: () => _openCategoryEditor(context, ref, root, categories),
-                  onAddProduct: () => _openProductEditor(context, ref, categoryId: root.id),
+                  onAddProduct: canOpenProductEditor
+                      ? () => _openProductEditor(context, ref, categoryId: root.id)
+                      : null,
                 ),
                 ...(byParent[root.id] ?? []).map(
                   (child) => Padding(
@@ -92,7 +99,9 @@ class CategoryManagementScreen extends ConsumerWidget {
                       category: child,
                       productCount: ref.watch(_productCountProvider(child.id)),
                       onTap: () => _openCategoryEditor(context, ref, child, categories),
-                      onAddProduct: () => _openProductEditor(context, ref, categoryId: child.id),
+                      onAddProduct: canOpenProductEditor
+                          ? () => _openProductEditor(context, ref, categoryId: child.id)
+                          : null,
                     ),
                   ),
                 ),
@@ -103,7 +112,7 @@ class CategoryManagementScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final categories = await ref.read(posRepositoryProvider).getAllCategories();
+          final categories = await ref.read(catalogRepositoryProvider).getAllCategories();
           if (!context.mounted) return;
           _openCategoryEditor(context, ref, null, categories);
         },
@@ -123,7 +132,7 @@ class CategoryManagementScreen extends ConsumerWidget {
       builder: (ctx) => _CategoryEditorDialog(
         category: category,
         categories: categories,
-        repository: ref.read(posRepositoryProvider),
+        repository: ref.read(catalogRepositoryProvider),
       ),
     );
     if (result == true && context.mounted) {
@@ -146,7 +155,7 @@ class CategoryManagementScreen extends ConsumerWidget {
 }
 
 final _productCountProvider = FutureProvider.family<int, int>((ref, categoryId) {
-  return ref.read(posRepositoryProvider).countProductsInCategory(categoryId);
+  return ref.read(catalogRepositoryProvider).countProductsInCategory(categoryId);
 });
 
 class _CategoryTile extends StatelessWidget {
@@ -154,13 +163,13 @@ class _CategoryTile extends StatelessWidget {
     required this.category,
     required this.productCount,
     required this.onTap,
-    required this.onAddProduct,
+    this.onAddProduct,
   });
 
   final domain_cat.Category category;
   final AsyncValue<int> productCount;
   final VoidCallback onTap;
-  final VoidCallback onAddProduct;
+  final VoidCallback? onAddProduct;
 
   static int _parseColor(String? hex) {
     if (hex == null || hex.isEmpty) return 0xFF9E9E9E;
@@ -217,11 +226,12 @@ class _CategoryTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'Add product to this category',
-            onPressed: onAddProduct,
-          ),
+          if (onAddProduct != null)
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline),
+              tooltip: 'Add product to this category',
+              onPressed: onAddProduct,
+            ),
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Edit category',
@@ -243,7 +253,7 @@ class _CategoryEditorDialog extends StatefulWidget {
 
   final domain_cat.Category? category;
   final List<domain_cat.Category> categories;
-  final PosRepository repository;
+  final CatalogRepository repository;
 
   @override
   State<_CategoryEditorDialog> createState() => _CategoryEditorDialogState();
@@ -430,7 +440,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
               pickedImageBytes: _pickedImageBytes,
               imageUrlController: _imageUrlController,
               onPickGallery: _isSaving ? null : () => _pickImage(ImageSource.gallery),
-              onPickCamera: _isSaving || kIsWeb ? null : () => _pickImage(ImageSource.camera),
+              onPickCamera: _isSaving || isSupabaseOnlyBackend ? null : () => _pickImage(ImageSource.camera),
               onClear: _isSaving ? null : _clearImage,
             ),
             const SizedBox(height: 16),

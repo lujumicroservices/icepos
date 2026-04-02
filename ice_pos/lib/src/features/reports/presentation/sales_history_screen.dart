@@ -4,11 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/auth/user_role_provider.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
+import 'package:ice_pos/src/features/admin/data/sales_history_repository.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 final _salesHistoryStreamProvider =
     StreamProvider<List<SaleWithItems>>((ref) {
-  return ref.watch(posRepositoryProvider).watchSalesHistory();
+  return ref.watch(salesHistoryRepositoryProvider).watchSalesHistory();
 });
 
 final _remoteSalesProvider =
@@ -279,7 +280,7 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await ref.read(posRepositoryProvider).deleteSale(saleId);
+    await ref.read(salesHistoryRepositoryProvider).deleteSale(saleId);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

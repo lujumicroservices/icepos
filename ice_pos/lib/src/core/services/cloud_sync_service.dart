@@ -6,7 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/device_id_service.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
+import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 
 const _kCloudProductIdMap = 'cloud_product_id_map';
@@ -81,7 +83,8 @@ class CloudSyncService {
   /// sync (network, RLS, etc.) never wipes local data. Retries up to [_syncMaxAttempts] on network errors.
   ///
   /// Llamadas concurrentes comparten una sola ejecución (mutex) para evitar condiciones de carrera en SQLite.
-  static Future<String?> syncFromCloud(AppDatabase db) {
+  static Future<String?> syncFromCloud(AppDatabase? db) {
+    if (db == null) return Future.value(null);
     final pending = _syncFromCloudMutex;
     if (pending != null) return pending;
 
@@ -476,6 +479,254 @@ class CloudSyncService {
       debugPrint('CloudSyncService.writeMovementToCloud: $e');
       debugPrint('$st');
       return e.toString();
+    }
+  }
+
+  /// Movimientos desde Supabase (p. ej. web sin Drift).
+  static Future<List<Movement>> fetchMovementsFromCloud({String? account, int limit = 200}) async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      final client = SupabaseService.instance.client;
+      var query = client.from('movements').select();
+      if (account != null) {
+        query = query.eq('account', account);
+      }
+      final res = await query.order('date', ascending: false).limit(limit);
+      final list = _list(res);
+      return list.map((e) {
+        final m = _map(e);
+        final id = _int(m['id']) ?? 0;
+        final date = DateTime.tryParse(m['date'].toString()) ?? DateTime.now();
+        final shiftRaw = m['shift_id'];
+        return Movement(
+          id: id,
+          date: date,
+          type: m['type'] as String? ?? '',
+          account: m['account'] as String? ?? '',
+          amount: _double(m['amount']),
+          reason: m['reason'] as String? ?? '',
+          shiftId: shiftRaw == null ? null : _int(shiftRaw),
+        );
+      }).toList();
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchMovementsFromCloud: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  /// Inserta un movimiento solo en Supabase (sin fila local).
+  static Future<String?> insertMovementToCloud({
+    required String type,
+    required String account,
+    required double amount,
+    required String reason,
+    int? shiftId,
+  }) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final client = SupabaseService.instance.client;
+      final payload = <String, dynamic>{
+        'date': DateTime.now().toUtc().toIso8601String(),
+        'type': type,
+        'account': account,
+        'amount': amount,
+        'reason': reason,
+      };
+      if (shiftId != null) {
+        payload['shift_id'] = shiftId;
+      }
+      await client.from('movements').insert(payload);
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.insertMovementToCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Conciliación física directamente en Supabase (sin SQLite local).
+  static Future<String?> reconcileSupplyInCloudOnly({
+    required int supplyId,
+    double? newQuantity,
+    String? qualitativeLevel,
+    String? newUnit,
+    required bool useQualitativeEntry,
+  }) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final client = SupabaseService.instance.client;
+      final row = await client.from('supplies').select().eq('id', supplyId).maybeSingle();
+      if (row == null) {
+        throw StateError('Supply id=$supplyId not found');
+      }
+      final m = _map(row);
+      final name = m['name'] as String? ?? '';
+      final currentStock = _double(m['current_stock']);
+      final costPerUnit = _double(m['cost_per_unit']);
+      final reorderPoint = _double(m['reorder_point']);
+      var unit = (m['unit'] as String?) ?? 'pcs';
+      final category = m['category'] as String?;
+      var stockMode = (m['stock_count_mode'] as String?) ?? StockCountMode.quantity;
+      String? qual = m['qualitative_level'] as String?;
+
+      final trimmedUnit = newUnit?.trim();
+      final unitToSet = (trimmedUnit != null && trimmedUnit.isNotEmpty)
+          ? (trimmedUnit.length > 10 ? trimmedUnit.substring(0, 10) : trimmedUnit)
+          : null;
+      if (unitToSet != null) {
+        unit = unitToSet;
+      }
+
+      late final double newStock;
+      late final double delta;
+
+      if (useQualitativeEntry) {
+        final level = qualitativeLevel?.trim();
+        if (level == null || !QualitativeLevel.isValid(level)) {
+          throw ArgumentError('Nivel cualitativo inválido');
+        }
+        newStock = stockFromQualitativeLevel(level);
+        qual = level;
+        stockMode = StockCountMode.qualitative;
+        delta = newStock - currentStock;
+      } else {
+        final qty = newQuantity;
+        if (qty == null || qty < 0) {
+          throw ArgumentError('Cantidad inválida');
+        }
+        newStock = qty;
+        qual = null;
+        stockMode = StockCountMode.quantity;
+        delta = qty - currentStock;
+      }
+
+      final err = await upsertSupplyToCloud(
+        id: supplyId,
+        name: name,
+        unit: unit,
+        currentStock: newStock,
+        costPerUnit: costPerUnit,
+        reorderPoint: reorderPoint,
+        category: category,
+        stockCountMode: stockMode,
+        qualitativeLevel: qual,
+      );
+      if (err != null) return err;
+
+      if (delta != 0) {
+        await client.from('inventory_logs').insert({
+          'supply_id': supplyId,
+          'change_amount': delta,
+          'reason': 'RECONCILIATION',
+        });
+      }
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.reconcileSupplyInCloudOnly: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  static Future<List<({Bundle bundle, List<BundleItem> bundleItems})>> fetchBundlesWithItemsFromCloud() async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      final client = SupabaseService.instance.client;
+      final bundlesRes = await client.from('bundles').select('*').order('id');
+      final itemsRes = await client.from('bundle_items').select('*');
+      final bList = _list(bundlesRes);
+      final iList = _list(itemsRes);
+      final itemsByBundle = <int, List<BundleItem>>{};
+      for (final e in iList) {
+        final m = _map(e);
+        final bi = BundleItem(
+          id: _int(m['id']) ?? 0,
+          bundleId: _int(m['bundle_id']) ?? 0,
+          productId: _int(m['product_id']) ?? 0,
+          quantityRequired: _double(m['quantity']),
+        );
+        itemsByBundle.putIfAbsent(bi.bundleId, () => []).add(bi);
+      }
+      final out = <({Bundle bundle, List<BundleItem> bundleItems})>[];
+      for (final e in bList) {
+        final m = _map(e);
+        final id = _int(m['id']) ?? 0;
+        final bundle = Bundle(
+          id: id,
+          name: m['name'] as String? ?? '',
+          price: _double(m['price']),
+          isActive: _bool(m['is_active']),
+          categoryId: _int(m['category_id']),
+        );
+        out.add((bundle: bundle, bundleItems: itemsByBundle[id] ?? const []));
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchBundlesWithItemsFromCloud: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  /// Guarda bundle + ítems solo en Supabase (sin SQLite local).
+  static Future<({int bundleId, String? error})> saveBundleToCloudOnly({
+    int? id,
+    required String name,
+    required double price,
+    int? categoryId,
+    required List<({int productId, double quantity})> productItems,
+  }) async {
+    if (!SupabaseService.isInitialized) {
+      return (bundleId: -1, error: 'Supabase no inicializado');
+    }
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final client = SupabaseService.instance.client;
+      if (id == null) {
+        final row = await client.from('bundles').insert({
+          'name': name,
+          'price': price,
+          'is_active': true,
+          'category_id': categoryId,
+        }).select('id').single();
+        final bundleId = _int(row['id']) ?? 0;
+        if (bundleId == 0) {
+          return (bundleId: 0, error: 'No se obtuvo id del bundle');
+        }
+        for (final item in productItems) {
+          await client.from('bundle_items').insert({
+            'bundle_id': bundleId,
+            'product_id': item.productId,
+            'quantity': item.quantity,
+          });
+        }
+        return (bundleId: bundleId, error: null);
+      }
+      final err = await upsertBundleToCloud(
+        id: id,
+        name: name,
+        price: price,
+        categoryId: categoryId,
+      );
+      if (err != null) return (bundleId: id, error: err);
+      final delErr = await deleteBundleItemsFromCloud(id);
+      if (delErr != null) return (bundleId: id, error: delErr);
+      for (final item in productItems) {
+        final e2 = await insertBundleItemToCloud(
+          bundleId: id,
+          productId: item.productId,
+          quantity: item.quantity,
+        );
+        if (e2 != null) return (bundleId: id, error: e2);
+      }
+      return (bundleId: id, error: null);
+    } catch (e, st) {
+      debugPrint('CloudSyncService.saveBundleToCloudOnly: $e');
+      debugPrint('$st');
+      return (bundleId: id ?? -1, error: e.toString());
     }
   }
 

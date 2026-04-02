@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -14,6 +15,7 @@ import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:ice_pos/src/core/setup/presentation/supabase_bootstrap.dart';
 import 'package:ice_pos/src/core/utils/error_logger.dart';
 import 'package:ice_pos/src/core/utils/logger.dart';
+import 'package:ice_pos/src/core/platform/data_backend.dart';
 import 'package:ice_pos/src/core/auth/auth_gate.dart';
 import 'package:ice_pos/src/features/home/presentation/home_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/controllers/receipt_printer_controller.dart';
@@ -58,10 +60,13 @@ Future<void> _runApp() async {
 
   await ConnectivityService.instance.init();
 
-  final database = AppDatabase();
+  // Web: no Drift/SQLite — admin reads/writes go to Supabase only. Native: local DB + sync.
+  final AppDatabase? database = isSupabaseOnlyBackend ? null : AppDatabase();
   // No automatic seed: with cloud enabled, data is synced at startup and kept in sync via Realtime; otherwise use "Cargar menú desde JSON" in drawer.
 
-  if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+  if (database != null &&
+      CloudSyncService.isEnabled &&
+      ConnectivityService.instance.isConnected) {
     try {
       final err = await CloudSyncService.syncFromCloud(database);
       if (err != null) {
@@ -93,6 +98,7 @@ Future<void> _runApp() async {
 final _realtimeSyncInitProvider = Provider<void>((ref) {
   if (!CloudSyncService.isEnabled) return;
   final db = ref.read(appDatabaseProvider);
+  if (db == null) return;
   void onSyncDone() {
     ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
   }
@@ -112,7 +118,9 @@ class _AppWithPrinterRestoreState extends ConsumerState<_AppWithPrinterRestore> 
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(receiptPrinterProvider.notifier).loadBondedDevices();
+      if (!kIsWeb) {
+        ref.read(receiptPrinterProvider.notifier).loadBondedDevices();
+      }
     });
   }
 

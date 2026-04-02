@@ -12,11 +12,11 @@ import 'package:ice_pos/src/core/setup/supabase_config_store.dart';
 class SetupSupabaseScreen extends ConsumerStatefulWidget {
   const SetupSupabaseScreen({
     super.key,
-    required this.database,
+    this.database,
     required this.onFinished,
   });
 
-  final AppDatabase database;
+  final AppDatabase? database;
   final VoidCallback onFinished;
 
   @override
@@ -79,13 +79,18 @@ class _SetupSupabaseScreenState extends ConsumerState<SetupSupabaseScreen> {
     setState(() => _busy = true);
     try {
       await SupabaseConfigStore.saveCredentials(url: url, anonKey: key);
-      await SupabaseService.initialize();
+      // Pasa URL/key explícitas: en web .env suele no cargarse (no está en assets) y así
+      // no dependemos de una segunda lectura desde SharedPreferences.
+      await SupabaseService.initialize(overrideUrl: url, overrideAnonKey: key);
       if (!SupabaseService.isInitialized) {
         throw StateError('init');
       }
-      final err = await CloudSyncService.syncFromCloud(widget.database);
-      if (err != null) {
-        await CloudSyncService.setStartupSyncError(err);
+      final db = widget.database;
+      if (db != null) {
+        final err = await CloudSyncService.syncFromCloud(db);
+        if (err != null) {
+          await CloudSyncService.setStartupSyncError(err);
+        }
       }
       if (mounted) widget.onFinished();
     } catch (e) {

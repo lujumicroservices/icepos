@@ -13,16 +13,16 @@ import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/core/utils/number_utils.dart';
 import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
-import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/admin/data/supply_admin_repository.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 
 final _suppliesGroupedProvider =
     FutureProvider<List<({String name, List<Supply> supplies})>>((ref) {
-  return ref.read(posRepositoryProvider).getSuppliesGroupedByCategory();
+  return ref.read(supplyAdminRepositoryProvider).getSuppliesGroupedByCategory();
 });
 
 final _supplyCategoryNamesProvider = FutureProvider<List<String>>((ref) {
-  return ref.read(posRepositoryProvider).getSupplyCategoryNames();
+  return ref.read(supplyAdminRepositoryProvider).getSupplyCategoryNames();
 });
 
 final _adminSupplySearchQueryProvider = StateProvider<String>((ref) => '');
@@ -69,19 +69,26 @@ class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen>
     if (!CloudSyncService.isEnabled) return;
     if (!ConnectivityService.instance.isConnected) return;
     final db = ref.read(appDatabaseProvider);
-    final err = await CloudSyncService.syncFromCloud(db);
+    if (db != null) {
+      final err = await CloudSyncService.syncFromCloud(db);
+      if (!mounted) return;
+      ref.invalidate(_suppliesGroupedProvider);
+      ref.invalidate(_supplyCategoryNamesProvider);
+      ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
+      if (err != null && err.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(err),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
     if (!mounted) return;
     ref.invalidate(_suppliesGroupedProvider);
     ref.invalidate(_supplyCategoryNamesProvider);
     ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
-    if (err != null && err.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
   }
 
   @override
@@ -198,7 +205,7 @@ class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen>
                             onTap: () => _showSupplyDialog(context: context, ref: ref, supply: supply),
                             onDismiss: () async {
                               try {
-                                await ref.read(posRepositoryProvider).deleteSupply(supply.id);
+                                await ref.read(supplyAdminRepositoryProvider).deleteSupply(supply.id);
                               } on OfflineMasterWriteException catch (e) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -253,7 +260,7 @@ class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen>
         onSave:
             (name, unit, costPerUnit, reorderPoint, category, stockMode, qual) async {
           try {
-            await ref.read(posRepositoryProvider).saveSupply(
+            await ref.read(supplyAdminRepositoryProvider).saveSupply(
                   id: supply?.id,
                   name: name,
                   unit: unit,

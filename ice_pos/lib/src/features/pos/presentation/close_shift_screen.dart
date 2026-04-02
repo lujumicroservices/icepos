@@ -41,19 +41,21 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
   }
 
   Future<void> _loadCurrentShift() async {
-    var shift = await ref.read(posRepositoryProvider).getCurrentShift();
+    var shift = await ref.read(posRepositoryProvider)!.getCurrentShift();
     if (shift == null && mounted) {
-      shift = await ref.read(posRepositoryProvider).startShift(0);
+      shift = await ref.read(posRepositoryProvider)!.startShift(0);
     }
     if (!mounted) return;
     if (shift != null && CloudSyncService.isEnabled) {
       final db = ref.read(appDatabaseProvider);
-      await CloudSyncService.pullMovementsForShift(db, shift.id);
+      if (db != null) {
+        await CloudSyncService.pullMovementsForShift(db, shift.id);
+      }
     }
     if (!mounted) return;
     ShiftTotalsForClosure? totals;
     if (shift != null) {
-      totals = await ref.read(posRepositoryProvider).getShiftTotalsForClosure(shift.id);
+      totals = await ref.read(posRepositoryProvider)!.getShiftTotalsForClosure(shift.id);
     }
     setState(() {
       _shift = shift;
@@ -146,7 +148,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
     if (!mounted) return;
     if (result != null && _shift != null) {
-      await ref.read(posRepositoryProvider).updateShiftStartingFund(_shift!.id, result);
+      await ref.read(posRepositoryProvider)!.updateShiftStartingFund(_shift!.id, result);
       await _loadCurrentShift();
     }
   }
@@ -158,7 +160,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
       _error = null;
     });
     try {
-      final result = await ref.read(posRepositoryProvider).performCloseShift(
+      final result = await ref.read(posRepositoryProvider)!.performCloseShift(
             shiftId: _shift!.id,
             declaredCash: _declaredCash,
             notes: _notesController.text.trim().isEmpty
@@ -167,7 +169,7 @@ class _CloseShiftScreenState extends ConsumerState<CloseShiftScreen> {
           );
       if (mounted) {
         // El siguiente turno inicia con el efectivo que quedó en caja en el corte anterior.
-        await ref.read(posRepositoryProvider).startShift(_declaredCash);
+        await ref.read(posRepositoryProvider)!.startShift(_declaredCash);
       }
       if (mounted) {
         setState(() {

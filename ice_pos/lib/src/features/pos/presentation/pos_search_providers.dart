@@ -11,7 +11,7 @@ final posQuickSearchQueryProvider = StateProvider<String>((ref) => '');
 final posSearchProductsProvider = FutureProvider<List<Product>>((ref) async {
   final q = ref.watch(posQuickSearchQueryProvider).trim().toLowerCase();
   if (q.isEmpty) return const [];
-  final all = await ref.read(posRepositoryProvider).getProducts();
+  final all = await ref.read(posRepositoryProvider)!.getProducts();
   final matches = all
       .where((p) => p.name.toLowerCase().contains(q))
       .toList()

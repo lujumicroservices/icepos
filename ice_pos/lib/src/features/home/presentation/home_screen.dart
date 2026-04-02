@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
+import 'package:ice_pos/src/core/platform/data_backend.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/database/seeder.dart';
@@ -14,7 +15,6 @@ import 'package:ice_pos/src/core/services/connectivity_provider.dart';
 import 'package:ice_pos/src/core/services/connectivity_service.dart';
 import 'package:ice_pos/src/core/services/recipe_json_import_service.dart';
 import 'package:ice_pos/src/core/services/recipe_report_save.dart';
-import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/features/admin/presentation/bundle_management_screen.dart';
@@ -33,6 +33,7 @@ import 'package:ice_pos/src/features/movements/presentation/movements_screen.dar
 import 'package:ice_pos/src/features/monitoring/presentation/temperature_history_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/reports_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/sales_history_screen.dart';
+import 'package:ice_pos/src/features/home/presentation/web_admin_home_screen.dart';
 import 'package:ice_pos/src/core/auth/auth_session_provider.dart';
 import 'package:ice_pos/src/core/auth/user_role_provider.dart';
 import 'package:ice_pos/src/core/utils/error_logger.dart';
@@ -47,22 +48,6 @@ final _startupSyncErrorProvider = FutureProvider<String?>((ref) => CloudSyncServ
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
-
-  static const _screensAdmin = [
-    PosScreen(),
-    InventoryScreen(),
-    SalesHistoryScreen(),
-  ];
-
-  /// En web solo mostramos pantallas administrativas (sin POS, impresora ni escáner).
-  static const _screensAdminWeb = [
-    InventoryScreen(),
-    SalesHistoryScreen(),
-  ];
-
-  static const _screensEmployeeWeb = [
-    SalesHistoryScreen(onlyToday: true),
-  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -135,14 +120,25 @@ class HomeScreen extends ConsumerWidget {
     final role = ref.watch(userRoleProvider);
     final selectedIndex = ref.watch(selectedTabIndexProvider);
     final l10n = ref.watch(appLocalizationsProvider);
-    final screens = kIsWeb
-        ? (role == UserRole.admin ? _screensAdminWeb : _screensEmployeeWeb)
-        : (role == UserRole.admin
-            ? _screensAdmin
-            : [
-                const PosScreen(),
-                const SalesHistoryScreen(onlyToday: true),
-              ]);
+    final hasDriftDatabase = ref.watch(appDatabaseProvider) != null;
+
+    final List<Widget> screens;
+    if (kIsWeb) {
+      screens = role == UserRole.admin
+          ? [const WebAdminHomeScreen()]
+          : [const _WebEmployeePlaceholder()];
+    } else if (role == UserRole.admin) {
+      screens = const [
+        PosScreen(),
+        InventoryScreen(),
+        SalesHistoryScreen(),
+      ];
+    } else {
+      screens = const [
+        PosScreen(),
+        SalesHistoryScreen(onlyToday: true),
+      ];
+    }
     final tabCount = screens.length;
     final effectiveIndex = selectedIndex.clamp(0, tabCount - 1);
 
@@ -271,7 +267,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            if (CloudSyncService.isEnabled)
+            if (hasDriftDatabase && CloudSyncService.isEnabled)
               ListTile(
                 leading: const Icon(Icons.sync),
                 title: Text(l10n.syncFromCloud),
@@ -339,6 +335,21 @@ class HomeScreen extends ConsumerWidget {
               ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.category),
+              title: Text(l10n.categoryManagement),
+              subtitle: Text(l10n.categoryManagementSubtitle),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const CategoryManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            if (hasDriftDatabase || isSupabaseOnlyBackend) ...[
+            ListTile(
               leading: const Icon(Icons.inventory),
               title: Text(l10n.supplyManagement),
               onTap: () {
@@ -347,20 +358,6 @@ class HomeScreen extends ConsumerWidget {
                   context,
                   MaterialPageRoute<void>(
                     builder: (_) => const SupplyManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.fact_check_outlined),
-              title: Text(l10n.inventoryReconciliation),
-              subtitle: Text(l10n.inventoryReconciliationSubtitle),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => const InventoryReconciliationScreen(),
                   ),
                 );
               },
@@ -378,16 +375,32 @@ class HomeScreen extends ConsumerWidget {
                 );
               },
             ),
+            ],
+            if (isSupabaseOnlyBackend)
+              ListTile(
+                leading: const Icon(Icons.history),
+                title: Text(l10n.salesHistory),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SalesHistoryScreen(),
+                    ),
+                  );
+                },
+              ),
+            if (hasDriftDatabase || isSupabaseOnlyBackend) ...[
             ListTile(
-              leading: const Icon(Icons.category),
-              title: Text(l10n.categoryManagement),
-              subtitle: Text(l10n.categoryManagementSubtitle),
+              leading: const Icon(Icons.fact_check_outlined),
+              title: Text(l10n.inventoryReconciliation),
+              subtitle: Text(l10n.inventoryReconciliationSubtitle),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) => const CategoryManagementScreen(),
+                    builder: (_) => const InventoryReconciliationScreen(),
                   ),
                 );
               },
@@ -461,6 +474,7 @@ class HomeScreen extends ConsumerWidget {
                 );
               },
             ),
+            ],
             ],
             if (!kIsWeb)
               ListTile(
@@ -584,7 +598,7 @@ class HomeScreen extends ConsumerWidget {
                   );
                 },
               ),
-            if (role == UserRole.admin) ...[
+            if (role == UserRole.admin && hasDriftDatabase) ...[
             ListTile(
               leading: const Icon(Icons.refresh),
               title: Text(l10n.loadMenuFromJson),
@@ -658,6 +672,10 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 );
                 final db = ref.read(appDatabaseProvider);
+                if (db == null) {
+                  if (context.mounted) Navigator.of(context).pop();
+                  return;
+                }
                 final seeder = DatabaseSeeder(db);
                 try {
                   await seeder.seedMenuReyesNievesForce();
@@ -758,6 +776,10 @@ class HomeScreen extends ConsumerWidget {
                 );
 
                 final db = ref.read(appDatabaseProvider);
+                if (db == null) {
+                  if (context.mounted) Navigator.of(context).pop();
+                  return;
+                }
                 final importer = RecipeJsonImportService(db);
                 try {
                   final jsonString = await rootBundle
@@ -836,7 +858,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 );
                 if (ok != true || !context.mounted) return;
-                await ref.read(posRepositoryProvider).deleteAllLocalSales();
+                await ref.read(posRepositoryProvider)!.deleteAllLocalSales();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -901,7 +923,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   );
-                  await ref.read(posRepositoryProvider).deleteAllLocalData();
+                  await ref.read(posRepositoryProvider)!.deleteAllLocalData();
                   final db = ref.read(appDatabaseProvider);
                   final err = await CloudSyncService.syncFromCloud(db);
                   ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
@@ -1000,42 +1022,61 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: effectiveIndex,
-        onTap: (index) {
-          ref.read(selectedTabIndexProvider.notifier).state = index;
-        },
-        items: role == UserRole.employee
-            ? [
-                BottomNavigationBarItem(
-                  icon: const Icon(Icons.point_of_sale_outlined),
-                  activeIcon: const Icon(Icons.point_of_sale),
-                  label: l10n.pointOfSale,
-                ),
-                BottomNavigationBarItem(
-                  icon: const Icon(Icons.history),
-                  activeIcon: const Icon(Icons.history),
-                  label: l10n.salesToday,
-                ),
-              ]
-            : [
-                BottomNavigationBarItem(
-                  icon: const Icon(Icons.point_of_sale_outlined),
-                  activeIcon: const Icon(Icons.point_of_sale),
-                  label: l10n.pointOfSale,
-                ),
-                BottomNavigationBarItem(
-                  icon: const Icon(Icons.inventory_2_outlined),
-                  activeIcon: const Icon(Icons.inventory_2),
-                  label: l10n.inventory,
-                ),
-                BottomNavigationBarItem(
-                  icon: const Icon(Icons.history),
-                  activeIcon: const Icon(Icons.history),
-                  label: l10n.salesHistory,
-                ),
-              ],
-      ),
+      // BottomNavigationBar exige items.length >= 2; en web hay una sola pestaña.
+      bottomNavigationBar: tabCount < 2
+          ? null
+          : BottomNavigationBar(
+              currentIndex: effectiveIndex,
+              onTap: (index) {
+                ref.read(selectedTabIndexProvider.notifier).state = index;
+              },
+              items: kIsWeb
+                  ? (role == UserRole.admin
+                      ? [
+                          BottomNavigationBarItem(
+                            icon: const Icon(Icons.category_outlined),
+                            activeIcon: const Icon(Icons.category),
+                            label: l10n.categoryManagement,
+                          ),
+                        ]
+                      : [
+                          BottomNavigationBarItem(
+                            icon: const Icon(Icons.home_outlined),
+                            activeIcon: const Icon(Icons.home),
+                            label: l10n.appTitle,
+                          ),
+                        ])
+                  : (role == UserRole.employee
+                      ? [
+                          BottomNavigationBarItem(
+                            icon: const Icon(Icons.point_of_sale_outlined),
+                            activeIcon: const Icon(Icons.point_of_sale),
+                            label: l10n.pointOfSale,
+                          ),
+                          BottomNavigationBarItem(
+                            icon: const Icon(Icons.history),
+                            activeIcon: const Icon(Icons.history),
+                            label: l10n.salesToday,
+                          ),
+                        ]
+                      : [
+                          BottomNavigationBarItem(
+                            icon: const Icon(Icons.point_of_sale_outlined),
+                            activeIcon: const Icon(Icons.point_of_sale),
+                            label: l10n.pointOfSale,
+                          ),
+                          BottomNavigationBarItem(
+                            icon: const Icon(Icons.inventory_2_outlined),
+                            activeIcon: const Icon(Icons.inventory_2),
+                            label: l10n.inventory,
+                          ),
+                          BottomNavigationBarItem(
+                            icon: const Icon(Icons.history),
+                            activeIcon: const Icon(Icons.history),
+                            label: l10n.salesHistory,
+                          ),
+                        ]),
+            ),
     );
   }
 
@@ -1047,16 +1088,9 @@ class HomeScreen extends ConsumerWidget {
   }) {
     if (isWeb) {
       if (isEmployee) {
-        return index == 0 ? l10n.salesToday : l10n.appTitle;
+        return l10n.appTitle;
       }
-      switch (index) {
-        case 0:
-          return l10n.inventory;
-        case 1:
-          return l10n.salesHistory;
-        default:
-          return l10n.appTitle;
-      }
+      return index == 0 ? l10n.webAdminHomeTitle : l10n.appTitle;
     }
     if (isEmployee) {
       switch (index) {
@@ -1078,5 +1112,23 @@ class HomeScreen extends ConsumerWidget {
       default:
         return l10n.appTitle;
     }
+  }
+}
+
+class _WebEmployeePlaceholder extends StatelessWidget {
+  const _WebEmployeePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          'Accede desde la app en el mostrador para ventas e inventario.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(fontSize: 16),
+        ),
+      ),
+    );
   }
 }

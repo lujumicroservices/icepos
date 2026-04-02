@@ -147,6 +147,9 @@ class AppLocalizations {
   String get productManagement => _('productManagement');
   String get categoryManagement => _('categoryManagement');
   String get categoryManagementSubtitle => _('categoryManagementSubtitle');
+  String get webAdminHomeTitle => _('webAdminHomeTitle');
+  String get webAdminHomeSubtitle => _('webAdminHomeSubtitle');
+  String get webQuickAccess => _('webQuickAccess');
   String get bundleManagement => _('bundleManagement');
   String get closeShift => _('closeShift');
   String get printer => _('printer');
@@ -490,6 +493,10 @@ class AppLocalizations {
     'productManagement': 'Productos',
     'categoryManagement': 'Categorías',
     'categoryManagementSubtitle': 'Crear y editar categorías; asignar productos',
+    'webAdminHomeTitle': 'Panel',
+    'webAdminHomeSubtitle':
+        'Gestiona catálogo, inventario y ventas conectado a Supabase. Usa el menú lateral para más opciones.',
+    'webQuickAccess': 'Accesos rápidos',
     'bundleManagement': 'Bundles',
     'closeShift': 'Cierre de caja',
     'printer': 'Impresora',
@@ -812,6 +819,10 @@ class AppLocalizations {
     'productManagement': 'Products',
     'categoryManagement': 'Categories',
     'categoryManagementSubtitle': 'Add, edit categories; assign products',
+    'webAdminHomeTitle': 'Dashboard',
+    'webAdminHomeSubtitle':
+        'Manage catalog, inventory and sales via Supabase. Use the side menu for more options.',
+    'webQuickAccess': 'Quick access',
     'bundleManagement': 'Bundles',
     'closeShift': 'Close shift',
     'printer': 'Printer',

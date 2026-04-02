@@ -22,7 +22,7 @@ import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_search_providers.dart';
 
 final _parkedOrdersStreamProvider = StreamProvider<List<ParkedOrder>>((ref) {
-  return ref.watch(posRepositoryProvider).watchParkedOrders();
+  return ref.watch(posRepositoryProvider)!.watchParkedOrders();
 });
 
 /// Child categories for current navigation (root categories when at home).
@@ -30,7 +30,7 @@ final _childCategoriesProvider =
     FutureProvider<List<Category>>((ref) async {
   ref.watch(posCategoriesRefreshProvider); // refetch when categories change (e.g. from Category Management)
   final nav = ref.watch(categoryNavigationControllerProvider);
-  final repo = ref.read(posRepositoryProvider);
+  final repo = ref.read(posRepositoryProvider)!;
   if (nav.currentCategoryId == null) {
     return repo.getCategories();
   }
@@ -41,7 +41,7 @@ final _childCategoriesProvider =
 final _gridProductsProvider = FutureProvider<List<Product>>((ref) async {
   ref.watch(posCategoriesRefreshProvider); // refetch when categories change
   final nav = ref.watch(categoryNavigationControllerProvider);
-  final repo = ref.read(posRepositoryProvider);
+  final repo = ref.read(posRepositoryProvider)!;
   final childCats = await ref.read(_childCategoriesProvider.future);
   if (childCats.isNotEmpty) return []; // Showing categories (and direct products via _directCategoryProductsProvider)
   if (nav.currentCategoryId == null) {
@@ -56,7 +56,7 @@ final _directCategoryProductsProvider = FutureProvider<List<Product>>((ref) asyn
   ref.watch(posCategoriesRefreshProvider); // refetch when categories change
   final nav = ref.watch(categoryNavigationControllerProvider);
   if (nav.currentCategoryId == null) return [];
-  return ref.read(posRepositoryProvider).getProductsByCategory(nav.currentCategoryId!);
+  return ref.read(posRepositoryProvider)!.getProductsByCategory(nav.currentCategoryId!);
 });
 
 /// Loads modifier groups for the **tapped** product first; only if none, falls back to
@@ -66,7 +66,7 @@ Future<void> _handlePosProductTap(
   WidgetRef ref,
   Product product,
 ) async {
-  final repo = ref.read(posRepositoryProvider);
+  final repo = ref.read(posRepositoryProvider)!;
   var productToUse = product;
   var groups = filterModifierGroupsForPos(
     await repo.getModifierGroupsForProduct(product.id),
@@ -548,7 +548,7 @@ void _showParkDialog(BuildContext context, WidgetRef ref) async {
       return;
     }
     final name = controller.text.trim().isEmpty ? null : controller.text.trim();
-    await ref.read(posRepositoryProvider).parkOrder(name, cart);
+    await ref.read(posRepositoryProvider)!.parkOrder(name, cart);
     ref.read(cartControllerProvider.notifier).clearCart();
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -778,7 +778,7 @@ void _showRetrieveBottomSheet(BuildContext context, WidgetRef ref) {
               if (ctx.mounted) Navigator.pop(ctx);
             },
             onDelete: (order) async {
-              await ref.read(posRepositoryProvider).deleteParkedOrder(order.id);
+              await ref.read(posRepositoryProvider)!.deleteParkedOrder(order.id);
             },
           );
         },

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
+import 'package:ice_pos/src/features/admin/data/catalog_repository.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
@@ -10,12 +12,20 @@ import 'package:ice_pos/src/features/admin/presentation/bundle_editor_screen.dar
 
 final _bundlesProvider = FutureProvider<List<({Bundle bundle, List<BundleItem> bundleItems})>>((ref) async {
   ref.watch(posCategoriesRefreshProvider);
-  return ref.read(posRepositoryProvider).getBundlesWithItems();
+  final pos = ref.watch(posRepositoryProvider);
+  if (pos != null) {
+    return pos.getBundlesWithItems();
+  }
+  return CloudSyncService.fetchBundlesWithItemsFromCloud();
 });
 
 final _categoriesForBundlesProvider = FutureProvider<List<domain_cat.Category>>((ref) async {
   ref.watch(posCategoriesRefreshProvider);
-  return ref.read(posRepositoryProvider).getAllCategories();
+  final pos = ref.watch(posRepositoryProvider);
+  if (pos != null) {
+    return pos.getAllCategories();
+  }
+  return ref.read(catalogRepositoryProvider).getAllCategories();
 });
 
 class BundleManagementScreen extends ConsumerWidget {
@@ -179,7 +189,18 @@ class BundleManagementScreen extends ConsumerWidget {
               );
               if (confirm == true) {
                 try {
-                  await ref.read(posRepositoryProvider).deleteBundle(bw.bundle.id);
+                  final repo = ref.read(posRepositoryProvider);
+                  if (repo != null) {
+                    await repo.deleteBundle(bw.bundle.id);
+                  } else {
+                    final err = await CloudSyncService.deleteBundleFromCloud(bw.bundle.id);
+                    if (err != null && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(err)),
+                      );
+                      return;
+                    }
+                  }
                   ref.invalidate(_bundlesProvider);
                 } on OfflineMasterWriteException catch (e) {
                   if (context.mounted) {

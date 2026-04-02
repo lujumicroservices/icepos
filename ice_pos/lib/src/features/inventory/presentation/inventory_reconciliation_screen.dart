@@ -8,6 +8,8 @@ import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/utils/number_utils.dart';
 import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/features/admin/data/supply_admin_repository.dart';
 import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,7 +21,11 @@ typedef _SupplyGroup = ({String name, List<Supply> supplies});
 /// Lista fresca tras cada guardado (evita condiciones de carrera con streams).
 final _reconciliationGroupsProvider =
     FutureProvider.autoDispose<List<_SupplyGroup>>((ref) async {
-  return ref.read(posRepositoryProvider).getSuppliesGroupedByCategory();
+  final pos = ref.watch(posRepositoryProvider);
+  if (pos != null) {
+    return pos.getSuppliesGroupedByCategory();
+  }
+  return ref.read(supplyAdminRepositoryProvider).getSuppliesGroupedByCategory();
 });
 
 final _reconciliationSearchQueryProvider = StateProvider<String>((ref) => '');
@@ -660,6 +666,7 @@ class _ReconciliationStepState extends ConsumerState<_ReconciliationStep> {
     setState(() => _saving = true);
     try {
       String? cloudErr;
+      final pos = ref.read(posRepositoryProvider);
       if (useQual) {
         final level = _selectedLevel;
         if (level == null || !QualitativeLevel.isValid(level)) {
@@ -668,24 +675,38 @@ class _ReconciliationStepState extends ConsumerState<_ReconciliationStep> {
           );
           return;
         }
-        cloudErr = await ref.read(posRepositoryProvider).reconcileSupply(
-              supplyId: widget.supply.id,
-              qualitativeLevel: level,
-              newUnit: _selectedUnit,
-              useQualitativeEntry: true,
-            );
+        cloudErr = pos != null
+            ? await pos.reconcileSupply(
+                supplyId: widget.supply.id,
+                qualitativeLevel: level,
+                newUnit: _selectedUnit,
+                useQualitativeEntry: true,
+              )
+            : await CloudSyncService.reconcileSupplyInCloudOnly(
+                supplyId: widget.supply.id,
+                qualitativeLevel: level,
+                newUnit: _selectedUnit,
+                useQualitativeEntry: true,
+              );
       } else {
         final parsed = parseDecimal(_qtyController.text);
         if (parsed == null || parsed < 0) {
           messenger.showSnackBar(SnackBar(content: Text(l10n.validAmount)));
           return;
         }
-        cloudErr = await ref.read(posRepositoryProvider).reconcileSupply(
-              supplyId: widget.supply.id,
-              newQuantity: parsed,
-              newUnit: _selectedUnit,
-              useQualitativeEntry: false,
-            );
+        cloudErr = pos != null
+            ? await pos.reconcileSupply(
+                supplyId: widget.supply.id,
+                newQuantity: parsed,
+                newUnit: _selectedUnit,
+                useQualitativeEntry: false,
+              )
+            : await CloudSyncService.reconcileSupplyInCloudOnly(
+                supplyId: widget.supply.id,
+                newQuantity: parsed,
+                newUnit: _selectedUnit,
+                useQualitativeEntry: false,
+              );
       }
 
       if (!mounted) return;

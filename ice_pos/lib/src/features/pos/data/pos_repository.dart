@@ -1985,7 +1985,8 @@ class ClosureDayRow {
 }
 
 @riverpod
-PosRepository posRepository(Ref ref) {
+PosRepository? posRepository(Ref ref) {
   final db = ref.watch(appDatabaseProvider);
+  if (db == null) return null;
   return PosRepository(db);
 }

@@ -1,16 +1,17 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-final _operationLogsProvider = FutureProvider<List<OperationLog>>((ref) {
-  return ref.read(posRepositoryProvider).getOperationLogs(limit: 800);
+final _operationLogsProvider = FutureProvider<List<OperationLog>>((ref) async {
+  final pos = ref.watch(posRepositoryProvider);
+  if (pos == null) {
+    return [];
+  }
+  return pos.getOperationLogs(limit: 800);
 });
 
 /// Local diagnostic log (failed sales, cloud sync issues). Export as .txt to share.
@@ -37,21 +38,15 @@ class OperationLogsScreen extends ConsumerWidget {
       }
       buf.writeln();
     }
-    final dir = await getTemporaryDirectory();
-    final file = File(
-      '${dir.path}/ice_pos_operation_log_${DateTime.now().millisecondsSinceEpoch}.txt',
-    );
-    await file.writeAsString(buf.toString(), flush: true);
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      subject: 'ICE POS operation log',
-    );
+    final text = buf.toString();
+    await Share.share(text, subject: 'ICE POS operation log');
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = ref.watch(appLocalizationsProvider);
     final async = ref.watch(_operationLogsProvider);
+    final hasLocalDb = ref.watch(posRepositoryProvider) != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -64,6 +59,22 @@ class OperationLogsScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (logs) {
+          if (!hasLocalDb) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Los registros de diagnóstico se guardan solo en el dispositivo POS (base de datos local). '
+                  'En la versión web no hay base local: no hay entradas que mostrar.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            );
+          }
           if (logs.isEmpty) {
             return Center(
               child: Padding(
@@ -151,7 +162,7 @@ class OperationLogsScreen extends ConsumerWidget {
       ),
       floatingActionButton: async.maybeWhen(
         data: (logs) {
-          if (logs.isEmpty) return null;
+          if (!hasLocalDb || logs.isEmpty) return null;
           return FloatingActionButton.extended(
             onPressed: () async {
               final ok = await showDialog<bool>(
@@ -172,7 +183,7 @@ class OperationLogsScreen extends ConsumerWidget {
                 ),
               );
               if (ok == true && context.mounted) {
-                await ref.read(posRepositoryProvider).clearOperationLogs();
+                await ref.read(posRepositoryProvider)!.clearOperationLogs();
                 ref.invalidate(_operationLogsProvider);
               }
             },

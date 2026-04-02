@@ -13,11 +13,12 @@ import 'package:ice_pos/src/core/setup/presentation/setup_supabase_screen.dart';
 class SupabaseBootstrap extends ConsumerStatefulWidget {
   const SupabaseBootstrap({
     super.key,
-    required this.database,
+    this.database,
     required this.child,
   });
 
-  final AppDatabase database;
+  /// Null on web when running without local Drift (setup wizard skips pull into SQLite).
+  final AppDatabase? database;
   final Widget child;
 
   @override

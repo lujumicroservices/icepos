@@ -31,6 +31,10 @@ class ReceiptPrinterNotifier extends Notifier<ReceiptPrinterState> {
   /// Load bonded (paired) Bluetooth devices. Uses Android's list of VINCULADOS/emparejados
   /// (no need for device to be "connected" — the app will connect when printing).
   Future<void> loadBondedDevices() async {
+    if (kIsWeb) {
+      state = state.copyWith(isLoading: false, lastError: null);
+      return;
+    }
     state = state.copyWith(isLoading: true, lastError: null);
     try {
       // Android 12+ needs BLUETOOTH_CONNECT to read bonded devices; older may use bluetooth.

@@ -2,18 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/offline_write_policy.dart';
+import 'package:ice_pos/src/features/admin/data/catalog_repository.dart';
+import 'package:ice_pos/src/features/admin/data/product_admin_repository.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
-import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 
 final _allProductsProvider = StreamProvider<List<Product>>((ref) {
-  return ref.watch(posRepositoryProvider).watchAllProducts();
+  final pos = ref.watch(posRepositoryProvider);
+  if (pos != null) {
+    return pos.watchAllProducts();
+  }
+  return ref.watch(productAdminRepositoryProvider).watchAllProducts();
 });
 
 final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
   ref.watch(posCategoriesRefreshProvider);
-  return ref.read(posRepositoryProvider).getAllCategories();
+  final pos = ref.watch(posRepositoryProvider);
+  if (pos != null) {
+    return pos.getAllCategories();
+  }
+  return ref.read(catalogRepositoryProvider).getAllCategories();
 });
 
 class BundleEditorScreen extends ConsumerStatefulWidget {
@@ -122,15 +133,36 @@ class _BundleEditorScreenState extends ConsumerState<BundleEditorScreen> {
 
     setState(() => _isSaving = true);
     try {
-      await ref.read(posRepositoryProvider).saveBundle(
-            id: widget.bundleId,
-            name: name,
-            price: price,
-            categoryId: _selectedCategoryId,
-            productItems: _selectedProducts.entries
-                .map((e) => (productId: e.key, quantity: e.value))
-                .toList(),
-          );
+      final pos = ref.read(posRepositoryProvider);
+      if (pos != null) {
+        await pos.saveBundle(
+          id: widget.bundleId,
+          name: name,
+          price: price,
+          categoryId: _selectedCategoryId,
+          productItems: _selectedProducts.entries
+              .map((e) => (productId: e.key, quantity: e.value))
+              .toList(),
+        );
+      } else {
+        final result = await CloudSyncService.saveBundleToCloudOnly(
+          id: widget.bundleId,
+          name: name,
+          price: price,
+          categoryId: _selectedCategoryId,
+          productItems: _selectedProducts.entries
+              .map((e) => (productId: e.key, quantity: e.value))
+              .toList(),
+        );
+        if (result.error != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(result.error!)),
+            );
+          }
+          return;
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Bundle saved')),

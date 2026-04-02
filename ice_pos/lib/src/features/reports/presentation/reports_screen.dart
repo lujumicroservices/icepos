@@ -67,12 +67,12 @@ Widget _periodChip(
 
 final _salesSummaryProvider = FutureProvider.autoDispose<SalesReportSummary?>((ref) async {
   final range = ref.watch(_dateRangeProvider);
-  return ref.read(posRepositoryProvider).getSalesReportSummary(start: range.start, end: range.end);
+  return ref.read(posRepositoryProvider)!.getSalesReportSummary(start: range.start, end: range.end);
 });
 
 final _topProductsProvider = FutureProvider.autoDispose<List<ProductSalesRow>>((ref) async {
   final range = ref.watch(_dateRangeProvider);
-  return ref.read(posRepositoryProvider).getTopProductsByDateRange(start: range.start, end: range.end);
+  return ref.read(posRepositoryProvider)!.getTopProductsByDateRange(start: range.start, end: range.end);
 });
 
 /// Origen de datos del reporte de ventas: 0 = este dispositivo, 1 = nube.
@@ -132,16 +132,16 @@ final _cloudSalesReportProvider = FutureProvider.autoDispose<({SalesReportSummar
 });
 
 final _inventoryReportProvider = FutureProvider.autoDispose<List<InventoryReportRow>>((ref) async {
-  return ref.read(posRepositoryProvider).getInventoryReport();
+  return ref.read(posRepositoryProvider)!.getInventoryReport();
 });
 
 final _lowStockProvider = FutureProvider.autoDispose<List<InventoryReportRow>>((ref) async {
-  return ref.read(posRepositoryProvider).getLowStockSupplies();
+  return ref.read(posRepositoryProvider)!.getLowStockSupplies();
 });
 
 final _inventoryLogsProvider = FutureProvider.autoDispose<List<InventoryLogRow>>((ref) async {
   final range = ref.watch(_dateRangeProvider);
-  return ref.read(posRepositoryProvider).getInventoryLogsSummary(start: range.start, end: range.end);
+  return ref.read(posRepositoryProvider)!.getInventoryLogsSummary(start: range.start, end: range.end);
 });
 
 /// Origen inventario: 0 = este dispositivo, 1 = nube.
@@ -293,12 +293,12 @@ final _rayosXSummaryProvider = FutureProvider.autoDispose<SalesReportSummary?>((
   final day = ref.watch(_rayosXDateProvider);
   final start = day;
   final end = DateTime(day.year, day.month, day.day, 23, 59, 59);
-  return ref.read(posRepositoryProvider).getSalesReportSummary(start: start, end: end);
+  return ref.read(posRepositoryProvider)!.getSalesReportSummary(start: start, end: end);
 });
 
 final _rayosXClosuresProvider = FutureProvider.autoDispose<List<ClosureDayRow>>((ref) async {
   final day = ref.watch(_rayosXDateProvider);
-  return ref.read(posRepositoryProvider).getClosuresForDay(day);
+  return ref.read(posRepositoryProvider)!.getClosuresForDay(day);
 });
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -359,7 +359,8 @@ class _SalesReportsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final range = ref.watch(_dateRangeProvider);
-    final useCloud = ref.watch(_salesReportSourceProvider) == 1;
+    final hasLocalPos = ref.watch(posRepositoryProvider) != null;
+    final useCloud = !hasLocalPos || ref.watch(_salesReportSourceProvider) == 1;
     final cloudAvailable = SalesSyncService.isAvailable;
 
     return RefreshIndicator(
@@ -374,7 +375,7 @@ class _SalesReportsTab extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (cloudAvailable)
+            if (cloudAvailable && hasLocalPos)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: SegmentedButton<int>(
@@ -574,7 +575,8 @@ class _InventoryReportsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final useCloud = ref.watch(_inventorySourceProvider) == 1;
+    final hasLocalPos = ref.watch(posRepositoryProvider) != null;
+    final useCloud = !hasLocalPos || ref.watch(_inventorySourceProvider) == 1;
     final cloudAvailable = CloudReportsService.isAvailable;
 
     return RefreshIndicator(
@@ -592,7 +594,7 @@ class _InventoryReportsTab extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (cloudAvailable)
+            if (cloudAvailable && hasLocalPos)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: SegmentedButton<int>(
@@ -739,7 +741,8 @@ class _RayosXTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final day = ref.watch(_rayosXDateProvider);
-    final useCloud = ref.watch(_rayosXSourceProvider) == 1;
+    final hasLocalPos = ref.watch(posRepositoryProvider) != null;
+    final useCloud = !hasLocalPos || ref.watch(_rayosXSourceProvider) == 1;
     final cloudAvailable = SalesSyncService.isAvailable;
 
     return RefreshIndicator(
@@ -755,7 +758,7 @@ class _RayosXTab extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (cloudAvailable)
+            if (cloudAvailable && hasLocalPos)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: SegmentedButton<int>(
