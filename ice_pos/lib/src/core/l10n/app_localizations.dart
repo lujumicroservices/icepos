@@ -80,6 +80,11 @@ class AppLocalizations {
   String get operationLogTitle => _('operationLogTitle');
   String get operationLogSubtitle => _('operationLogSubtitle');
   String get operationLogEmpty => _('operationLogEmpty');
+  String get shiftCloseDiagnosticsTitle => _('shiftCloseDiagnosticsTitle');
+  String get shiftCloseDiagnosticsMenuSubtitle => _('shiftCloseDiagnosticsMenuSubtitle');
+  String get shiftCloseDiagnosticsSubtitle => _('shiftCloseDiagnosticsSubtitle');
+  String get shiftCloseDiagnosticsEmpty => _('shiftCloseDiagnosticsEmpty');
+  String get shiftCloseDiagnosticsDisabled => _('shiftCloseDiagnosticsDisabled');
   String get exportOperationLog => _('exportOperationLog');
   String get clearOperationLogConfirmTitle => _('clearOperationLogConfirmTitle');
   String get clearOperationLogConfirmBody => _('clearOperationLogConfirmBody');
@@ -434,6 +439,13 @@ class AppLocalizations {
         'Errores de venta y sincronización con la nube (solo en este dispositivo).',
     'operationLogEmpty':
         'No hay entradas todavía. Si una venta falla o la nube no guarda la venta, aparecerá aquí.',
+    'shiftCloseDiagnosticsTitle': 'Diagnóstico cierre de caja',
+    'shiftCloseDiagnosticsMenuSubtitle': 'Eventos en la nube por dispositivo al cerrar turno.',
+    'shiftCloseDiagnosticsSubtitle':
+        'Eventos en la nube por dispositivo: descarga de movimientos al abrir corte, cierre local y envío a Supabase. Orden: más recientes primero.',
+    'shiftCloseDiagnosticsEmpty':
+        'Aún no hay eventos. Aparecen al abrir la pantalla de cierre de caja (pull de movimientos) o al confirmar un corte en un POS con nube activa.',
+    'shiftCloseDiagnosticsDisabled': 'La nube no está configurada; no hay eventos que mostrar.',
     'exportOperationLog': 'Exportar y compartir (.txt)',
     'clearOperationLogConfirmTitle': '¿Borrar el registro?',
     'clearOperationLogConfirmBody':
@@ -758,6 +770,13 @@ class AppLocalizations {
         'Sale and cloud sync issues (this device only).',
     'operationLogEmpty':
         'No entries yet. Failed checkouts or cloud write issues will appear here.',
+    'shiftCloseDiagnosticsTitle': 'Shift close diagnostics',
+    'shiftCloseDiagnosticsMenuSubtitle': 'Cloud events per device when closing a shift.',
+    'shiftCloseDiagnosticsSubtitle':
+        'Cloud events per device: movement pull when opening close shift, local close, and Supabase sync. Newest first.',
+    'shiftCloseDiagnosticsEmpty':
+        'No events yet. They appear when a device opens the close-shift screen (movement pull) or completes a close with cloud enabled.',
+    'shiftCloseDiagnosticsDisabled': 'Cloud is not configured; nothing to show.',
     'exportOperationLog': 'Export and share (.txt)',
     'clearOperationLogConfirmTitle': 'Clear log?',
     'clearOperationLogConfirmBody':

@@ -436,6 +436,7 @@ class CloudSyncService {
           .eq('shift_id', shiftId)
           .order('id');
       final rows = _list(res).map((r) => _map(r)).toList();
+      var insertedLocally = 0;
       for (final row in rows) {
         final cloudId = _int(row['id'])!;
         final existing = await (db.select(db.movements)..where((m) => m.id.equals(cloudId))).getSingleOrNull();
@@ -451,12 +452,50 @@ class CloudSyncService {
               date: Value(date ?? DateTime.now()),
               shiftId: Value(_int(row['shift_id'])),
             ));
+        insertedLocally++;
       }
+      await logShiftCloseDiagnostic(
+        event: 'pull_movements_for_shift',
+        shiftId: shiftId,
+        context: {
+          'ok': true,
+          'cloudRowCount': rows.length,
+          'insertedLocally': insertedLocally,
+        },
+      );
       return null;
     } catch (e, st) {
       debugPrint('CloudSyncService.pullMovementsForShift: $e');
       debugPrint('$st');
+      await logShiftCloseDiagnostic(
+        event: 'pull_movements_for_shift',
+        shiftId: shiftId,
+        context: {'ok': false, 'error': e.toString()},
+      );
       return e.toString();
+    }
+  }
+
+  /// Registro en Supabase para ver en web qué hizo cada dispositivo alrededor del cierre de caja. No lanza.
+  static Future<void> logShiftCloseDiagnostic({
+    required String event,
+    int? shiftId,
+    Map<String, Object?>? context,
+  }) async {
+    if (!SupabaseService.isInitialized) return;
+    try {
+      final device = await DeviceIdService.getDeviceInfo();
+      final payload = <String, dynamic>{
+        'event': event,
+        'device_id': device.deviceId,
+        'device_name': device.deviceName,
+        if (shiftId != null) 'shift_id': shiftId,
+        if (context != null && context.isNotEmpty) 'context': context,
+      };
+      await SupabaseService.instance.client.from('shift_close_events').insert(payload);
+    } catch (e, st) {
+      debugPrint('CloudSyncService.logShiftCloseDiagnostic: $e');
+      debugPrint('$st');
     }
   }
 

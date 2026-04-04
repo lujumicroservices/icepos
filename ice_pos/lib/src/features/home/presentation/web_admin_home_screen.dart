@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/features/admin/presentation/bundle_management_screen.dart';
@@ -10,6 +11,7 @@ import 'package:ice_pos/src/features/admin/presentation/product_management_scree
 import 'package:ice_pos/src/features/admin/presentation/supply_management_screen.dart';
 import 'package:ice_pos/src/features/inventory/presentation/inventory_reconciliation_screen.dart';
 import 'package:ice_pos/src/features/movements/presentation/movements_screen.dart';
+import 'package:ice_pos/src/features/monitoring/presentation/shift_close_events_screen.dart';
 import 'package:ice_pos/src/features/monitoring/presentation/temperature_history_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/reports_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/sales_history_screen.dart';
@@ -87,6 +89,14 @@ class WebAdminHomeScreen extends ConsumerWidget {
         onIconColor: Colors.blue.shade800,
         builder: (_) => const TemperatureHistoryScreen(),
       ),
+      if (CloudSyncService.isEnabled)
+        _WebModule(
+          title: l10n.shiftCloseDiagnosticsTitle,
+          icon: Icons.point_of_sale_outlined,
+          color: scheme.tertiaryContainer.withValues(alpha: 0.85),
+          onIconColor: scheme.onTertiaryContainer,
+          builder: (_) => const ShiftCloseEventsScreen(),
+        ),
       _WebModule(
         title: l10n.operationLogTitle,
         icon: Icons.bug_report_outlined,

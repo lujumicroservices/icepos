@@ -1637,12 +1637,55 @@ class PosRepository {
       final shiftWithEndTime = shift.copyWith(endTime: Value(now));
       return (result: result, shiftForCloud: shiftWithEndTime);
     });
+    await CloudSyncService.logShiftCloseDiagnostic(
+      event: 'shift_close_local_committed',
+      shiftId: shiftId,
+      context: {
+        'closureId': tx.result.closure.id,
+        'declaredCash': tx.result.closure.declaredCash,
+        'systemExpectedCash': tx.result.closure.systemExpectedCash,
+        'difference': tx.result.closure.difference,
+      },
+    );
     if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
       final err = await CloudSyncService.writeShiftClosureToCloud(
         tx.shiftForCloud,
         tx.result.closure,
       );
-      if (err != null) debugPrint('Cloud write shift closure: $err');
+      if (err != null) {
+        debugPrint('Cloud write shift closure: $err');
+        await CloudSyncService.logShiftCloseDiagnostic(
+          event: 'shift_close_cloud_failed',
+          shiftId: shiftId,
+          context: {'error': err, 'closureId': tx.result.closure.id},
+        );
+        await logOperationEvent(
+          level: 'warning',
+          operation: 'shift_closure_cloud_sync',
+          message: err,
+          context: {
+            'shiftId': shiftId,
+            'closureId': tx.result.closure.id,
+            'declaredCash': tx.result.closure.declaredCash,
+            'systemExpectedCash': tx.result.closure.systemExpectedCash,
+          },
+        );
+      } else {
+        await CloudSyncService.logShiftCloseDiagnostic(
+          event: 'shift_close_cloud_ok',
+          shiftId: shiftId,
+          context: {'closureId': tx.result.closure.id},
+        );
+      }
+    } else {
+      await CloudSyncService.logShiftCloseDiagnostic(
+        event: 'shift_close_cloud_skipped',
+        shiftId: shiftId,
+        context: {
+          'closureId': tx.result.closure.id,
+          'reason': !CloudSyncService.isEnabled ? 'cloud_disabled' : 'offline',
+        },
+      );
     }
     return tx.result;
   }

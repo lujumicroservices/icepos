@@ -30,6 +30,7 @@ import 'package:ice_pos/src/features/pos/presentation/close_shift_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/printer_setup_screen.dart';
 import 'package:ice_pos/src/features/movements/presentation/movements_screen.dart';
+import 'package:ice_pos/src/features/monitoring/presentation/shift_close_events_screen.dart';
 import 'package:ice_pos/src/features/monitoring/presentation/temperature_history_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/reports_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/sales_history_screen.dart';
@@ -432,6 +433,21 @@ class HomeScreen extends ConsumerWidget {
                 );
               },
             ),
+            if (CloudSyncService.isEnabled)
+              ListTile(
+                leading: const Icon(Icons.point_of_sale_outlined),
+                title: Text(l10n.shiftCloseDiagnosticsTitle),
+                subtitle: Text(l10n.shiftCloseDiagnosticsMenuSubtitle),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ShiftCloseEventsScreen(),
+                    ),
+                  );
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.swap_horiz),
               title: Text(l10n.movements),

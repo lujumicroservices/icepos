@@ -210,6 +210,19 @@ create table public.movements (
 );
 comment on table public.movements is 'Entradas y salidas de caja o banco que afectan el monto esperado; no son ventas.';
 
+-- Shift close diagnostics (multi-device observability)
+create table public.shift_close_events (
+  id bigserial primary key,
+  created_at timestamptz not null default now(),
+  event text not null,
+  device_id text not null,
+  device_name text not null,
+  shift_id int,
+  context jsonb
+);
+comment on table public.shift_close_events is 'Auditoría de cierre de caja por dispositivo (pull movimientos, commit local, sync nube).';
+create index idx_shift_close_events_created_at on public.shift_close_events (created_at desc);
+
 -- App releases (actualizaciones de la app)
 create table public.app_releases (
   id serial primary key,
@@ -259,6 +272,7 @@ alter table public.shifts enable row level security;
 alter table public.cash_movements enable row level security;
 alter table public.shift_closures enable row level security;
 alter table public.movements enable row level security;
+alter table public.shift_close_events enable row level security;
 alter table public.app_releases enable row level security;
 alter table public.profiles enable row level security;
 
@@ -269,7 +283,7 @@ declare
     'categories','supplies','products','recipes','sales','sale_items','inventory_logs',
     'modifier_groups','product_modifiers','modifier_options','parked_orders','discounts',
     'bundles','bundle_items','shifts','cash_movements','shift_closures','movements',
-    'app_releases'
+    'shift_close_events','app_releases'
   ];
 begin
   foreach t in array tables loop
@@ -327,6 +341,43 @@ end;
 $$;
 grant execute on function public.sync_sequences() to anon;
 grant execute on function public.sync_sequences() to authenticated;
+
+-- Movements: mobile upsert sends explicit ids (SQLite) without advancing serial; web INSERT must not reuse ids.
+create or replace function public.movements_before_insert_sync_id()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  seq regclass;
+  m bigint;
+begin
+  perform pg_advisory_xact_lock(87392001);
+
+  seq := pg_get_serial_sequence('public.movements', 'id')::regclass;
+  if seq is null then
+    return new;
+  end if;
+
+  m := (select coalesce(max(id), 0) from public.movements);
+
+  if exists (select 1 from public.movements where id = new.id) then
+    new.id := m + 1;
+    perform setval(seq, new.id, true);
+  else
+    perform setval(seq, greatest(m, new.id), true);
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists movements_before_insert_sync_id on public.movements;
+create trigger movements_before_insert_sync_id
+before insert on public.movements
+for each row
+execute procedure public.movements_before_insert_sync_id();
 
 -- Auto-create profile on signup
 create or replace function public.handle_new_user()
