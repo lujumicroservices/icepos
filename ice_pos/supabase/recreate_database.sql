@@ -34,6 +34,9 @@ drop table if exists public.categories cascade;
 drop table if exists public.parked_orders cascade;
 drop table if exists public.discounts cascade;
 drop table if exists public.shifts cascade;
+drop table if exists public.shift_close_events cascade;
+drop table if exists public.pos_devices cascade;
+drop table if exists public.stores cascade;
 drop table if exists public.app_releases cascade;
 
 -- -----------------------------------------------------------------------------
@@ -79,6 +82,20 @@ create table public.recipes (
   quantity_required real not null
 );
 
+-- Stores (sucursales; semilla id=1)
+create table public.stores (
+  id serial primary key,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+comment on table public.stores is 'Sucursales. App envía store_id (por defecto 1).';
+
+insert into public.stores (id, name) values (1, 'Tienda principal');
+select setval(
+  pg_get_serial_sequence('public.stores', 'id'),
+  (select max(id) from public.stores)
+);
+
 -- Sales
 create table public.sales (
   id serial primary key,
@@ -89,7 +106,8 @@ create table public.sales (
   change_given real default 0,
   device_id text,
   device_name text,
-  cancelled_at timestamptz
+  cancelled_at timestamptz,
+  store_id int not null default 1 references public.stores(id)
 );
 comment on column public.sales.cancelled_at is 'Si no es null, la venta fue cancelada (borrado lógico).';
 
@@ -175,8 +193,13 @@ create table public.shifts (
   id serial primary key,
   start_time timestamptz not null default now(),
   end_time timestamptz,
-  starting_fund real default 0
+  starting_fund real default 0,
+  device_id text,
+  device_name text,
+  store_id int not null default 1 references public.stores(id)
 );
+comment on column public.shifts.device_id is 'Dispositivo que abrió el turno (UUID estable de la app).';
+comment on column public.shifts.device_name is 'Nombre legible de la caja.';
 
 -- Cash movements
 create table public.cash_movements (
@@ -195,8 +218,12 @@ create table public.shift_closures (
   system_expected_cash real not null,
   declared_cash real not null,
   difference real not null,
-  notes text
+  notes text,
+  closure_kind text not null default 'device',
+  closed_by_device_id text
 );
+comment on column public.shift_closures.closure_kind is 'device | admin_remote';
+comment on column public.shift_closures.closed_by_device_id is 'Dispositivo que ejecutó el cierre.';
 
 -- Movements (entradas/salidas caja o banco; no son ventas)
 create table public.movements (
@@ -206,7 +233,8 @@ create table public.movements (
   account text not null,
   amount real not null,
   reason text not null,
-  shift_id int references public.shifts(id)
+  shift_id int references public.shifts(id),
+  store_id int not null default 1 references public.stores(id)
 );
 comment on table public.movements is 'Entradas y salidas de caja o banco que afectan el monto esperado; no son ventas.';
 
@@ -218,10 +246,26 @@ create table public.shift_close_events (
   device_id text not null,
   device_name text not null,
   shift_id int,
-  context jsonb
+  context jsonb,
+  store_id int references public.stores(id)
 );
 comment on table public.shift_close_events is 'Auditoría de cierre de caja por dispositivo (pull movimientos, commit local, sync nube).';
 create index idx_shift_close_events_created_at on public.shift_close_events (created_at desc);
+
+-- Terminales POS registrados desde la app
+create table public.pos_devices (
+  device_id text primary key,
+  device_name text not null,
+  last_seen_at timestamptz not null default now(),
+  app_version text,
+  platform text,
+  store_id int not null default 1 references public.stores(id)
+);
+comment on table public.pos_devices is 'Registro explícito de cajas/dispositivos (botón en la app).';
+
+create index idx_shifts_device_open on public.shifts (device_id) where end_time is null;
+create index idx_shifts_device_id on public.shifts (device_id);
+create index idx_shifts_store_id on public.shifts (store_id);
 
 -- App releases (actualizaciones de la app)
 create table public.app_releases (
@@ -247,6 +291,7 @@ comment on table public.profiles is 'Rol de cada usuario (admin/cajero). Fuente 
 create index idx_products_category on public.products(category_id);
 create index idx_sale_items_sale on public.sale_items(sale_id);
 create index idx_sales_date on public.sales(date desc);
+create index idx_sales_store_date on public.sales(store_id, date desc);
 create index idx_recipes_product on public.recipes(product_id);
 create index idx_product_modifiers_product on public.product_modifiers(product_id);
 create index idx_modifier_options_group on public.modifier_options(modifier_group_id);
@@ -254,6 +299,7 @@ create index idx_modifier_options_group on public.modifier_options(modifier_grou
 -- -----------------------------------------------------------------------------
 -- 4. RLS + POLICIES (anon and authenticated for all tables)
 -- -----------------------------------------------------------------------------
+alter table public.stores enable row level security;
 alter table public.categories enable row level security;
 alter table public.supplies enable row level security;
 alter table public.products enable row level security;
@@ -273,6 +319,7 @@ alter table public.cash_movements enable row level security;
 alter table public.shift_closures enable row level security;
 alter table public.movements enable row level security;
 alter table public.shift_close_events enable row level security;
+alter table public.pos_devices enable row level security;
 alter table public.app_releases enable row level security;
 alter table public.profiles enable row level security;
 
@@ -280,10 +327,10 @@ do $$
 declare
   t text;
   tables text[] := array[
-    'categories','supplies','products','recipes','sales','sale_items','inventory_logs',
+    'stores','categories','supplies','products','recipes','sales','sale_items','inventory_logs',
     'modifier_groups','product_modifiers','modifier_options','parked_orders','discounts',
     'bundles','bundle_items','shifts','cash_movements','shift_closures','movements',
-    'shift_close_events','app_releases'
+    'shift_close_events','pos_devices','app_releases'
   ];
 begin
   foreach t in array tables loop
@@ -319,6 +366,7 @@ security definer
 set search_path = public
 as $$
 begin
+  perform setval(pg_get_serial_sequence('stores', 'id'), coalesce((select max(id) from stores), 1));
   perform setval(pg_get_serial_sequence('categories', 'id'), coalesce((select max(id) from categories), 1));
   perform setval(pg_get_serial_sequence('supplies', 'id'), coalesce((select max(id) from supplies), 1));
   perform setval(pg_get_serial_sequence('products', 'id'), coalesce((select max(id) from products), 1));

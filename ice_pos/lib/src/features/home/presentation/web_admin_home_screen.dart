@@ -91,7 +91,7 @@ class WebAdminHomeScreen extends ConsumerWidget {
       ),
       if (CloudSyncService.isEnabled)
         _WebModule(
-          title: l10n.shiftCloseDiagnosticsTitle,
+          title: l10n.cloudPosDiagnosticsTitle,
           icon: Icons.point_of_sale_outlined,
           color: scheme.tertiaryContainer.withValues(alpha: 0.85),
           onIconColor: scheme.onTertiaryContainer,

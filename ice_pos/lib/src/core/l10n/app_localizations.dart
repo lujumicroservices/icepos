@@ -85,6 +85,24 @@ class AppLocalizations {
   String get shiftCloseDiagnosticsSubtitle => _('shiftCloseDiagnosticsSubtitle');
   String get shiftCloseDiagnosticsEmpty => _('shiftCloseDiagnosticsEmpty');
   String get shiftCloseDiagnosticsDisabled => _('shiftCloseDiagnosticsDisabled');
+  String get cloudPosDiagnosticsTitle => _('cloudPosDiagnosticsTitle');
+  String get shiftCloseEventsTab => _('shiftCloseEventsTab');
+  String get devicesAndClosuresTab => _('devicesAndClosuresTab');
+  String get registerDeviceToCloudTitle => _('registerDeviceToCloudTitle');
+  String get registerDeviceToCloudSubtitle => _('registerDeviceToCloudSubtitle');
+  String get registerDeviceToCloudOk => _('registerDeviceToCloudOk');
+  String get cloudDevicesEmpty => _('cloudDevicesEmpty');
+  String get cloudDeviceLastSeen => _('cloudDeviceLastSeen');
+  String get cloudDeviceOpenShift => _('cloudDeviceOpenShift');
+  String get cloudDeviceNoOpenShift => _('cloudDeviceNoOpenShift');
+  String get cloudRemoteCloseShift => _('cloudRemoteCloseShift');
+  String get cloudRemoteCloseShiftHint => _('cloudRemoteCloseShiftHint');
+  String get cloudSalesByDevice => _('cloudSalesByDevice');
+  String get cloudClosuresByDevice => _('cloudClosuresByDevice');
+  String get cloudShiftClosedRemoteOk => _('cloudShiftClosedRemoteOk');
+  String get cloudNoSalesForDevice => _('cloudNoSalesForDevice');
+  String get cloudNoClosuresForDevice => _('cloudNoClosuresForDevice');
+  String get storeLabel => _('storeLabel');
   String get exportOperationLog => _('exportOperationLog');
   String get clearOperationLogConfirmTitle => _('clearOperationLogConfirmTitle');
   String get clearOperationLogConfirmBody => _('clearOperationLogConfirmBody');
@@ -446,6 +464,27 @@ class AppLocalizations {
     'shiftCloseDiagnosticsEmpty':
         'Aún no hay eventos. Aparecen al abrir la pantalla de cierre de caja (pull de movimientos) o al confirmar un corte en un POS con nube activa.',
     'shiftCloseDiagnosticsDisabled': 'La nube no está configurada; no hay eventos que mostrar.',
+    'cloudPosDiagnosticsTitle': 'Nube · caja y dispositivos',
+    'shiftCloseEventsTab': 'Eventos',
+    'devicesAndClosuresTab': 'Dispositivos',
+    'registerDeviceToCloudTitle': 'Registrar en la nube',
+    'registerDeviceToCloudSubtitle':
+        'Envía este equipo a la lista de terminales y actualiza el turno abierto con su ID (cajero y admin).',
+    'registerDeviceToCloudOk': 'Dispositivo y turno actualizados en la nube.',
+    'cloudDevicesEmpty':
+        'Ningún dispositivo registrado todavía. Use “Registrar en la nube” en cada caja con internet.',
+    'cloudDeviceLastSeen': 'Último registro',
+    'cloudDeviceOpenShift': 'Turno abierto (nube)',
+    'cloudDeviceNoOpenShift': 'No hay turno abierto en la nube para este dispositivo.',
+    'cloudRemoteCloseShift': 'Cerrar turno remoto',
+    'cloudRemoteCloseShiftHint':
+        'Cierra solo en Supabase: la caja física puede seguir con turno local hasta que sincronice o cierre allí. El efectivo esperado se calcula con ventas en nube de este dispositivo en el rango del turno y movimientos de caja del shift_id.',
+    'cloudSalesByDevice': 'Ventas recientes (nube)',
+    'cloudClosuresByDevice': 'Cortes registrados (nube)',
+    'cloudShiftClosedRemoteOk': 'Turno cerrado en la nube.',
+    'cloudNoSalesForDevice': 'Sin ventas en nube para este dispositivo.',
+    'cloudNoClosuresForDevice': 'Sin cortes en nube para este dispositivo.',
+    'storeLabel': 'Tienda',
     'exportOperationLog': 'Exportar y compartir (.txt)',
     'clearOperationLogConfirmTitle': '¿Borrar el registro?',
     'clearOperationLogConfirmBody':
@@ -777,6 +816,27 @@ class AppLocalizations {
     'shiftCloseDiagnosticsEmpty':
         'No events yet. They appear when a device opens the close-shift screen (movement pull) or completes a close with cloud enabled.',
     'shiftCloseDiagnosticsDisabled': 'Cloud is not configured; nothing to show.',
+    'cloudPosDiagnosticsTitle': 'Cloud · cash & devices',
+    'shiftCloseEventsTab': 'Events',
+    'devicesAndClosuresTab': 'Devices',
+    'registerDeviceToCloudTitle': 'Register to cloud',
+    'registerDeviceToCloudSubtitle':
+        'Sends this terminal to the device list and links the open shift to this device ID (cashier and admin).',
+    'registerDeviceToCloudOk': 'Device and open shift updated in the cloud.',
+    'cloudDevicesEmpty':
+        'No devices registered yet. Use “Register to cloud” on each POS while online.',
+    'cloudDeviceLastSeen': 'Last seen',
+    'cloudDeviceOpenShift': 'Open shift (cloud)',
+    'cloudDeviceNoOpenShift': 'No open shift in the cloud for this device.',
+    'cloudRemoteCloseShift': 'Remote close shift',
+    'cloudRemoteCloseShiftHint':
+        'Closes in Supabase only; the physical device may still have a local shift until it syncs or closes there. Expected cash uses cloud sales for this device in the shift window and CAJA movements for this shift_id.',
+    'cloudSalesByDevice': 'Recent sales (cloud)',
+    'cloudClosuresByDevice': 'Closures (cloud)',
+    'cloudShiftClosedRemoteOk': 'Shift closed in the cloud.',
+    'cloudNoSalesForDevice': 'No cloud sales for this device.',
+    'cloudNoClosuresForDevice': 'No cloud closures for this device.',
+    'storeLabel': 'Store',
     'exportOperationLog': 'Export and share (.txt)',
     'clearOperationLogConfirmTitle': 'Clear log?',
     'clearOperationLogConfirmBody':

@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:ice_pos/src/core/config/store_scope.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/device_id_service.dart';
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
@@ -344,6 +346,7 @@ class CloudSyncService {
       }
 
       final device = await DeviceIdService.getDeviceInfo();
+      final storeId = await StoreScope.getActiveStoreId();
       Map<String, dynamic> saleRow = {
         'total_amount': totalAmount,
         'payment_method': paymentMethod,
@@ -351,6 +354,7 @@ class CloudSyncService {
         'change_given': changeGiven,
         'device_id': device.deviceId,
         'device_name': device.deviceName,
+        'store_id': storeId,
       };
       dynamic saleRes;
       try {
@@ -363,7 +367,21 @@ class CloudSyncService {
             'payment_method': paymentMethod,
             'amount_tendered': amountTendered,
             'change_given': changeGiven,
+            'store_id': storeId,
           };
+          try {
+            saleRes = await client.from('sales').insert(saleRow).select('id').single();
+          } catch (e2) {
+            final m2 = e2.toString();
+            if (m2.contains('store_id') || m2.contains('does not exist')) {
+              saleRow.remove('store_id');
+              saleRes = await client.from('sales').insert(saleRow).select('id').single();
+            } else {
+              rethrow;
+            }
+          }
+        } else if (msg.contains('store_id') || msg.contains('does not exist')) {
+          saleRow.remove('store_id');
           saleRes = await client.from('sales').insert(saleRow).select('id').single();
         } else {
           rethrow;
@@ -411,15 +429,333 @@ class CloudSyncService {
     if (!SupabaseService.isInitialized) return null;
     try {
       final client = SupabaseService.instance.client;
+      final device = await DeviceIdService.getDeviceInfo();
+      final storeId = await StoreScope.getActiveStoreId();
       await client.from('shifts').upsert({
         'id': shift.id,
         'start_time': shift.startTime.toUtc().toIso8601String(),
         'end_time': shift.endTime?.toUtc().toIso8601String(),
         'starting_fund': shift.startingFund,
+        'device_id': device.deviceId,
+        'device_name': device.deviceName,
+        'store_id': storeId,
       }, onConflict: 'id');
       return null;
     } catch (e, st) {
       debugPrint('CloudSyncService.writeShiftToCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  static String _platformLabel() {
+    if (kIsWeb) return 'web';
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.linux:
+        return 'linux';
+      case TargetPlatform.macOS:
+        return 'macos';
+      case TargetPlatform.windows:
+        return 'windows';
+      case TargetPlatform.fuchsia:
+        return 'fuchsia';
+    }
+  }
+
+  /// Upsert en [pos_devices] (nombre, versión, plataforma). Devuelve mensaje de error o null.
+  static Future<String?> registerPosDeviceInCloud() async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      final client = SupabaseService.instance.client;
+      final device = await DeviceIdService.getDeviceInfo();
+      final pkg = await PackageInfo.fromPlatform();
+      final storeId = await StoreScope.getActiveStoreId();
+      await client.from('pos_devices').upsert({
+        'device_id': device.deviceId,
+        'device_name': device.deviceName,
+        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+        'app_version': '${pkg.version}+${pkg.buildNumber}',
+        'platform': _platformLabel(),
+        'store_id': storeId,
+      }, onConflict: 'device_id');
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.registerPosDeviceInCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Registra el terminal y reenvía el turno abierto local (si existe) para asociar device_id en la nube.
+  static Future<String?> registerDeviceAndSyncOpenShift(AppDatabase? db) async {
+    final err = await registerPosDeviceInCloud();
+    if (err != null) return err;
+    if (db != null) {
+      final open = await (db.select(db.shifts)
+            ..where((s) => s.endTime.isNull())
+            ..orderBy([(s) => OrderingTerm.desc(s.startTime)])
+            ..limit(1))
+          .getSingleOrNull();
+      if (open != null) {
+        return await writeShiftToCloud(open);
+      }
+    }
+    return null;
+  }
+
+  static DateTime? _parseTs(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    return DateTime.tryParse(v.toString());
+  }
+
+  static Future<List<CloudPosDeviceRecord>> fetchPosDevicesFromCloud() async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      final res = await SupabaseService.instance.client
+          .from('pos_devices')
+          .select()
+          .order('last_seen_at', ascending: false);
+      final out = <CloudPosDeviceRecord>[];
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final id = m['device_id'] as String? ?? '';
+        if (id.isEmpty) continue;
+        out.add(CloudPosDeviceRecord(
+          deviceId: id,
+          deviceName: m['device_name'] as String? ?? id,
+          lastSeenAt: _parseTs(m['last_seen_at']) ?? DateTime.now(),
+          appVersion: m['app_version'] as String?,
+          platform: m['platform'] as String?,
+          storeId: _int(m['store_id']) ?? kDefaultStoreId,
+        ));
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchPosDevicesFromCloud: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  /// Turno abierto en nube para ese terminal (si existe).
+  static Future<CloudShiftSummary?> fetchOpenShiftForDeviceCloud(
+    String deviceId, {
+    int? storeId,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      var q = SupabaseService.instance.client
+          .from('shifts')
+          .select()
+          .eq('device_id', deviceId)
+          .isFilter('end_time', null);
+      if (storeId != null) {
+        q = q.eq('store_id', storeId);
+      }
+      final row = await q.order('start_time', ascending: false).limit(1).maybeSingle();
+      if (row == null) return null;
+      final m = _map(row);
+      final sid = _int(m['id']);
+      if (sid == null) return null;
+      return CloudShiftSummary(
+        id: sid,
+        startTime: _parseTs(m['start_time']) ?? DateTime.now(),
+        endTime: null,
+        startingFund: _double(m['starting_fund']),
+        deviceId: m['device_id'] as String?,
+        deviceName: m['device_name'] as String?,
+        storeId: _int(m['store_id']) ?? kDefaultStoreId,
+      );
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchOpenShiftForDeviceCloud: $e');
+      debugPrint('$st');
+      return null;
+    }
+  }
+
+  static Future<List<CloudShiftSummary>> fetchShiftsForDeviceFromCloud(
+    String deviceId, {
+    int? storeId,
+    int limit = 40,
+  }) async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      var q = SupabaseService.instance.client
+          .from('shifts')
+          .select('*, shift_closures(*)')
+          .eq('device_id', deviceId);
+      if (storeId != null) {
+        q = q.eq('store_id', storeId);
+      }
+      final res = await q.order('start_time', ascending: false).limit(limit);
+      final out = <CloudShiftSummary>[];
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final sid = _int(m['id']);
+        if (sid == null) continue;
+        final closuresRaw = m['shift_closures'];
+        final closures = <CloudShiftClosureBrief>[];
+        if (closuresRaw is List) {
+          for (final c in closuresRaw) {
+            if (c is! Map) continue;
+            final cm = _map(c);
+            closures.add(CloudShiftClosureBrief(
+              closingTime: _parseTs(cm['closing_time']) ?? DateTime.now(),
+              systemExpectedCash: _double(cm['system_expected_cash']),
+              declaredCash: _double(cm['declared_cash']),
+              difference: _double(cm['difference']),
+              notes: cm['notes'] as String?,
+              closureKind: cm['closure_kind'] as String? ?? 'device',
+            ));
+          }
+        } else if (closuresRaw is Map) {
+          final cm = _map(closuresRaw);
+          closures.add(CloudShiftClosureBrief(
+            closingTime: _parseTs(cm['closing_time']) ?? DateTime.now(),
+            systemExpectedCash: _double(cm['system_expected_cash']),
+            declaredCash: _double(cm['declared_cash']),
+            difference: _double(cm['difference']),
+            notes: cm['notes'] as String?,
+            closureKind: cm['closure_kind'] as String? ?? 'device',
+          ));
+        }
+        out.add(CloudShiftSummary(
+          id: sid,
+          startTime: _parseTs(m['start_time']) ?? DateTime.now(),
+          endTime: _parseTs(m['end_time']),
+          startingFund: _double(m['starting_fund']),
+          deviceId: m['device_id'] as String?,
+          deviceName: m['device_name'] as String?,
+          storeId: _int(m['store_id']) ?? kDefaultStoreId,
+          closures: closures,
+        ));
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchShiftsForDeviceFromCloud: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  static Future<List<CloudSaleBrief>> fetchSalesForDeviceFromCloud(
+    String deviceId, {
+    int? storeId,
+    int limit = 100,
+  }) async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      var q = SupabaseService.instance.client
+          .from('sales')
+          .select('id, date, total_amount, payment_method')
+          .eq('device_id', deviceId)
+          .isFilter('cancelled_at', null);
+      if (storeId != null) {
+        q = q.eq('store_id', storeId);
+      }
+      final res = await q.order('date', ascending: false).limit(limit);
+      final out = <CloudSaleBrief>[];
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final id = _int(m['id']);
+        if (id == null) continue;
+        out.add(CloudSaleBrief(
+          id: id,
+          date: _parseTs(m['date']) ?? DateTime.now(),
+          totalAmount: _double(m['total_amount']),
+          paymentMethod: m['payment_method'] as String? ?? 'CASH',
+        ));
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchSalesForDeviceFromCloud: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  /// Cierra el turno solo en Supabase (corte remoto). Requiere [shifts.device_id] para sumar ventas.
+  static Future<String?> adminRemoteCloseShiftInCloud({
+    required int shiftId,
+    required double declaredCash,
+    String? notes,
+  }) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final client = SupabaseService.instance.client;
+      final shiftRow = await client.from('shifts').select().eq('id', shiftId).maybeSingle();
+      if (shiftRow == null) return 'Turno no encontrado';
+      final sm = _map(shiftRow);
+      if (sm['end_time'] != null) return 'El turno ya está cerrado';
+      final deviceId = sm['device_id'] as String?;
+      if (deviceId == null || deviceId.isEmpty) {
+        return 'El turno no tiene dispositivo en la nube. En la caja use el botón Registrar en la nube con el turno abierto.';
+      }
+      final start = _parseTs(sm['start_time']) ?? DateTime.now();
+      final startStr = start.toUtc().toIso8601String();
+      final end = DateTime.now();
+      final endStr = end.toUtc().toIso8601String();
+      final shiftStoreId = _int(sm['store_id']) ?? kDefaultStoreId;
+      final salesRes = await client
+          .from('sales')
+          .select('total_amount, payment_method')
+          .gte('date', startStr)
+          .lte('date', endStr)
+          .eq('device_id', deviceId)
+          .eq('store_id', shiftStoreId)
+          .isFilter('cancelled_at', null);
+      var cashSales = 0.0;
+      for (final row in _list(salesRes)) {
+        final r = _map(row);
+        if ((r['payment_method'] as String?) == 'CASH') {
+          cashSales += _double(r['total_amount']);
+        }
+      }
+      final movRes =
+          await client.from('movements').select('type, amount').eq('shift_id', shiftId).eq('account', 'CAJA');
+      var movNet = 0.0;
+      for (final row in _list(movRes)) {
+        final r = _map(row);
+        final t = r['type'] as String? ?? '';
+        final amt = _double(r['amount']);
+        if (t == 'ENTRADA') movNet += amt;
+        if (t == 'SALIDA') movNet -= amt;
+      }
+      final startingFund = _double(sm['starting_fund']);
+      final systemExpected = startingFund + cashSales + movNet;
+      final difference = declaredCash - systemExpected;
+      final adminDev = await DeviceIdService.getDeviceInfo();
+      await client.from('shifts').update({'end_time': endStr}).eq('id', shiftId);
+      await client.from('shift_closures').insert({
+        'shift_id': shiftId,
+        'closing_time': endStr,
+        'system_expected_cash': systemExpected,
+        'declared_cash': declaredCash,
+        'difference': difference,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        'closure_kind': 'admin_remote',
+        'closed_by_device_id': adminDev.deviceId,
+      });
+      await logShiftCloseDiagnostic(
+        event: 'shift_close_admin_remote',
+        shiftId: shiftId,
+        context: {
+          'declaredCash': declaredCash,
+          'systemExpectedCash': systemExpected,
+          'targetDeviceId': deviceId,
+          'adminDeviceId': adminDev.deviceId,
+          'storeId': shiftStoreId,
+        },
+      );
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.adminRemoteCloseShiftInCloud: $e');
       debugPrint('$st');
       return e.toString();
     }
@@ -485,10 +821,12 @@ class CloudSyncService {
     if (!SupabaseService.isInitialized) return;
     try {
       final device = await DeviceIdService.getDeviceInfo();
+      final storeId = await StoreScope.getActiveStoreId();
       final payload = <String, dynamic>{
         'event': event,
         'device_id': device.deviceId,
         'device_name': device.deviceName,
+        'store_id': storeId,
         if (shiftId != null) 'shift_id': shiftId,
         if (context != null && context.isNotEmpty) 'context': context,
       };
@@ -504,6 +842,7 @@ class CloudSyncService {
     if (!SupabaseService.isInitialized) return null;
     try {
       final client = SupabaseService.instance.client;
+      final storeId = await StoreScope.getActiveStoreId();
       await client.from('movements').upsert({
         'id': movement.id,
         'date': movement.date.toUtc().toIso8601String(),
@@ -512,6 +851,7 @@ class CloudSyncService {
         'amount': movement.amount,
         'reason': movement.reason,
         'shift_id': movement.shiftId,
+        'store_id': storeId,
       }, onConflict: 'id');
       return null;
     } catch (e, st) {
@@ -566,12 +906,14 @@ class CloudSyncService {
     try {
       OfflineWritePolicy.requireOnlineForMasterWrite();
       final client = SupabaseService.instance.client;
+      final storeId = await StoreScope.getActiveStoreId();
       final payload = <String, dynamic>{
         'date': DateTime.now().toUtc().toIso8601String(),
         'type': type,
         'account': account,
         'amount': amount,
         'reason': reason,
+        'store_id': storeId,
       };
       if (shiftId != null) {
         payload['shift_id'] = shiftId;
@@ -774,11 +1116,16 @@ class CloudSyncService {
     if (!SupabaseService.isInitialized) return null;
     try {
       final client = SupabaseService.instance.client;
+      final device = await DeviceIdService.getDeviceInfo();
+      final storeId = await StoreScope.getActiveStoreId();
       await client.from('shifts').upsert({
         'id': shiftWithEndTime.id,
         'start_time': shiftWithEndTime.startTime.toUtc().toIso8601String(),
         'end_time': shiftWithEndTime.endTime?.toUtc().toIso8601String(),
         'starting_fund': shiftWithEndTime.startingFund,
+        'device_id': device.deviceId,
+        'device_name': device.deviceName,
+        'store_id': storeId,
       }, onConflict: 'id');
       await client.from('shift_closures').insert({
         'shift_id': closure.shiftId,
@@ -787,6 +1134,8 @@ class CloudSyncService {
         'declared_cash': closure.declaredCash,
         'difference': closure.difference,
         'notes': closure.notes,
+        'closure_kind': 'device',
+        'closed_by_device_id': device.deviceId,
       });
       return null;
     } catch (e, st) {
@@ -1405,4 +1754,80 @@ class CloudSyncService {
       return (<int, int>{}, <int, int>{});
     }
   }
+}
+
+/// Fila de [pos_devices] en Supabase.
+class CloudPosDeviceRecord {
+  const CloudPosDeviceRecord({
+    required this.deviceId,
+    required this.deviceName,
+    required this.lastSeenAt,
+    required this.storeId,
+    this.appVersion,
+    this.platform,
+  });
+
+  final String deviceId;
+  final String deviceName;
+  final DateTime lastSeenAt;
+  /// [stores.id] en Supabase.
+  final int storeId;
+  final String? appVersion;
+  final String? platform;
+}
+
+class CloudShiftClosureBrief {
+  const CloudShiftClosureBrief({
+    required this.closingTime,
+    required this.systemExpectedCash,
+    required this.declaredCash,
+    required this.difference,
+    this.notes,
+    required this.closureKind,
+  });
+
+  final DateTime closingTime;
+  final double systemExpectedCash;
+  final double declaredCash;
+  final double difference;
+  final String? notes;
+  final String closureKind;
+}
+
+class CloudShiftSummary {
+  const CloudShiftSummary({
+    required this.id,
+    required this.startTime,
+    this.endTime,
+    required this.startingFund,
+    required this.storeId,
+    this.deviceId,
+    this.deviceName,
+    this.closures = const [],
+  });
+
+  final int id;
+  final DateTime startTime;
+  final DateTime? endTime;
+  final double startingFund;
+  final int storeId;
+  final String? deviceId;
+  final String? deviceName;
+  final List<CloudShiftClosureBrief> closures;
+
+  bool get isOpen => endTime == null;
+}
+
+class CloudSaleBrief {
+  const CloudSaleBrief({
+    required this.id,
+    required this.date,
+    required this.totalAmount,
+    required this.paymentMethod,
+  });
+
+  final int id;
+  final DateTime date;
+  final double totalAmount;
+  final String paymentMethod;
 }

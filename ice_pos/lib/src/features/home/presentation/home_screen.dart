@@ -197,6 +197,58 @@ class HomeScreen extends ConsumerWidget {
               },
             ),
             const Divider(height: 1),
+            if (CloudSyncService.isEnabled)
+              ListTile(
+                leading: const Icon(Icons.cloud_upload_outlined),
+                title: Text(l10n.registerDeviceToCloudTitle),
+                subtitle: Text(l10n.registerDeviceToCloudSubtitle),
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (!ConnectivityService.instance.isConnected) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.offlineRequiresInternet),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                  showDialog<void>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (ctx) => AlertDialog(
+                      content: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(child: Text(l10n.syncingFromCloud)),
+                        ],
+                      ),
+                    ),
+                  );
+                  final db = ref.read(appDatabaseProvider);
+                  final err = await CloudSyncService.registerDeviceAndSyncOpenShift(db);
+                  if (context.mounted) Navigator.of(context).pop();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(err == null ? l10n.registerDeviceToCloudOk : err),
+                        backgroundColor:
+                            err != null ? Theme.of(context).colorScheme.error : null,
+                        behavior: SnackBarBehavior.floating,
+                        duration: Duration(seconds: err != null ? 6 : 3),
+                      ),
+                    );
+                  }
+                },
+              ),
             if (role == UserRole.admin) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -436,7 +488,7 @@ class HomeScreen extends ConsumerWidget {
             if (CloudSyncService.isEnabled)
               ListTile(
                 leading: const Icon(Icons.point_of_sale_outlined),
-                title: Text(l10n.shiftCloseDiagnosticsTitle),
+                title: Text(l10n.cloudPosDiagnosticsTitle),
                 subtitle: Text(l10n.shiftCloseDiagnosticsMenuSubtitle),
                 onTap: () {
                   Navigator.pop(context);

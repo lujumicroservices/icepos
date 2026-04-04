@@ -1577,6 +1577,14 @@ class PosRepository {
   Future<void> updateShiftStartingFund(int shiftId, double startingFund) async {
     await (_db.update(_db.shifts)..where((s) => s.id.equals(shiftId)))
         .write(ShiftsCompanion(startingFund: Value(startingFund)));
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+      final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(shiftId)))
+          .getSingleOrNull();
+      if (shift != null) {
+        final err = await CloudSyncService.writeShiftToCloud(shift);
+        if (err != null) debugPrint('Cloud write shift (starting fund): $err');
+      }
+    }
   }
 
   /// Closes a shift with blind count reconciliation.
