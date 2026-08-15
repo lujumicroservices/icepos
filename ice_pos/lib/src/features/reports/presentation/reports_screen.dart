@@ -7,6 +7,7 @@ import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_reports_service.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/pos/domain/sale_payment.dart';
 
 final _dateRangeProvider = StateProvider<({DateTime start, DateTime end})>((ref) {
   final now = DateTime.now();
@@ -94,22 +95,15 @@ final _cloudSalesReportProvider = FutureProvider.autoDispose<({SalesReportSummar
   final byProduct = <String, ({double qty, double revenue})>{};
   for (final s in inRange) {
     total += s.totalAmount;
-    switch (s.paymentMethod) {
-      case 'CASH':
-        cash += s.totalAmount;
-        break;
-      case 'CARD_DEBIT':
-        cardDebit += s.totalAmount;
-        break;
-      case 'CARD_CREDIT':
-        cardCredit += s.totalAmount;
-        break;
-      case 'TRANSFER':
-        transfer += s.totalAmount;
-        break;
-      default:
-        cash += s.totalAmount;
-    }
+    final b = SalePaymentBreakdown.fromSale(
+      paymentMethod: s.paymentMethod,
+      totalAmount: s.totalAmount,
+      paymentsJson: s.paymentsJson,
+    );
+    cash += b.cash;
+    cardDebit += b.debit;
+    cardCredit += b.credit;
+    transfer += b.transfer;
     for (final item in s.items) {
       final rev = item.quantity * item.unitPrice;
       final prev = byProduct[item.productName] ?? (qty: 0.0, revenue: 0.0);
@@ -198,22 +192,15 @@ final _cloudRayosXSummaryProvider = FutureProvider.autoDispose<SalesReportSummar
   double cash = 0, cardDebit = 0, cardCredit = 0, transfer = 0;
   for (final s in inRange) {
     total += s.totalAmount;
-    switch (s.paymentMethod) {
-      case 'CASH':
-        cash += s.totalAmount;
-        break;
-      case 'CARD_DEBIT':
-        cardDebit += s.totalAmount;
-        break;
-      case 'CARD_CREDIT':
-        cardCredit += s.totalAmount;
-        break;
-      case 'TRANSFER':
-        transfer += s.totalAmount;
-        break;
-      default:
-        cash += s.totalAmount;
-    }
+    final b = SalePaymentBreakdown.fromSale(
+      paymentMethod: s.paymentMethod,
+      totalAmount: s.totalAmount,
+      paymentsJson: s.paymentsJson,
+    );
+    cash += b.cash;
+    cardDebit += b.debit;
+    cardCredit += b.credit;
+    transfer += b.transfer;
   }
   return SalesReportSummary(
     totalAmount: total,
@@ -236,6 +223,9 @@ final _cloudRayosXClosuresProvider = FutureProvider.autoDispose<List<ClosureDayR
     return d == dayStart;
   }).toList();
 
+  final movementNetByShift =
+      await CloudReportsService.getCajaMovementNetByShiftIds(inDay.map((c) => c.shiftId).toList());
+
   final result = <ClosureDayRow>[];
   for (final c in inDay) {
     final startLocal = c.startTime.toLocal();
@@ -244,22 +234,15 @@ final _cloudRayosXClosuresProvider = FutureProvider.autoDispose<List<ClosureDayR
     for (final s in remoteSales) {
       final local = s.createdAt.toLocal();
       if (!local.isBefore(startLocal) && !local.isAfter(endLocal)) {
-        switch (s.paymentMethod) {
-          case 'CASH':
-            cash += s.totalAmount;
-            break;
-          case 'CARD_DEBIT':
-            debit += s.totalAmount;
-            break;
-          case 'CARD_CREDIT':
-            credit += s.totalAmount;
-            break;
-          case 'TRANSFER':
-            transfer += s.totalAmount;
-            break;
-          default:
-            cash += s.totalAmount;
-        }
+        final b = SalePaymentBreakdown.fromSale(
+          paymentMethod: s.paymentMethod,
+          totalAmount: s.totalAmount,
+          paymentsJson: s.paymentsJson,
+        );
+        cash += b.cash;
+        debit += b.debit;
+        credit += b.credit;
+        transfer += b.transfer;
       }
     }
     result.add(ClosureDayRow(
@@ -272,7 +255,7 @@ final _cloudRayosXClosuresProvider = FutureProvider.autoDispose<List<ClosureDayR
       cardDebit: debit,
       cardCredit: credit,
       transferSales: transfer,
-      movementsCajaNet: 0,
+      movementsCajaNet: movementNetByShift[c.shiftId] ?? 0,
       systemExpectedCash: c.systemExpectedCash,
       declaredCash: c.declaredCash,
       difference: c.difference,

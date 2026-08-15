@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/features/admin/presentation/bundle_management_screen.dart';
+import 'package:ice_pos/src/features/admin/presentation/discount_catalog_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/category_management_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/operation_logs_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_management_screen.dart';
+import 'package:ice_pos/src/features/admin/presentation/stores_registers_admin_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/supply_management_screen.dart';
+import 'package:ice_pos/src/features/home/presentation/home_drawer.dart';
 import 'package:ice_pos/src/features/inventory/presentation/inventory_reconciliation_screen.dart';
 import 'package:ice_pos/src/features/movements/presentation/movements_screen.dart';
 import 'package:ice_pos/src/features/monitoring/presentation/shift_close_events_screen.dart';
 import 'package:ice_pos/src/features/monitoring/presentation/temperature_history_screen.dart';
+import 'package:ice_pos/src/features/reports/presentation/platform_orders_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/reports_screen.dart';
+import 'package:ice_pos/src/features/reports/presentation/sales_quick_report_screen.dart';
+import 'package:ice_pos/src/features/pos/presentation/pending_cashier_approvals_screen.dart';
 import 'package:ice_pos/src/features/reports/presentation/sales_history_screen.dart';
+import 'package:ice_pos/src/features/tasks/presentation/staff_tasks_admin_screen.dart';
 
-/// Inicio web para administradores: cuadrícula de accesos a los módulos más usados.
+/// Inicio web para administradores: mismas secciones que el menú lateral (app).
 class WebAdminHomeScreen extends ConsumerWidget {
   const WebAdminHomeScreen({super.key});
 
@@ -24,8 +31,9 @@ class WebAdminHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = ref.watch(appLocalizationsProvider);
     final scheme = Theme.of(context).colorScheme;
+    final cloud = CloudSyncService.isEnabled;
 
-    final tiles = <_WebModule>[
+    final catalog = <_WebModule>[
       _WebModule(
         title: l10n.categoryManagement,
         icon: Icons.category_rounded,
@@ -48,6 +56,46 @@ class WebAdminHomeScreen extends ConsumerWidget {
         builder: (_) => const SupplyManagementScreen(),
       ),
       _WebModule(
+        title: l10n.bundleManagement,
+        icon: Icons.local_offer_rounded,
+        color: scheme.primaryContainer.withValues(alpha: 0.5),
+        onIconColor: scheme.onPrimaryContainer,
+        builder: (_) => const BundleManagementScreen(),
+      ),
+      _WebModule(
+        title: l10n.discountCatalogTitle,
+        icon: Icons.percent_rounded,
+        color: scheme.secondaryContainer.withValues(alpha: 0.55),
+        onIconColor: scheme.onSecondaryContainer,
+        builder: (_) => const DiscountCatalogScreen(),
+      ),
+      if (cloud)
+        _WebModule(
+          title: l10n.staffTasksAdminTitle,
+          icon: Icons.task_alt_rounded,
+          color: scheme.tertiaryContainer.withValues(alpha: 0.6),
+          onIconColor: scheme.onTertiaryContainer,
+          builder: (_) => const StaffTasksAdminScreen(),
+        ),
+      _WebModule(
+        title: l10n.inventoryReconciliation,
+        icon: Icons.fact_check_rounded,
+        color: scheme.surfaceContainerHighest,
+        onIconColor: scheme.onSurfaceVariant,
+        builder: (_) => const InventoryReconciliationScreen(),
+      ),
+    ];
+
+    final salesReports = <_WebModule>[
+      if (cloud)
+        _WebModule(
+          title: l10n.quickSalesSummaryTitle,
+          icon: Icons.summarize_rounded,
+          color: scheme.primaryContainer,
+          onIconColor: scheme.onPrimaryContainer,
+          builder: (_) => const SalesQuickReportScreen(),
+        ),
+      _WebModule(
         title: l10n.salesHistory,
         icon: Icons.history_rounded,
         color: scheme.primaryContainer.withValues(alpha: 0.65),
@@ -62,26 +110,20 @@ class WebAdminHomeScreen extends ConsumerWidget {
         builder: (_) => const ReportsScreen(),
       ),
       _WebModule(
-        title: l10n.inventoryReconciliation,
-        icon: Icons.fact_check_rounded,
-        color: scheme.surfaceContainerHighest,
-        onIconColor: scheme.onSurfaceVariant,
-        builder: (_) => const InventoryReconciliationScreen(),
-      ),
-      _WebModule(
-        title: l10n.bundleManagement,
-        icon: Icons.local_offer_rounded,
-        color: scheme.primaryContainer.withValues(alpha: 0.5),
-        onIconColor: scheme.onPrimaryContainer,
-        builder: (_) => const BundleManagementScreen(),
-      ),
-      _WebModule(
         title: l10n.movements,
         icon: Icons.swap_horiz_rounded,
         color: scheme.tertiaryContainer.withValues(alpha: 0.7),
         onIconColor: scheme.onTertiaryContainer,
         builder: (_) => const MovementsScreen(),
       ),
+      if (cloud)
+        _WebModule(
+          title: l10n.platformOrdersTitle,
+          icon: Icons.delivery_dining_rounded,
+          color: scheme.tertiaryContainer.withValues(alpha: 0.55),
+          onIconColor: scheme.onTertiaryContainer,
+          builder: (_) => const PlatformOrdersScreen(),
+        ),
       _WebModule(
         title: l10n.temperatureHistory,
         icon: Icons.thermostat_rounded,
@@ -89,13 +131,27 @@ class WebAdminHomeScreen extends ConsumerWidget {
         onIconColor: Colors.blue.shade800,
         builder: (_) => const TemperatureHistoryScreen(),
       ),
-      if (CloudSyncService.isEnabled)
+    ];
+
+    final organization = <_WebModule>[
+      if (cloud)
         _WebModule(
-          title: l10n.cloudPosDiagnosticsTitle,
-          icon: Icons.point_of_sale_outlined,
-          color: scheme.tertiaryContainer.withValues(alpha: 0.85),
-          onIconColor: scheme.onTertiaryContainer,
-          builder: (_) => const ShiftCloseEventsScreen(),
+          title: l10n.storesRegistersAdminTitle,
+          icon: Icons.store_mall_directory_outlined,
+          color: scheme.primaryContainer.withValues(alpha: 0.8),
+          onIconColor: scheme.onPrimaryContainer,
+          builder: (_) => const StoresRegistersAdminScreen(),
+        ),
+    ];
+
+    final support = <_WebModule>[
+      if (cloud)
+        _WebModule(
+          title: l10n.pendingCashierApprovalsTitle,
+          icon: Icons.how_to_reg_outlined,
+          color: scheme.primaryContainer.withValues(alpha: 0.72),
+          onIconColor: scheme.onPrimaryContainer,
+          builder: (_) => const PendingCashierApprovalsScreen(),
         ),
       _WebModule(
         title: l10n.operationLogTitle,
@@ -104,6 +160,14 @@ class WebAdminHomeScreen extends ConsumerWidget {
         onIconColor: scheme.onErrorContainer,
         builder: (_) => const OperationLogsScreen(),
       ),
+      if (cloud)
+        _WebModule(
+          title: l10n.cloudPosDiagnosticsTitle,
+          icon: Icons.point_of_sale_outlined,
+          color: scheme.tertiaryContainer.withValues(alpha: 0.85),
+          onIconColor: scheme.onTertiaryContainer,
+          builder: (_) => const ShiftCloseEventsScreen(),
+        ),
     ];
 
     return ColoredBox(
@@ -120,50 +184,11 @@ class WebAdminHomeScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _HeaderCard(l10n: l10n, scheme: scheme),
-                  const SizedBox(height: 28),
-                  Text(
-                    l10n.webQuickAccess,
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (context, c) {
-                      final w = c.maxWidth;
-                      final cols = w >= 1000
-                          ? 4
-                          : w >= 640
-                              ? 3
-                              : 2;
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: cols,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: w >= 900 ? 1.12 : 1.0,
-                        ),
-                        itemCount: tiles.length,
-                        itemBuilder: (context, i) {
-                          final m = tiles[i];
-                          return _ModuleTile(
-                            module: m,
-                            onTap: () {
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder: m.builder,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
+                  const SizedBox(height: 24),
+                  _WebSection(title: l10n.drawerSectionCatalog, modules: catalog),
+                  _WebSection(title: l10n.drawerSectionSalesReports, modules: salesReports),
+                  _WebSection(title: l10n.drawerSectionOrganization, modules: organization),
+                  _WebSection(title: l10n.drawerSectionSupport, modules: support),
                 ],
               ),
             ),
@@ -188,6 +213,62 @@ class _WebModule {
   final Color color;
   final Color onIconColor;
   final WidgetBuilder builder;
+}
+
+class _WebSection extends StatelessWidget {
+  const _WebSection({
+    required this.title,
+    required this.modules,
+  });
+
+  final String title;
+  final List<_WebModule> modules;
+
+  @override
+  Widget build(BuildContext context) {
+    if (modules.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DrawerSectionHeader(title: title),
+        LayoutBuilder(
+          builder: (context, c) {
+            final w = c.maxWidth;
+            final cols = w >= 1000
+                ? 4
+                : w >= 640
+                    ? 3
+                    : 2;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: w >= 900 ? 1.12 : 1.0,
+              ),
+              itemCount: modules.length,
+              itemBuilder: (context, i) {
+                final m = modules[i];
+                return _ModuleTile(
+                  module: m,
+                  onTap: () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: m.builder,
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
 }
 
 class _HeaderCard extends StatelessWidget {

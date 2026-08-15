@@ -7,9 +7,11 @@ import 'package:ice_pos/src/features/pos/domain/bundle_promotion.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart';
 import 'package:ice_pos/src/features/pos/domain/product_discount_rule.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_computer.dart';
+import 'package:ice_pos/src/features/pos/domain/sale_payment.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_line.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_state.dart';
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'cart_controller.g.dart';
@@ -17,18 +19,36 @@ part 'cart_controller.g.dart';
 /// Provides receipt lines using the Quantity Map approach (no double-counting).
 final currentReceiptProvider =
     FutureProvider<ReceiptResult>((ref) async {
+  ref.watch(posCategoriesRefreshProvider);
   final cartState = ref.watch(cartControllerProvider);
   if (cartState.items.isEmpty) {
     return const ReceiptResult(lines: [], total: 0, standaloneSubtotal: 0);
   }
-  final bundles =
-      await ref.read(pos_data.posRepositoryProvider)!.getBundlesWithItems();
+  final repo = ref.read(pos_data.posRepositoryProvider)!;
+  final bundles = await repo.getBundlesWithItems();
+  final supplyIds = cartState.items
+      .expand((item) => item.selectedModifiers.map((m) => m.supplyId))
+      .toSet();
+  final supplyIdToName = await repo.getSupplyNamesByIds(supplyIds);
   return computeReceipt(
     cartState.items,
     bundles,
     cartState.appliedDiscount,
     productDiscounts: cartState.productDiscounts,
+    supplyIdToName: supplyIdToName,
   );
+});
+
+/// Nombres de insumos para mostrar sabores en el carrito del POS.
+final cartModifierSupplyNamesProvider = FutureProvider<Map<int, String>>((ref) async {
+  ref.watch(cartControllerProvider);
+  final items = ref.read(cartControllerProvider).items;
+  final supplyIds =
+      items.expand((item) => item.selectedModifiers.map((m) => m.supplyId)).toSet();
+  if (supplyIds.isEmpty) return {};
+  final repo = ref.read(pos_data.posRepositoryProvider);
+  if (repo == null) return {};
+  return repo.getSupplyNamesByIds(supplyIds);
 });
 
 /// Legacy provider - kept for checkout which needs bundle-adjusted items.
@@ -53,19 +73,25 @@ class CartController extends _$CartController {
     if (state.items.isEmpty) {
       return const ReceiptResult(lines: [], total: 0, standaloneSubtotal: 0);
     }
-    final bundles =
-        await ref.read(pos_data.posRepositoryProvider)!.getBundlesWithItems();
+    final repo = ref.read(pos_data.posRepositoryProvider)!;
+    final bundles = await repo.getBundlesWithItems();
+    final supplyIds = state.items
+        .expand((item) => item.selectedModifiers.map((m) => m.supplyId))
+        .toSet();
+    final supplyIdToName = await repo.getSupplyNamesByIds(supplyIds);
     return computeReceipt(
       state.items,
       bundles,
       state.appliedDiscount,
       productDiscounts: state.productDiscounts,
+      supplyIdToName: supplyIdToName,
     );
   }
 
   void addToCart(
     Product product, {
     List<ModifierOption> selectedModifiers = const [],
+    List<String> modifierLabels = const [],
     double quantity = 1,
   }) {
     final double qty = quantity > 0 ? quantity : 1.0;
@@ -87,6 +113,7 @@ class CartController extends _$CartController {
             product: product,
             quantity: qty,
             selectedModifiers: selectedModifiers,
+            modifierLabels: modifierLabels,
           ),
         ],
       );
@@ -134,6 +161,12 @@ class CartController extends _$CartController {
     return true;
   }
 
+  /// Applies a preloaded catalog discount (from admin list / picker).
+  void applyCatalogDiscount(Discount discount) {
+    if (!discount.isActive) return;
+    state = state.copyWith(appliedDiscount: discount);
+  }
+
   void removeDiscount() {
     state = state.copyWith(clearDiscount: true);
   }
@@ -178,20 +211,24 @@ class CartController extends _$CartController {
   }
 
   /// Completes the sale and clears the cart.
-  /// [paymentData] map from CheckoutDialog: 'method' (cash/card/transfer),
-  /// 'amountTendered' (double), 'cardType' (debit/credit or null).
+  /// [paymentData] from CheckoutDialog: single method or split (`split: true`, `payments: [...]`).
   Future<void> completeSale(Map<String, dynamic> paymentData) async {
     if (state.items.isEmpty) return;
 
-    final method = paymentData['method'] as String? ?? 'cash';
-    final amountTendered = (paymentData['amountTendered'] as num?)?.toDouble() ?? 0.0;
-    final cardType = paymentData['cardType'] as String?;
-
     final receipt = await currentReceipt;
-    final paymentMethod = _paymentMethodFromDialog(method, cardType);
-    final changeGiven = method == 'cash'
-        ? (amountTendered - receipt.total).clamp(0.0, double.infinity)
-        : 0.0;
+    final payments = SalePaymentLine.fromCheckoutPaymentData(
+      paymentData,
+      cartTotal: receipt.total,
+    );
+    final isSplit = payments.length > 1;
+    final primary = payments.first;
+    final paymentMethod = isSplit ? 'SPLIT' : primary.method;
+    final amountTendered = payments
+        .where((p) => p.method == 'CASH')
+        .fold<double>(0, (s, p) => s + (p.amountTendered ?? p.amount));
+    final changeGiven = payments
+        .where((p) => p.method == 'CASH')
+        .fold<double>(0, (s, p) => s + (p.changeGiven ?? 0));
 
     final bundles =
         await ref.read(pos_data.posRepositoryProvider)!.getBundlesWithItems();
@@ -215,20 +252,8 @@ class CartController extends _$CartController {
           paymentMethod: paymentMethod,
           amountTendered: amountTendered,
           changeGiven: changeGiven,
+          payments: isSplit ? payments : null,
         );
     clearCart();
-  }
-
-  static String _paymentMethodFromDialog(String method, String? cardType) {
-    switch (method) {
-      case 'cash':
-        return 'CASH';
-      case 'card':
-        return cardType == 'credit' ? 'CARD_CREDIT' : 'CARD_DEBIT';
-      case 'transfer':
-        return 'TRANSFER';
-      default:
-        return 'CASH';
-    }
   }
 }

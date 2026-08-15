@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:ice_pos/src/core/auth/auth_session_provider.dart';
 import 'package:ice_pos/src/core/auth/user_role_provider.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/services/fcm_push_service.dart';
 import 'package:ice_pos/src/features/auth/presentation/login_screen.dart';
 
 /// Muestra login si no hay sesión; si hay sesión sincroniza el rol y muestra [child].
@@ -50,6 +53,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           final r = role;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(userRoleProvider.notifier).setRoleFromAuth(r);
+            unawaited(FcmPushService.instance.registerTokenForCurrentUser());
           });
         }
         if (role == null) {

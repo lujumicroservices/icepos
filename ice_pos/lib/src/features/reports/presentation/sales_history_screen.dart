@@ -1,12 +1,17 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/auth/user_role_provider.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
 import 'package:ice_pos/src/features/admin/data/sales_history_repository.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
-
+import 'package:ice_pos/src/features/pos/data/sale_receipt_print_mapper.dart';
+import 'package:ice_pos/src/features/pos/domain/receipt_print_data.dart';
+import 'package:ice_pos/src/features/pos/domain/sale_payment.dart';
+import 'package:ice_pos/src/features/pos/presentation/controllers/receipt_printer_controller.dart';
 final _salesHistoryStreamProvider =
     StreamProvider<List<SaleWithItems>>((ref) {
   return ref.watch(salesHistoryRepositoryProvider).watchSalesHistory();
@@ -93,7 +98,11 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
             ),
           Expanded(
             child: _segmentIndex == 0
-                ? _buildLocalBody(salesAsync, ref.watch(userRoleProvider))
+                ? _buildLocalBody(
+                    salesAsync,
+                    ref.watch(userRoleProvider),
+                    ref.watch(posRepositoryProvider),
+                  )
                 : syncAvailable
                     ? _buildCloudBody(ref)
                     : Center(
@@ -115,7 +124,11 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
     );
   }
 
-  Widget _buildLocalBody(AsyncValue<List<SaleWithItems>> salesAsync, UserRole? role) {
+  Widget _buildLocalBody(
+    AsyncValue<List<SaleWithItems>> salesAsync,
+    UserRole? role,
+    PosRepository? posRepo,
+  ) {
     return salesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
@@ -205,6 +218,8 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                             '${dateLocal.hour.toString().padLeft(2, '0')}:${dateLocal.minute.toString().padLeft(2, '0')}';
 
                         final l10n = ref.watch(appLocalizationsProvider);
+                        final canRequestCancel = role == UserRole.admin ||
+                            (role == UserRole.employee && posRepo != null);
                         final children = <Widget>[
                           ...saleWithItems.items
                               .map(
@@ -216,7 +231,17 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                                   ),
                                 ),
                               ),
-                          if (role == UserRole.admin)
+                          if (!kIsWeb)
+                            ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.receipt_long_outlined),
+                              title: Text(
+                                l10n.reprintTicket,
+                                style: GoogleFonts.inter(fontSize: 14),
+                              ),
+                              onTap: () => _reprintLocalSale(context, ref, sale.id, posRepo),
+                            ),
+                          if (canRequestCancel)
                             ListTile(
                               dense: true,
                               leading: const Icon(Icons.cancel_outlined, color: Colors.red),
@@ -238,7 +263,10 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                               ),
                             ),
                             subtitle: Text(
-                              sale.paymentMethod,
+                              SalePaymentBreakdown.formatPaymentSummary(
+                                paymentsJson: sale.paymentsJson,
+                                paymentMethod: sale.paymentMethod,
+                              ),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: Theme.of(context)
@@ -257,6 +285,94 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
             ],
           );
         },
+    );
+  }
+
+  Future<void> _reprintLocalSale(
+    BuildContext context,
+    WidgetRef ref,
+    int saleId,
+    PosRepository? posRepo,
+  ) async {
+    final l10n = ref.read(appLocalizationsProvider);
+    if (posRepo == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.printError)),
+        );
+      }
+      return;
+    }
+
+    final printData = await posRepo.receiptPrintDataForSale(saleId);
+    if (!context.mounted) return;
+    if (printData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.printError)),
+      );
+      return;
+    }
+    await _printReceiptData(context, ref, printData);
+  }
+
+  Future<void> _reprintRemoteSale(
+    BuildContext context,
+    WidgetRef ref,
+    RemoteSale sale,
+  ) async {
+    final printData = SaleReceiptPrintMapper.fromRemoteSale(sale);
+    await _printReceiptData(context, ref, printData);
+  }
+
+  Future<void> _printReceiptData(
+    BuildContext context,
+    WidgetRef ref,
+    ReceiptPrintData printData,
+  ) async {
+    final l10n = ref.read(appLocalizationsProvider);
+    if (!context.mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 20),
+              Text(l10n.printingTicket, style: GoogleFonts.inter(fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    String? printErr;
+    try {
+      printErr = await ref.read(receiptPrinterProvider.notifier).printReceipt(printData);
+    } catch (_) {
+      printErr = l10n.printError;
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          printErr != null ? '${l10n.printError}: $printErr' : l10n.ticketSent,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        backgroundColor: printErr != null ? Theme.of(context).colorScheme.error : null,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -280,6 +396,20 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
       ),
     );
     if (confirmed != true || !context.mounted) return;
+    final role = ref.read(userRoleProvider);
+    final pos = ref.read(posRepositoryProvider);
+    if (role == UserRole.employee && pos != null) {
+      await pos.enqueuePendingSaleCancel(saleId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.pendingApprovalQueued),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
     await ref.read(salesHistoryRepositoryProvider).deleteSale(saleId);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -291,8 +421,56 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
     }
   }
 
+  Future<void> _confirmCancelCloudSale(BuildContext context, String saleId, dynamic l10n) async {
+    final saleIdInt = int.tryParse(saleId);
+    if (saleIdInt == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo cancelar: id inválido ($saleId)'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.cancelSaleConfirmTitle),
+        content: Text(l10n.cancelSaleConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            child: Text(l10n.cancelSale),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final err = await CloudSyncService.softCancelSaleInCloud(saleIdInt);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(err == null ? l10n.saleCancelled : err),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: err != null ? Theme.of(context).colorScheme.error : null,
+      ),
+    );
+    if (err == null) {
+      ref.invalidate(_remoteSalesProvider);
+    }
+  }
+
   Widget _buildCloudBody(WidgetRef ref) {
     final remoteAsync = ref.watch(_remoteSalesProvider);
+    final role = ref.watch(userRoleProvider);
+    final l10n = ref.watch(appLocalizationsProvider);
     return remoteAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(
@@ -380,24 +558,52 @@ class _SalesHistoryScreenState extends ConsumerState<SalesHistoryScreen> {
                               style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 16),
                             ),
                             subtitle: Text(
-                              [sale.paymentMethod, if (deviceLabel != null) deviceLabel]
-                                  .join(' · '),
+                              [
+                                SalePaymentBreakdown.formatPaymentSummary(
+                                  paymentsJson: sale.paymentsJson,
+                                  paymentMethod: sale.paymentMethod,
+                                ),
+                                if (deviceLabel != null) deviceLabel,
+                              ].join(' · '),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
-                            children: sale.items
-                                .map(
-                                  (item) => ListTile(
-                                    dense: true,
-                                    title: Text(
-                                      '${item.quantity.toStringAsFixed(0)}x ${item.productName} @ \$${item.unitPrice.toStringAsFixed(2)}',
-                                      style: GoogleFonts.inter(fontSize: 14),
+                            children: [
+                              ...sale.items.map(
+                                (item) => ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    '${item.quantity.toStringAsFixed(0)}x ${item.productName} @ \$${item.unitPrice.toStringAsFixed(2)}',
+                                    style: GoogleFonts.inter(fontSize: 14),
+                                  ),
+                                ),
+                              ),
+                              if (!kIsWeb)
+                                ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.receipt_long_outlined),
+                                  title: Text(
+                                    l10n.reprintTicket,
+                                    style: GoogleFonts.inter(fontSize: 14),
+                                  ),
+                                  onTap: () => _reprintRemoteSale(context, ref, sale),
+                                ),
+                              if (role == UserRole.admin)
+                                ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.cancel_outlined, color: Colors.red),
+                                  title: Text(
+                                    l10n.cancelSale,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: Theme.of(context).colorScheme.error,
                                     ),
                                   ),
-                                )
-                                .toList(),
+                                  onTap: () => _confirmCancelCloudSale(context, sale.id, l10n),
+                                ),
+                            ],
                           ),
                         );
                       },

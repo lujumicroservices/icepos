@@ -52,14 +52,18 @@ class Sales extends Table {
   IntColumn get id => integer().autoIncrement()();
   DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
   RealColumn get totalAmount => real()();
-  /// CASH, CARD_DEBIT, CARD_CREDIT, TRANSFER
+  /// CASH, CARD_DEBIT, CARD_CREDIT, TRANSFER, SPLIT (see [paymentsJson])
   TextColumn get paymentMethod => text().withDefault(const Constant('CASH'))();
   RealColumn get amountTendered => real().withDefault(const Constant(0.0))();
   RealColumn get changeGiven => real().withDefault(const Constant(0.0))();
+  /// JSON array of split payments when [paymentMethod] is SPLIT.
+  TextColumn get paymentsJson => text().nullable()();
   /// Id de la venta en Supabase (para poder cancelarla en la nube).
   IntColumn get cloudSaleId => integer().nullable()();
   /// Borrado lógico: si no es null, la venta está cancelada (no se borra físicamente).
   DateTimeColumn get cancelledAt => dateTime().nullable()();
+  /// Turno local ([Shifts.id]); al sincronizar se envía como `sales.shift_id` = id nube del turno.
+  IntColumn get shiftId => integer().references(Shifts, #id)();
 }
 
 // 5. SALE ITEMS (Details)
@@ -69,6 +73,8 @@ class SaleItems extends Table {
   IntColumn get productId => integer().references(Products, #id)();
   RealColumn get quantity => real()(); 
   RealColumn get unitPrice => real()(); 
+  /// JSON array of [ModifierOptionDto] for cloud replay when the sale was offline or sync failed.
+  TextColumn get modifiersJson => text().nullable()();
 }
 
 // 6. INVENTORY LOGS (Audit Trail)
@@ -146,6 +152,10 @@ class BundleItems extends Table {
 // 14. SHIFTS (Work sessions - open/close)
 class Shifts extends Table {
   IntColumn get id => integer().autoIncrement()();
+  /// Same as [id] in Supabase `shifts` (assigned at open; legacy rows backfilled to [id]).
+  IntColumn get cloudShiftId => integer().named('cloud_shift_id').nullable()();
+  /// `pos_registers.id` en Supabase (cajón lógico de esta tienda).
+  IntColumn get cloudRegisterId => integer().named('cloud_register_id').nullable()();
   DateTimeColumn get startTime => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get endTime => dateTime().nullable()();
   RealColumn get startingFund => real().withDefault(const Constant(0.0))();
@@ -171,6 +181,11 @@ class Movements extends Table {
   RealColumn get amount => real()(); // Siempre positivo
   TextColumn get reason => text()();
   IntColumn get shiftId => integer().nullable().references(Shifts, #id)();
+  /// True until [CloudSyncService.writeMovementToCloud] succeeds (offline insert or failed push).
+  BoolColumn get needsCloudSync =>
+      boolean().withDefault(const Constant(false))();
+  /// Admin cancel: excluded from caja net and lists.
+  DateTimeColumn get cancelledAt => dateTime().nullable()();
 }
 
 // 15.7 USERS (Login: administradores y cajeros)
@@ -182,12 +197,23 @@ class AppUsers extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+// 15.8 PENDING CASHIER APPROVALS (cajero solicita; admin aprueba en el dispositivo)
+/// kind: movement | sale_cancel | shift_close — payload JSON según [PosRepository].
+class PendingCashierApprovals extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get kind => text()();
+  TextColumn get payloadJson => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  /// UUID en `public.pending_cashier_approvals` (admin web / sync).
+  TextColumn get cloudPendingId => text().nullable()();
+}
+
 // 16. OPERATION LOGS (Failed operations / warnings for diagnostics & export)
 /// Local-only audit trail: sale failures, cloud sync issues, etc.
 class OperationLogs extends Table {
   IntColumn get id => integer().autoIncrement()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  /// error | warning | info
+  /// critical | error | warning | info ([critical] = fallo de escritura local o nube)
   TextColumn get level => text().withLength(min: 1, max: 16)();
   /// e.g. sale_transaction, sale_cloud_sync, sale_cart_complete
   TextColumn get operation => text().withLength(min: 1, max: 64)();

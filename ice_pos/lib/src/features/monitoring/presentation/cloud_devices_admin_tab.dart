@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/connectivity_service.dart';
@@ -69,7 +68,10 @@ class CloudDevicesAdminTab extends ConsumerWidget {
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
-                    '${l10n.storeLabel} #${d.storeId} · ${l10n.cloudDeviceLastSeen}: $seenStr · ${d.platform ?? '—'} · ${d.appVersion ?? '—'}',
+                    '${l10n.storeLabel} #${d.storeId}'
+                    '${d.registerId != null ? ' · Caja #${d.registerId}' : ''}'
+                    ' · ${l10n.cloudDeviceLastSeen}: $seenStr · ${d.platform ?? '—'} · ${d.appVersion ?? '—'}'
+                    '${d.remoteUpdateRequestedAt != null ? ' · ${l10n.cloudUpdatePendingBadge}' : ''}',
                     style: GoogleFonts.inter(fontSize: 12, color: scheme.onSurfaceVariant),
                   ),
                   trailing: const Icon(Icons.chevron_right),
@@ -100,6 +102,7 @@ class CloudDeviceDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _CloudDeviceDetailScreenState extends ConsumerState<CloudDeviceDetailScreen> {
+  late CloudPosDeviceRecord _device;
   CloudShiftSummary? _openShift;
   List<CloudShiftSummary> _shifts = [];
   List<CloudSaleBrief> _sales = [];
@@ -109,6 +112,7 @@ class _CloudDeviceDetailScreenState extends ConsumerState<CloudDeviceDetailScree
   @override
   void initState() {
     super.initState();
+    _device = widget.device;
     _reload();
   }
 
@@ -118,21 +122,23 @@ class _CloudDeviceDetailScreenState extends ConsumerState<CloudDeviceDetailScree
       _loadError = null;
     });
     try {
-      final sid = widget.device.storeId;
+      final sid = _device.storeId;
+      final refreshed = await CloudSyncService.fetchPosDeviceFromCloud(_device.deviceId);
       final open = await CloudSyncService.fetchOpenShiftForDeviceCloud(
-        widget.device.deviceId,
+        _device.deviceId,
         storeId: sid,
       );
       final shifts = await CloudSyncService.fetchShiftsForDeviceFromCloud(
-        widget.device.deviceId,
+        _device.deviceId,
         storeId: sid,
       );
       final sales = await CloudSyncService.fetchSalesForDeviceFromCloud(
-        widget.device.deviceId,
+        _device.deviceId,
         storeId: sid,
       );
       if (mounted) {
         setState(() {
+          if (refreshed != null) _device = refreshed;
           _openShift = open;
           _shifts = shifts;
           _sales = sales;
@@ -146,6 +152,100 @@ class _CloudDeviceDetailScreenState extends ConsumerState<CloudDeviceDetailScree
           _loading = false;
         });
       }
+    }
+  }
+
+  Future<void> _promptRequestRemoteUpdate() async {
+    final l10n = ref.read(appLocalizationsProvider);
+    final messageController = TextEditingController(
+      text: _device.remoteUpdateMessage ?? '',
+    );
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.cloudRequestAppUpdate),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(l10n.cloudRequestAppUpdateSubtitle, style: GoogleFonts.inter(fontSize: 13)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: messageController,
+                  decoration: InputDecoration(
+                    labelText: l10n.cloudUpdateRequestMessageHint,
+                    border: const OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.apply)),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      if (!ConnectivityService.instance.isConnected) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.offlineRequiresInternet)));
+        return;
+      }
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final msg = messageController.text.trim();
+      final err = await CloudSyncService.setRemoteUpdateRequestForDevice(
+        deviceId: _device.deviceId,
+        message: msg.isEmpty ? null : msg,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err == null ? l10n.cloudUpdateRequestSent : err),
+          backgroundColor: err != null ? Theme.of(context).colorScheme.error : null,
+        ),
+      );
+      if (err == null) {
+        ref.invalidate(_cloudDevicesProvider);
+        await _reload();
+      }
+    } on OfflineMasterWriteException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
+    } finally {
+      messageController.dispose();
+    }
+  }
+
+  Future<void> _clearRemoteUpdate() async {
+    final l10n = ref.read(appLocalizationsProvider);
+    if (!ConnectivityService.instance.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.offlineRequiresInternet)));
+      return;
+    }
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final err = await CloudSyncService.clearRemoteUpdateRequestForDevice(_device.deviceId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err == null ? l10n.cloudUpdateRequestCleared : err),
+          backgroundColor: err != null ? Theme.of(context).colorScheme.error : null,
+        ),
+      );
+      if (err == null) {
+        ref.invalidate(_cloudDevicesProvider);
+        await _reload();
+      }
+    } on OfflineMasterWriteException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -273,7 +373,7 @@ class _CloudDeviceDetailScreenState extends ConsumerState<CloudDeviceDetailScree
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.device.deviceName, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        title: Text(_device.deviceName, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -291,14 +391,47 @@ class _CloudDeviceDetailScreenState extends ConsumerState<CloudDeviceDetailScree
                     padding: const EdgeInsets.all(16),
                     children: [
                       Text(
-                        '${l10n.storeLabel} #${widget.device.storeId}',
+                        '${l10n.storeLabel} #${_device.storeId}',
                         style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        widget.device.deviceId,
+                        _device.deviceId,
                         style: GoogleFonts.jetBrainsMono(fontSize: 11, color: scheme.onSurfaceVariant),
                       ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _loading ? null : _promptRequestRemoteUpdate,
+                        icon: const Icon(Icons.system_update_alt, size: 20),
+                        label: Text(l10n.cloudRequestAppUpdate),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.cloudRequestAppUpdateSubtitle,
+                        style: GoogleFonts.inter(fontSize: 12, color: scheme.onSurfaceVariant),
+                      ),
+                      if (_device.remoteUpdateRequestedAt != null) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 20, color: scheme.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${l10n.cloudUpdatePendingBadge}: '
+                                '${_device.remoteUpdateRequestedAt!.toLocal()}',
+                                style: GoogleFonts.inter(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _loading ? null : _clearRemoteUpdate,
+                          child: Text(l10n.cloudClearUpdateRequest),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       Text(
                         l10n.cloudDeviceOpenShift,
@@ -307,7 +440,8 @@ class _CloudDeviceDetailScreenState extends ConsumerState<CloudDeviceDetailScree
                       const SizedBox(height: 8),
                       if (_openShift != null) ...[
                         Text(
-                          '${l10n.openingTime}: ${_openShift!.startTime.toLocal()} · shift_id ${_openShift!.id}',
+                          '${l10n.openingTime}: ${_openShift!.startTime.toLocal()} · shift_id ${_openShift!.id}'
+                          '${_openShift!.registerLabel != null ? ' · ${_openShift!.registerLabel}' : ''}',
                           style: GoogleFonts.inter(fontSize: 13),
                         ),
                         const SizedBox(height: 8),

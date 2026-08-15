@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/pos/domain/modifier_display.dart';
 
 /// Result of the modifier dialog: selected modifiers and quantity (e.g. piezas for bolis).
 class ModifierDialogResult {
   const ModifierDialogResult({
     required this.modifiers,
+    this.modifierLabels = const [],
     this.quantity = 1,
   });
   final List<ModifierOption> modifiers;
+  final List<String> modifierLabels;
   final double quantity;
 }
 
@@ -85,35 +88,30 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
       _selections[groupIndex].where((o) => o.id == optionId).length;
 
   /// Derives subgroup (e.g. "Regular", "Light") and short display name from supply name.
-  static ({String? subgroup, String displayName}) _subgroupAndName(String supplyName) {
-    if (supplyName.startsWith('Boli Regular - ')) {
-      return (subgroup: 'Regular', displayName: supplyName.replaceFirst('Boli Regular - ', ''));
+  static ({String? subgroup, String displayName}) _subgroupAndName(String supplyName) =>
+      ModifierDisplay.parse(supplyName);
+
+  List<String> _labelsForSelectedModifiers() {
+    final optionById = <int, String>{};
+    for (final g in widget.modifierGroups) {
+      for (final opt in g.options) {
+        optionById[opt.option.id] = ModifierDisplay.ticketLabel(opt.supplyName);
+      }
     }
-    if (supplyName.startsWith('Boli Light - ')) {
-      return (subgroup: 'Light', displayName: supplyName.replaceFirst('Boli Light - ', ''));
-    }
-    if (supplyName.startsWith('Paleta Agua - ')) {
-      return (subgroup: null, displayName: supplyName.replaceFirst('Paleta Agua - ', ''));
-    }
-    if (supplyName.startsWith('Paleta Forrada - ')) {
-      return (subgroup: null, displayName: supplyName.replaceFirst('Paleta Forrada - ', ''));
-    }
-    if (supplyName.startsWith('Nieve AGUA - ')) {
-      return (subgroup: 'AGUA', displayName: supplyName.replaceFirst('Nieve AGUA - ', ''));
-    }
-    if (supplyName.startsWith('Nieve LECHE - ')) {
-      return (subgroup: 'LECHE', displayName: supplyName.replaceFirst('Nieve LECHE - ', ''));
-    }
-    if (supplyName.startsWith('Nieve CREMA - ')) {
-      return (subgroup: 'CREMA', displayName: supplyName.replaceFirst('Nieve CREMA - ', ''));
-    }
-    if (supplyName.startsWith('Nieve LIGHT - ')) {
-      return (subgroup: 'LIGHT', displayName: supplyName.replaceFirst('Nieve LIGHT - ', ''));
-    }
-    if (supplyName.startsWith('Malteada - ')) {
-      return (subgroup: null, displayName: supplyName.replaceFirst('Malteada - ', ''));
-    }
-    return (subgroup: null, displayName: supplyName);
+    return [
+      for (final mod in _allSelectedModifiers)
+        optionById[mod.id] ?? 'Opción ${mod.id}',
+    ];
+  }
+
+  bool _useFlavorGrid(ModifierGroupWithOptions groupWithOptions) {
+    final names = groupWithOptions.options.map((o) => o.supplyName);
+    return names.any((n) => n.startsWith('Boli Regular - ')) ||
+        names.any((n) => n.startsWith('Boli Light - ')) ||
+        names.any((n) => n.startsWith('Nieve AGUA - ')) ||
+        names.any((n) => n.startsWith('Nieve LECHE - ')) ||
+        names.any((n) => n.startsWith('Nieve CREMA - ')) ||
+        names.any((n) => n.startsWith('Nieve LIGHT - '));
   }
 
   String _buttonLabel() {
@@ -173,10 +171,11 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final hasFlavorGrid = widget.modifierGroups.any(_useFlavorGrid);
     return DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
+      initialChildSize: hasFlavorGrid ? 0.86 : 0.6,
+      minChildSize: hasFlavorGrid ? 0.55 : 0.4,
+      maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
         return Container(
@@ -265,11 +264,23 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
                               ],
                             ),
                             const SizedBox(height: 12),
-                            ..._buildOptionsWithSubgroups(
-                              groupIndex,
-                              groupWithOptions.options,
-                              group.maxSelection,
-                            ),
+                            if (_useFlavorGrid(groupWithOptions))
+                              _FlavorOptionsGrid(
+                                options: groupWithOptions.options,
+                                countForOption: (optionId) =>
+                                    _count(groupIndex, optionId),
+                                maxCountForOption: (optionId) => group.maxSelection -
+                                    selectedCount +
+                                    _count(groupIndex, optionId),
+                                onIncrement: (opt) => _increment(groupIndex, opt),
+                                onDecrement: (opt) => _decrement(groupIndex, opt),
+                              )
+                            else
+                              ..._buildOptionsWithSubgroups(
+                                groupIndex,
+                                groupWithOptions.options,
+                                group.maxSelection,
+                              ),
                           ],
                         ),
                       ),
@@ -354,6 +365,7 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
                               Navigator.of(context).pop(
                                 ModifierDialogResult(
                                   modifiers: _allSelectedModifiers,
+                                  modifierLabels: _labelsForSelectedModifiers(),
                                   quantity: totalPiezas,
                                 ),
                               );
@@ -380,6 +392,293 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
           ),
         );
       },
+    );
+  }
+}
+
+class _FlavorOptionsGrid extends StatelessWidget {
+  const _FlavorOptionsGrid({
+    required this.options,
+    required this.countForOption,
+    required this.maxCountForOption,
+    required this.onIncrement,
+    required this.onDecrement,
+  });
+
+  final List<ModifierOptionWithSupply> options;
+  final int Function(int optionId) countForOption;
+  final int Function(int optionId) maxCountForOption;
+  final void Function(ModifierOptionWithSupply option) onIncrement;
+  final void Function(ModifierOptionWithSupply option) onDecrement;
+
+  static ({String? subgroup, String displayName}) _subgroupAndName(String supplyName) {
+    if (supplyName.startsWith('Boli Regular - ')) {
+      return (subgroup: 'Regular', displayName: supplyName.replaceFirst('Boli Regular - ', ''));
+    }
+    if (supplyName.startsWith('Boli Light - ')) {
+      return (subgroup: 'Light', displayName: supplyName.replaceFirst('Boli Light - ', ''));
+    }
+    if (supplyName.startsWith('Nieve AGUA - ')) {
+      return (subgroup: 'AGUA', displayName: supplyName.replaceFirst('Nieve AGUA - ', ''));
+    }
+    if (supplyName.startsWith('Nieve LECHE - ')) {
+      return (subgroup: 'LECHE', displayName: supplyName.replaceFirst('Nieve LECHE - ', ''));
+    }
+    if (supplyName.startsWith('Nieve CREMA - ')) {
+      return (subgroup: 'CREMA', displayName: supplyName.replaceFirst('Nieve CREMA - ', ''));
+    }
+    if (supplyName.startsWith('Nieve LIGHT - ')) {
+      return (subgroup: 'LIGHT', displayName: supplyName.replaceFirst('Nieve LIGHT - ', ''));
+    }
+    return (subgroup: null, displayName: supplyName);
+  }
+
+  static String _normalize(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+  }
+
+  static String _assetPathForFlavor(String displayName) {
+    final slug = _normalize(displayName);
+    return 'assets/images/flavors/$slug.png';
+  }
+
+  static IconData _iconForFlavor(String normalized) {
+    if (normalized.contains('limon')) return Icons.local_bar;
+    if (normalized.contains('mango')) return Icons.local_florist;
+    if (normalized.contains('chocolate') || normalized.contains('nutella')) return Icons.icecream;
+    if (normalized.contains('fresa') || normalized.contains('picafresa')) return Icons.local_pizza;
+    if (normalized.contains('coco')) return Icons.eco;
+    if (normalized.contains('cafe')) return Icons.coffee;
+    if (normalized.contains('uva')) return Icons.grain;
+    if (normalized.contains('panditas') || normalized.contains('chicle')) return Icons.toys;
+    if (normalized.contains('mazapan') || normalized.contains('nuez') || normalized.contains('pinon')) {
+      return Icons.spa;
+    }
+    if (normalized.contains('oreo') || normalized.contains('comegalletas')) return Icons.cookie;
+    if (normalized.contains('rompope') || normalized.contains('vainilla')) return Icons.ac_unit;
+    if (normalized.contains('hierbabuena') || normalized.contains('tejuino')) return Icons.grass;
+    if (normalized.contains('tamarindo') || normalized.contains('jamaica')) return Icons.local_drink;
+    return Icons.icecream_outlined;
+  }
+
+  static Color _colorForFlavor(BuildContext context, String normalized) {
+    final scheme = Theme.of(context).colorScheme;
+    if (normalized.contains('fresa') || normalized.contains('picafresa') || normalized.contains('frutos rojos')) {
+      return Colors.pink.shade300;
+    }
+    if (normalized.contains('mango') || normalized.contains('elote') || normalized.contains('mazapan')) {
+      return Colors.amber.shade400;
+    }
+    if (normalized.contains('chocolate') || normalized.contains('nutella') || normalized.contains('ferrero')) {
+      return Colors.brown.shade400;
+    }
+    if (normalized.contains('limon') || normalized.contains('hierbabuena') || normalized.contains('pepino')) {
+      return Colors.green.shade400;
+    }
+    if (normalized.contains('coco') || normalized.contains('vainilla') || normalized.contains('rompope')) {
+      return Colors.teal.shade200;
+    }
+    if (normalized.contains('uva') || normalized.contains('taro')) {
+      return Colors.deepPurple.shade300;
+    }
+    return scheme.primaryContainer;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = <String, List<ModifierOptionWithSupply>>{};
+    for (final opt in options) {
+      final parsed = _subgroupAndName(opt.supplyName);
+      final key = parsed.subgroup ?? '';
+      grouped.putIfAbsent(key, () => []).add(opt);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final entry in grouped.entries) ...[
+          if (entry.key.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              entry.key,
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.9,
+            ),
+            itemCount: entry.value.length,
+            itemBuilder: (context, idx) {
+              final opt = entry.value[idx];
+              final parsed = _subgroupAndName(opt.supplyName);
+              final normalized = _normalize(parsed.displayName);
+              final count = countForOption(opt.option.id);
+              final maxCount = maxCountForOption(opt.option.id);
+              return _FlavorGridTile(
+                name: parsed.displayName,
+                priceExtra: opt.option.priceExtra,
+                count: count,
+                maxCount: maxCount,
+                assetPath: _assetPathForFlavor(parsed.displayName),
+                icon: _iconForFlavor(normalized),
+                color: _colorForFlavor(context, normalized),
+                onIncrement: () => onIncrement(opt),
+                onDecrement: () => onDecrement(opt),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _FlavorGridTile extends StatelessWidget {
+  const _FlavorGridTile({
+    required this.name,
+    required this.priceExtra,
+    required this.count,
+    required this.maxCount,
+    required this.assetPath,
+    required this.icon,
+    required this.color,
+    required this.onIncrement,
+    required this.onDecrement,
+  });
+
+  final String name;
+  final double priceExtra;
+  final int count;
+  final int maxCount;
+  final String assetPath;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final canAdd = maxCount > 0;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: canAdd ? onIncrement : null,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    clipBehavior: Clip.none,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.asset(
+                            assetPath,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Center(
+                              child: Icon(icon, color: color, size: 34),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (count > 0)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: scheme.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$count',
+                              style: GoogleFonts.inter(
+                                color: scheme.onPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            if (priceExtra > 0)
+              Text(
+                '+\$${priceExtra.toStringAsFixed(0)}',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            SizedBox(
+              height: 28,
+              child: count > 0
+                  ? Center(
+                      child: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+                        tooltip: 'Quitar',
+                        onPressed: onDecrement,
+                        icon: Icon(
+                          Icons.remove_circle_outline,
+                          size: 20,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

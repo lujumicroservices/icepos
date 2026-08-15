@@ -3,14 +3,195 @@ import 'package:ice_pos/src/features/pos/domain/cart_item.dart';
 import 'package:ice_pos/src/features/pos/domain/product_discount_rule.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_line.dart';
 
+class _ReceiptUnit {
+  _ReceiptUnit({
+    required this.productId,
+    required this.productName,
+    required this.modifierDetails,
+    required this.amount,
+    this.modifierExtra = 0,
+    this.lineQuantity = 1,
+  });
+
+  final int productId;
+  final String productName;
+  final List<String> modifierDetails;
+  final double amount;
+  /// Paid add-ons (e.g. leche de almendra) — billed on top of bundle price.
+  final double modifierExtra;
+  final int lineQuantity;
+}
+
+List<String> _modifierDetailsForItem(CartItem item, Map<int, String> supplyIdToName) {
+  return cartItemModifierLabels(item, supplyIdToName: supplyIdToName);
+}
+
+List<_ReceiptUnit> _expandCartItemsToUnits(
+  List<CartItem> items,
+  Map<int, String> supplyIdToName,
+) {
+  final units = <_ReceiptUnit>[];
+  for (final item in items) {
+    final modDetails = _modifierDetailsForItem(item, supplyIdToName);
+    if (item.selectedModifiers.isEmpty) {
+      final qty = item.quantity;
+      if (qty == qty.roundToDouble() && qty >= 1) {
+        for (var i = 0; i < qty.round(); i++) {
+          units.add(
+            _ReceiptUnit(
+              productId: item.product.id,
+              productName: item.product.name,
+              modifierDetails: const [],
+              amount: item.product.price,
+            ),
+          );
+        }
+      } else {
+        units.add(
+          _ReceiptUnit(
+            productId: item.product.id,
+            productName: item.product.name,
+            modifierDetails: const [],
+            amount: item.subtotal,
+            lineQuantity: 1,
+          ),
+        );
+      }
+      continue;
+    }
+
+    final qty = item.quantity;
+    final modCount = item.selectedModifiers.length;
+    if (qty > 0 && modCount == qty.round()) {
+      for (var i = 0; i < modCount; i++) {
+        final m = item.selectedModifiers[i];
+        units.add(
+          _ReceiptUnit(
+            productId: item.product.id,
+            productName: item.product.name,
+            modifierDetails: [modDetails[i]],
+            amount: item.product.price + m.priceExtra,
+            modifierExtra: m.priceExtra,
+          ),
+        );
+      }
+      continue;
+    }
+
+    final modifierExtra = item.selectedModifiers.fold<double>(
+      0.0,
+      (sum, m) => sum + m.priceExtra,
+    );
+    units.add(
+      _ReceiptUnit(
+        productId: item.product.id,
+        productName: item.product.name,
+        modifierDetails: modDetails,
+        amount: item.subtotal,
+        modifierExtra: modifierExtra,
+        lineQuantity: qty.round().clamp(1, 999),
+      ),
+    );
+  }
+  return units;
+}
+
+Map<int, List<_ReceiptUnit>> _unitsByProduct(List<_ReceiptUnit> units) {
+  final map = <int, List<_ReceiptUnit>>{};
+  for (final unit in units) {
+    map.putIfAbsent(unit.productId, () => []).add(unit);
+  }
+  return map;
+}
+
+double _inventoryCount(List<_ReceiptUnit>? units) {
+  if (units == null || units.isEmpty) return 0;
+  return units.fold<double>(0, (sum, u) => sum + u.lineQuantity);
+}
+
+void _consumeUnits(
+  List<_ReceiptUnit> units,
+  double toConsume, {
+  List<_ReceiptUnit>? consumedOut,
+}) {
+  var remaining = toConsume;
+  var i = 0;
+  while (remaining > 0 && i < units.length) {
+    final u = units[i];
+    if (u.lineQuantity <= remaining) {
+      consumedOut?.add(u);
+      remaining -= u.lineQuantity;
+      units.removeAt(i);
+    } else {
+      final take = remaining;
+      final keep = u.lineQuantity - take.ceil();
+      final takeFraction = take / u.lineQuantity;
+      final keepFraction = keep / u.lineQuantity;
+      consumedOut?.add(
+        _ReceiptUnit(
+          productId: u.productId,
+          productName: u.productName,
+          modifierDetails: u.modifierDetails,
+          amount: u.amount * takeFraction,
+          modifierExtra: u.modifierExtra * takeFraction,
+          lineQuantity: take.ceil().clamp(1, u.lineQuantity),
+        ),
+      );
+      units[i] = _ReceiptUnit(
+        productId: u.productId,
+        productName: u.productName,
+        modifierDetails: u.modifierDetails,
+        amount: u.amount * keepFraction,
+        modifierExtra: u.modifierExtra * keepFraction,
+        lineQuantity: keep,
+      );
+      remaining = 0;
+    }
+  }
+}
+
+void _addBundledModifierExtraLines(
+  List<ReceiptLine> lines,
+  List<_ReceiptUnit> consumedUnits,
+) {
+  final grouped = <String, ({String name, List<String> mods, double amount, int qty})>{};
+  for (final u in consumedUnits) {
+    if (u.modifierExtra <= 0) continue;
+    final key = '${u.productName}|${u.modifierDetails.join('\u0001')}';
+    final prev = grouped[key];
+    grouped[key] = (
+      name: u.productName,
+      mods: u.modifierDetails,
+      amount: (prev?.amount ?? 0) + u.modifierExtra,
+      qty: (prev?.qty ?? 0) + u.lineQuantity,
+    );
+  }
+  for (final g in grouped.values) {
+    lines.add(
+      ReceiptLine(
+        description: g.name,
+        amount: g.amount,
+        isBundle: false,
+        quantity: g.qty,
+        modifierDetails: g.mods,
+      ),
+    );
+  }
+}
+
+String _unitGroupKey(_ReceiptUnit unit) =>
+    '${unit.productId}|${unit.modifierDetails.join('\u0001')}|${unit.lineQuantity}';
+
 /// Computes receipt lines using a strict Quantity Map (inventory) approach.
 /// Prevents double-counting by decrementing inventory when bundles are applied.
 /// [productDiscounts]: descuentos por producto (ej. 20% en productos que contengan "nieve").
+/// [supplyIdToName]: nombres de insumos para etiquetas de sabores en el ticket.
 ReceiptResult computeReceipt(
   List<CartItem> items,
   List<({Bundle bundle, List<BundleItem> bundleItems})> bundlesWithItems,
   Discount? appliedDiscount, {
   List<ProductDiscountRule> productDiscounts = const [],
+  Map<int, String> supplyIdToName = const {},
 }) {
   final lines = <ReceiptLine>[];
   var standaloneSubtotal = 0.0;
@@ -23,18 +204,8 @@ ReceiptResult computeReceipt(
     );
   }
 
-  // Step A: Inventory (quantity) and subtotal per product (so modifiers priced per piece are correct)
-  final inventory = <int, double>{};
-  final productInfo = <int, ({String name, double subtotal})>{};
-  for (final item in items) {
-    final pid = item.product.id;
-    inventory[pid] = (inventory[pid] ?? 0) + item.quantity;
-    final prev = productInfo[pid];
-    productInfo[pid] = (
-      name: prev?.name ?? item.product.name,
-      subtotal: (prev?.subtotal ?? 0) + item.subtotal,
-    );
-  }
+  final allUnits = _expandCartItemsToUnits(items, supplyIdToName);
+  final unitsByProduct = _unitsByProduct(allUnits);
 
   // Step B: Bundle loop - consume from inventory
   for (final bw in bundlesWithItems) {
@@ -52,7 +223,7 @@ ReceiptResult computeReceipt(
       for (final e in reqMap.entries) {
         final need = e.value;
         if (need <= 0) continue;
-        final have = inventory[e.key] ?? 0;
+        final have = _inventoryCount(unitsByProduct[e.key]);
         final n = have / need;
         if (n < maxPossible) maxPossible = n;
       }
@@ -68,32 +239,41 @@ ReceiptResult computeReceipt(
         quantity: numBundles,
       ));
 
+      final consumedForBundle = <_ReceiptUnit>[];
       for (final e in reqMap.entries) {
         final pid = e.key;
         final consumed = numBundles * e.value;
-        inventory[pid] = (inventory[pid] ?? 0) - consumed;
-        if (inventory[pid]! <= 0) inventory.remove(pid);
+        final list = unitsByProduct[pid];
+        if (list != null) {
+          _consumeUnits(list, consumed, consumedOut: consumedForBundle);
+          if (list.isEmpty) unitsByProduct.remove(pid);
+        }
       }
+      _addBundledModifierExtraLines(lines, consumedForBundle);
     }
   }
 
-  // Step C: Leftovers loop - use actual subtotal per product (correct for per-modifier pricing)
-  for (final e in inventory.entries) {
-    final pid = e.key;
-    final qty = e.value;
-    if (qty <= 0) continue;
+  // Step C: Leftovers with modifier detail
+  final leftoverUnits = unitsByProduct.values.expand((list) => list).toList();
+  final grouped = <String, List<_ReceiptUnit>>{};
+  for (final unit in leftoverUnits) {
+    grouped.putIfAbsent(_unitGroupKey(unit), () => []).add(unit);
+  }
 
-    final info = productInfo[pid];
-    if (info == null) continue;
-
-    final amount = info.subtotal;
+  for (final group in grouped.values) {
+    final sample = group.first;
+    final lineQty = group.fold<int>(0, (s, u) => s + u.lineQuantity);
+    final amount = group.fold<double>(0, (s, u) => s + u.amount);
     standaloneSubtotal += amount;
-    lines.add(ReceiptLine(
-      description: info.name,
-      amount: amount,
-      isBundle: false,
-      quantity: qty.round(),
-    ));
+    lines.add(
+      ReceiptLine(
+        description: sample.productName,
+        amount: amount,
+        isBundle: false,
+        quantity: lineQty,
+        modifierDetails: sample.modifierDetails,
+      ),
+    );
   }
 
   // Apply QR/code discount ONLY to leftover lines
@@ -101,8 +281,12 @@ ReceiptResult computeReceipt(
   if (appliedDiscount != null && standaloneSubtotal > 0) {
     final discountAmount = standaloneSubtotal * appliedDiscount.percentage;
     total -= discountAmount;
+    final label = appliedDiscount.description.trim().isNotEmpty
+        ? appliedDiscount.description.trim()
+        : 'Discount';
     lines.add(ReceiptLine(
-      description: 'Discount (${(appliedDiscount.percentage * 100).toStringAsFixed(0)}%)',
+      description:
+          '$label (${(appliedDiscount.percentage * 100).toStringAsFixed(0)}%)',
       amount: -discountAmount,
       isBundle: false,
       quantity: 1,

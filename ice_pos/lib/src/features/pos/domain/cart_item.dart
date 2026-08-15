@@ -1,4 +1,5 @@
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/features/pos/domain/modifier_display.dart';
 import 'package:ice_pos/src/features/pos/domain/modifier_option.dart';
 
 /// Domain model for an item in the cart.
@@ -7,11 +8,14 @@ class CartItem {
     required this.product,
     required this.quantity,
     this.selectedModifiers = const [],
+    this.modifierLabels = const [],
   });
 
   final Product product;
   final double quantity;
   final List<ModifierOption> selectedModifiers;
+  /// Etiquetas legibles alineadas con [selectedModifiers] (sabor, tipo, etc.).
+  final List<String> modifierLabels;
 
   /// Serializes for JSON (e.g. Park Order). Preserves product (id, name, price)
   /// and selected modifiers for exact reconstruction.
@@ -28,6 +32,7 @@ class CartItem {
       'selectedModifiers': selectedModifiers
           .map((m) => ModifierOptionDto.fromModifierOption(m).toJson())
           .toList(),
+      if (modifierLabels.isNotEmpty) 'modifierLabels': modifierLabels,
     };
   }
 
@@ -50,10 +55,13 @@ class CartItem {
         .map((e) => ModifierOptionDto.fromJson(e as Map<String, dynamic>))
         .map((dto) => dto.toModifierOption())
         .toList();
+    final labelsJson = json['modifierLabels'] as List<dynamic>? ?? [];
+    final modifierLabels = labelsJson.map((e) => e.toString()).toList();
     return CartItem(
       product: product,
       quantity: quantity,
       selectedModifiers: selectedModifiers,
+      modifierLabels: modifierLabels,
     );
   }
 
@@ -96,15 +104,44 @@ class CartItem {
         selectedModifiers.fold<double>(0.0, (sum, m) => sum + m.priceExtra);
   }
 
+  /// Sum of [priceExtra] for [count] units consumed FIFO from this line when
+  /// bundling, after [alreadyBundledUnits] were already allocated to combos.
+  static double modifierExtraForConsumedUnits(
+    CartItem item,
+    double alreadyBundledUnits,
+    double count,
+  ) {
+    if (count <= 0 || item.selectedModifiers.isEmpty) return 0;
+
+    final q = item.quantity;
+    final n = item.selectedModifiers.length;
+    if (q > 0 && n == q.round()) {
+      var sum = 0.0;
+      final start = alreadyBundledUnits.floor();
+      final end = (alreadyBundledUnits + count).round();
+      for (var i = start; i < end && i < n; i++) {
+        sum += item.selectedModifiers[i].priceExtra;
+      }
+      return sum;
+    }
+
+    if (q <= 0) return 0;
+    final totalExtra =
+        item.selectedModifiers.fold<double>(0.0, (s, m) => s + m.priceExtra);
+    return totalExtra * (count / q);
+  }
+
   CartItem copyWith({
     Product? product,
     double? quantity,
     List<ModifierOption>? selectedModifiers,
+    List<String>? modifierLabels,
   }) {
     return CartItem(
       product: product ?? this.product,
       quantity: quantity ?? this.quantity,
       selectedModifiers: selectedModifiers ?? this.selectedModifiers,
+      modifierLabels: modifierLabels ?? this.modifierLabels,
     );
   }
 
@@ -132,4 +169,26 @@ class CartItem {
   @override
   int get hashCode =>
       Object.hash(product.id, Object.hashAll(selectedModifiers.map((m) => m.id)));
+}
+
+/// Etiquetas legibles de modificadores para carrito y ticket.
+List<String> cartItemModifierLabels(
+  CartItem item, {
+  Map<int, String> supplyIdToName = const {},
+}) {
+  if (item.selectedModifiers.isEmpty) return const [];
+  return [
+    for (var i = 0; i < item.selectedModifiers.length; i++)
+      _modifierLabelAt(item, i, supplyIdToName),
+  ];
+}
+
+String _modifierLabelAt(CartItem item, int index, Map<int, String> supplyIdToName) {
+  if (index < item.modifierLabels.length && item.modifierLabels[index].trim().isNotEmpty) {
+    return item.modifierLabels[index].trim();
+  }
+  final modifier = item.selectedModifiers[index];
+  final raw = supplyIdToName[modifier.supplyId] ?? '';
+  if (raw.isEmpty) return 'Opción ${modifier.id}';
+  return ModifierDisplay.ticketLabel(raw);
 }

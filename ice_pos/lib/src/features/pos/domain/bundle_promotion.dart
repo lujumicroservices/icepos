@@ -38,6 +38,28 @@ BundleAdjustedCart checkForBundles(
   var bundleTotal = 0.0;
   final virtualBundles = <VirtualBundleLine>[];
   final bundledAllocation = <int, ({double qty, double value, String name})>{};
+  final bundledUnitsPerItem = List<double>.filled(items.length, 0);
+
+  double bundledModifierExtraForProduct(int pid, double count) {
+    var remaining = count;
+    var extra = 0.0;
+    for (final entry in productToEntries[pid] ?? const []) {
+      if (remaining <= 0) break;
+      final idx = entry.idx;
+      final item = entry.item;
+      final available = item.quantity - bundledUnitsPerItem[idx];
+      if (available <= 0) continue;
+      final take = remaining < available ? remaining : available;
+      extra += CartItem.modifierExtraForConsumedUnits(
+        item,
+        bundledUnitsPerItem[idx],
+        take,
+      );
+      bundledUnitsPerItem[idx] += take;
+      remaining -= take;
+    }
+    return extra;
+  }
 
   // ─── Step 2: Consumption Loop ────────────────────────────────────────────
   var anyMatched = true;
@@ -71,7 +93,12 @@ BundleAdjustedCart checkForBundles(
 
       // Action: add to total, DECREMENT from working inventory
       anyMatched = true;
-      bundleTotal += numBundles * bundle.price;
+      var iterationModifierExtra = 0.0;
+      for (final e in reqMap.entries) {
+        iterationModifierExtra +=
+            bundledModifierExtraForProduct(e.key, numBundles * e.value);
+      }
+      bundleTotal += numBundles * bundle.price + iterationModifierExtra;
       final existing = virtualBundles
           .indexWhere((vb) => vb.bundleName == bundle.name);
       if (existing >= 0) {

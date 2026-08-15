@@ -111,10 +111,9 @@ class ReceiptPrinterNotifier extends Notifier<ReceiptPrinterState> {
       try {
         await _bt.connect(device);
         try {
-          await _bt.writeBytes(Uint8List.fromList(bytes));
-          // Esperar antes de desconectar: en algunas tablets cerrar el socket
-          // demasiado pronto corta el envío; dar tiempo a que la impresora reciba todo.
-          await Future<void>.delayed(const Duration(milliseconds: 700));
+          await _writeBytesChunked(bytes);
+          // Esperar antes de desconectar para que la impresora termine el buffer.
+          await Future<void>.delayed(const Duration(milliseconds: 1200));
           state = state.copyWith(lastError: null);
           return null;
         } finally {
@@ -141,6 +140,18 @@ class ReceiptPrinterNotifier extends Notifier<ReceiptPrinterState> {
     }
     if (s.length > 80) return 'Error al imprimir. Revisa la impresora.';
     return s.replaceFirst(RegExp(r'^[^:]+: '), '');
+  }
+
+  /// Some Bluetooth stacks drop large single writes; send in chunks.
+  Future<void> _writeBytesChunked(List<int> bytes) async {
+    const chunkSize = 512;
+    for (var i = 0; i < bytes.length; i += chunkSize) {
+      final end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
+      await _bt.writeBytes(Uint8List.fromList(bytes.sublist(i, end)));
+      if (end < bytes.length) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    }
   }
 
   Future<String?> printTest() async {

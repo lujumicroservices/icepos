@@ -418,7 +418,15 @@ class DatabaseSeeder {
           isActive: const Value(true),
         ),
       );
-      debugPrint('✅ Sample discount SCHOOL_CAMPO_VERDE (10%) seeded.');
+      await db.into(db.discounts).insert(
+        DiscountsCompanion.insert(
+          code: 'ESTUDIANTE',
+          percentage: 0.10,
+          description: 'Descuento estudiantes 10%',
+          isActive: const Value(true),
+        ),
+      );
+      debugPrint('✅ Sample discounts (SCHOOL_CAMPO_VERDE, ESTUDIANTE 10%) seeded.');
     }
 
     // 10. Add sample BUNDLE (Desayuno Ejecutivo = Vaso Chico + Baguette)

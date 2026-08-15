@@ -1,16 +1,28 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:ice_pos/src/core/config/register_scope.dart';
+import 'package:ice_pos/src/core/config/store_scope.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/device_id_service.dart';
 import 'package:ice_pos/src/core/services/connectivity_service.dart';
+import 'package:ice_pos/src/core/services/operation_log_level.dart';
+import 'package:ice_pos/src/core/services/operation_log_sink.dart';
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/core/services/category_image_service.dart';
+import 'package:ice_pos/src/core/services/pending_cashier_approvals_cloud_service.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
+import 'package:ice_pos/src/core/shift/shift_linkage.dart';
 import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart' as domain;
+import 'package:ice_pos/src/features/pos/data/sale_receipt_print_mapper.dart';
+import 'package:ice_pos/src/features/pos/domain/modifier_option.dart';
+import 'package:ice_pos/src/features/pos/domain/receipt_print_data.dart';
+import 'package:ice_pos/src/features/pos/domain/sale_payment.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -43,11 +55,13 @@ class SaleItemDto {
     required this.productName,
     required this.quantity,
     required this.priceAtSale,
+    this.modifierDetails = const [],
   });
 
   final String productName;
   final double quantity;
   final double priceAtSale;
+  final List<String> modifierDetails;
 }
 
 /// Sale with its line items for history/reporting.
@@ -147,6 +161,35 @@ class PosRepository {
   PosRepository(this._db);
 
   final AppDatabase _db;
+  DateTime? _lastReconcileOpenShifts;
+
+  /// Evita dos filas locales idénticas por doble toque o reintento con mala red.
+  static const Duration _kMovementIdempotencyWindow = Duration(seconds: 10);
+
+  Future<Movement?> _recentMovementWithSameFingerprint({
+    required String type,
+    required String account,
+    required double amount,
+    required String reason,
+    int? shiftId,
+  }) async {
+    final since = DateTime.now().subtract(_kMovementIdempotencyWindow);
+    return (_db.select(_db.movements)
+          ..where((m) {
+            final base = m.type.equals(type) &
+                m.account.equals(account) &
+                m.amount.equals(amount) &
+                m.reason.equals(reason) &
+                m.date.isBiggerOrEqualValue(since);
+            if (shiftId != null) {
+              return base & m.shiftId.equals(shiftId);
+            }
+            return base & m.shiftId.isNull();
+          })
+          ..orderBy([(m) => OrderingTerm.desc(m.date)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
 
   /// Persists a diagnostic row (sale failures, cloud sync issues). Never throws.
   Future<void> logOperationEvent({
@@ -156,27 +199,13 @@ class PosRepository {
     Map<String, Object?>? context,
     StackTrace? stackTrace,
   }) async {
-    try {
-      String? ctxJson;
-      if (context != null && context.isNotEmpty) {
-        try {
-          ctxJson = jsonEncode(context);
-        } catch (_) {
-          ctxJson = context.toString();
-        }
-      }
-      await _db.into(_db.operationLogs).insert(
-            OperationLogsCompanion.insert(
-              level: level,
-              operation: operation,
-              message: message,
-              contextJson: Value(ctxJson),
-              stackTrace: Value(stackTrace?.toString()),
-            ),
-          );
-    } catch (e, st) {
-      debugPrint('logOperationEvent insert failed: $e\n$st');
-    }
+    await OperationLogSink.report(
+      level: level,
+      operation: operation,
+      message: message,
+      context: context,
+      stackTrace: stackTrace,
+    );
   }
 
   /// Latest entries first (for diagnostics screen).
@@ -260,6 +289,50 @@ class PosRepository {
     String? newImageMimeType,
   }) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
+    if (CloudSyncService.isEnabled) {
+      final (cerr, cloudId) = await CloudSyncService.insertCategoryRowInCloud(
+        name: name.trim(),
+        parentId: parentId,
+        color: color,
+        imageUrl: newImageBytes != null ? null : imageUrl,
+      );
+      if (cerr != null) {
+        throw StateError(cerr);
+      }
+      final cid = cloudId!;
+      await _db.into(_db.categories).insert(
+            CategoriesCompanion.insert(
+              id: Value(cid),
+              name: name.trim(),
+              parentId: Value(parentId),
+              color: Value(color),
+              imageUrl: newImageBytes != null ? const Value.absent() : Value(imageUrl),
+            ),
+          );
+      if (newImageBytes != null && newImageBytes.isNotEmpty) {
+        final url = await CategoryImageService.uploadCategoryImage(
+          categoryId: cid,
+          bytes: Uint8List.fromList(newImageBytes),
+          mimeType: newImageMimeType ?? 'image/jpeg',
+        );
+        if (url != null) {
+          await (_db.update(_db.categories)..where((c) => c.id.equals(cid)))
+              .write(CategoriesCompanion(imageUrl: Value(url)));
+          final uerr = await CloudSyncService.upsertCategoryToCloud(
+            id: cid,
+            name: name.trim(),
+            parentId: parentId,
+            color: color,
+            imageUrl: url,
+          );
+          if (uerr != null) {
+            debugPrint('insertCategory image upsert: $uerr');
+          }
+        }
+      }
+      return cid;
+    }
+
     final id = await _db.into(_db.categories).insert(
       CategoriesCompanion.insert(
         name: name.trim(),
@@ -280,19 +353,6 @@ class PosRepository {
             .write(CategoriesCompanion(imageUrl: Value(url)));
       }
     }
-
-    if (CloudSyncService.isEnabled) {
-      final cat = await getCategory(id);
-      if (cat != null) {
-        CloudSyncService.upsertCategoryToCloud(
-          id: cat.id,
-          name: cat.name,
-          parentId: cat.parentId,
-          color: cat.color,
-          imageUrl: cat.imageUrl,
-        ).catchError((e) => null);
-      }
-    }
     return id;
   }
 
@@ -307,6 +367,36 @@ class PosRepository {
     String? newImageMimeType,
   }) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
+    final existing = await getCategory(id);
+    if (existing == null) {
+      throw StateError('Category $id not found');
+    }
+    String? uploadedUrl;
+    if (newImageBytes != null && newImageBytes.isNotEmpty) {
+      uploadedUrl = await CategoryImageService.uploadCategoryImage(
+        categoryId: id,
+        bytes: Uint8List.fromList(newImageBytes),
+        mimeType: newImageMimeType ?? 'image/jpeg',
+      );
+    }
+    final mergedName = name?.trim() ?? existing.name;
+    final mergedParent = parentId ?? existing.parentId;
+    final mergedColor = color ?? existing.color;
+    final mergedImageUrl = uploadedUrl ?? (newImageBytes == null ? imageUrl : existing.imageUrl);
+
+    if (CloudSyncService.isEnabled) {
+      final err = await CloudSyncService.upsertCategoryToCloud(
+        id: id,
+        name: mergedName,
+        parentId: mergedParent,
+        color: mergedColor,
+        imageUrl: mergedImageUrl,
+      );
+      if (err != null) {
+        throw StateError(err);
+      }
+    }
+
     final companion = CategoriesCompanion(
       name: name != null ? Value(name.trim()) : const Value.absent(),
       parentId:
@@ -323,28 +413,9 @@ class PosRepository {
           .write(companion);
     }
 
-    if (newImageBytes != null && newImageBytes.isNotEmpty) {
-      final url = await CategoryImageService.uploadCategoryImage(
-        categoryId: id,
-        bytes: Uint8List.fromList(newImageBytes),
-        mimeType: newImageMimeType ?? 'image/jpeg',
-      );
-      if (url != null) {
-        await (_db.update(_db.categories)..where((c) => c.id.equals(id)))
-            .write(CategoriesCompanion(imageUrl: Value(url)));
-      }
-    }
-    if (CloudSyncService.isEnabled) {
-      final cat = await getCategory(id);
-      if (cat != null) {
-        CloudSyncService.upsertCategoryToCloud(
-          id: cat.id,
-          name: cat.name,
-          parentId: cat.parentId,
-          color: cat.color,
-          imageUrl: cat.imageUrl,
-        ).catchError((e) => null);
-      }
+    if (uploadedUrl != null) {
+      await (_db.update(_db.categories)..where((c) => c.id.equals(id)))
+          .write(CategoriesCompanion(imageUrl: Value(uploadedUrl)));
     }
   }
 
@@ -370,10 +441,13 @@ class PosRepository {
         'Delete or move them first.',
       );
     }
-    await (_db.delete(_db.categories)..where((c) => c.id.equals(id))).go();
     if (CloudSyncService.isEnabled) {
-      CloudSyncService.deleteCategoryFromCloud(id).catchError((e) => null);
+      final err = await CloudSyncService.deleteCategoryFromCloud(id);
+      if (err != null) {
+        throw StateError(err);
+      }
     }
+    await (_db.delete(_db.categories)..where((c) => c.id.equals(id))).go();
   }
 
   /// Counts products in a category.
@@ -407,6 +481,91 @@ class PosRepository {
         .watch();
   }
 
+  /// Top sellers for the POS strip: ranked from **Supabase** (`pos_top_selling_product_ids`
+  /// RPC), not from local `sale_items`. Local Drift is only used to resolve [Product]
+  /// rows (name, price, image) from cloud product ids. Refreshes on first load,
+  /// connectivity return, and local products cache changes (no periodic polling).
+  Stream<List<Product>> watchPosTopSellingProducts({
+    int limit = 12,
+    int lookbackDays = 30,
+  }) {
+    if (limit < 1) return Stream.value([]);
+    final safeDays = lookbackDays.clamp(1, 366);
+    return Stream<List<Product>>.multi((controller) {
+      var isReloading = false;
+      Future<void> reload() async {
+        if (isReloading) return;
+        isReloading = true;
+        try {
+          final list = await getPosTopSellingProducts(
+            limit: limit,
+            lookbackDays: safeDays,
+          );
+          if (!controller.isClosed) {
+            controller.add(list);
+          }
+        } catch (e, st) {
+          if (!controller.isClosed) {
+            controller.addError(e, st);
+          }
+        } finally {
+          isReloading = false;
+        }
+      }
+
+      final subProducts =
+          (_db.select(_db.products)..limit(1)).watch().listen((_) => reload());
+      final subOnline = ConnectivityService.instance.onConnectivityChanged.listen(
+        (online) {
+          if (online) {
+            unawaited(reload());
+          }
+        },
+      );
+
+      controller.onCancel = () {
+        subProducts.cancel();
+        subOnline.cancel();
+      };
+
+      unawaited(reload());
+    });
+  }
+
+  /// One-shot top sellers from Supabase for the active store; empty if offline,
+  /// cloud disabled, or RPC returns no rows.
+  Future<List<Product>> getPosTopSellingProducts({
+    int limit = 12,
+    int lookbackDays = 30,
+  }) async {
+    if (limit < 1) return [];
+    if (!CloudSyncService.isEnabled || !ConnectivityService.instance.isConnected) {
+      return [];
+    }
+    final safeDays = lookbackDays.clamp(1, 366);
+    const sqlBuffer = 48;
+    final takeIds = limit + sqlBuffer;
+    final storeId = await StoreScope.getActiveStoreId();
+    final ids = await SalesSyncService.fetchTopSellingProductIdsFromCloud(
+      days: safeDays,
+      limit: takeIds,
+      storeId: storeId,
+    );
+    if (ids.isEmpty) return [];
+    final products =
+        await (_db.select(_db.products)..where((p) => p.id.isIn(ids))).get();
+    final byId = {for (final p in products) p.id: p};
+    final out = <Product>[];
+    for (final id in ids) {
+      final p = byId[id];
+      if (p != null) {
+        out.add(p);
+        if (out.length >= limit) break;
+      }
+    }
+    return out;
+  }
+
   /// Observes all products (including inactive) for admin.
   Stream<List<Product>> watchAllProducts() {
     return _db.select(_db.products).watch();
@@ -421,37 +580,47 @@ class PosRepository {
   /// Sets product active flag. Inactive products are hidden from POS.
   Future<void> setProductActive(int productId, bool active) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
-    await (_db.update(_db.products)..where((p) => p.id.equals(productId)))
-        .write(ProductsCompanion(isActive: Value(active)));
+    final p = await getProduct(productId);
+    if (p == null) return;
     if (CloudSyncService.isEnabled) {
-      final p = await getProduct(productId);
-      if (p != null) {
-        CloudSyncService.upsertProductToCloud(
-          id: p.id,
-          name: p.name,
-          price: p.price,
-          categoryId: p.categoryId,
-          isActive: active,
-          imageUrl: p.imageUrl,
-        ).catchError((e) => null);
+      final err = await CloudSyncService.upsertProductToCloud(
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        categoryId: p.categoryId,
+        isActive: active,
+        imageUrl: p.imageUrl,
+      );
+      if (err != null) {
+        throw StateError(err);
       }
     }
+    await (_db.update(_db.products)..where((pr) => pr.id.equals(productId)))
+        .write(ProductsCompanion(isActive: Value(active)));
   }
 
   /// Deletes a product and its recipes and product_modifiers.
   /// Throws StateError if the product has any sales (sale_items).
   Future<void> deleteProduct(int productId) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
+    final saleCount = await (_db.selectOnly(_db.saleItems)
+          ..addColumns([_db.saleItems.id.count()])
+          ..where(_db.saleItems.productId.equals(productId)))
+        .getSingle();
+    if ((saleCount.read(_db.saleItems.id.count()) ?? 0) > 0) {
+      throw StateError(
+        'No se puede eliminar: el producto tiene ventas asociadas. Desactívalo en su lugar.',
+      );
+    }
+    if (CloudSyncService.isEnabled) {
+      var err = await CloudSyncService.deleteRecipesForProductFromCloud(productId);
+      if (err != null) throw StateError(err);
+      err = await CloudSyncService.deleteModifiersForProductFromCloud(productId);
+      if (err != null) throw StateError(err);
+      err = await CloudSyncService.deleteProductFromCloud(productId);
+      if (err != null) throw StateError(err);
+    }
     await _db.transaction(() async {
-      final saleCount = await (_db.selectOnly(_db.saleItems)
-            ..addColumns([_db.saleItems.id.count()])
-            ..where(_db.saleItems.productId.equals(productId)))
-          .getSingle();
-      if ((saleCount.read(_db.saleItems.id.count()) ?? 0) > 0) {
-        throw StateError(
-          'No se puede eliminar: el producto tiene ventas asociadas. Desactívalo en su lugar.',
-        );
-      }
       await (_db.delete(_db.recipes)..where((r) => r.productId.equals(productId)))
           .go();
       await (_db.delete(_db.productModifiers)
@@ -460,11 +629,6 @@ class PosRepository {
       await (_db.delete(_db.products)..where((p) => p.id.equals(productId)))
           .go();
     });
-    if (CloudSyncService.isEnabled) {
-      CloudSyncService.deleteModifiersForProductFromCloud(productId).catchError((e) => null);
-      CloudSyncService.deleteRecipesForProductFromCloud(productId).catchError((e) => null);
-      CloudSyncService.deleteProductFromCloud(productId).catchError((e) => null);
-    }
   }
 
   /// Gets recipes for a product with supply names.
@@ -757,13 +921,16 @@ class PosRepository {
   /// Deletes a bundle and its items.
   Future<void> deleteBundle(int id) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
+    if (CloudSyncService.isEnabled) {
+      final err = await CloudSyncService.deleteBundleFromCloud(id);
+      if (err != null) {
+        throw StateError(err);
+      }
+    }
     await (_db.delete(_db.bundleItems)
           ..where((bi) => bi.bundleId.equals(id)))
         .go();
     await (_db.delete(_db.bundles)..where((b) => b.id.equals(id))).go();
-    if (CloudSyncService.isEnabled) {
-      CloudSyncService.deleteBundleFromCloud(id).catchError((e) => null);
-    }
   }
 
   /// Finds an active discount by code (case-insensitive).
@@ -777,6 +944,110 @@ class PosRepository {
       if (d.code.toUpperCase() == normalized) return d;
     }
     return null;
+  }
+
+  /// Active catalog discounts for the POS picker, ordered by label then code.
+  Stream<List<Discount>> watchActiveDiscountsCatalog() {
+    return (_db.select(_db.discounts)
+          ..where((d) => d.isActive.equals(true))
+          ..orderBy([
+            (d) => OrderingTerm.asc(d.description),
+            (d) => OrderingTerm.asc(d.code),
+          ]))
+        .watch();
+  }
+
+  /// One-shot active discounts (e.g. before opening the discount dialog).
+  Future<List<Discount>> getActiveDiscountsCatalog() {
+    return (_db.select(_db.discounts)
+          ..where((d) => d.isActive.equals(true))
+          ..orderBy([
+            (d) => OrderingTerm.asc(d.description),
+            (d) => OrderingTerm.asc(d.code),
+          ]))
+        .get();
+  }
+
+  /// All discounts for admin (includes inactive).
+  Future<List<Discount>> getAllDiscountsAdmin() {
+    return (_db.select(_db.discounts)
+          ..orderBy([
+            (d) => OrderingTerm.asc(d.description),
+            (d) => OrderingTerm.asc(d.code),
+          ]))
+        .get();
+  }
+
+  /// Creates or updates a catalog discount. [percentage] is 0–1 (e.g. 0.1 = 10%).
+  /// [code] is stored uppercase. Pushes to Supabase when cloud sync is enabled.
+  Future<int> saveDiscountCatalog({
+    int? id,
+    required String code,
+    required double percentage,
+    required String description,
+    bool isActive = true,
+  }) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
+    final trimmedCode = code.trim().toUpperCase();
+    if (trimmedCode.isEmpty) {
+      throw ArgumentError('Discount code is required');
+    }
+    if (percentage <= 0 || percentage > 1) {
+      throw ArgumentError('percentage must be between 0 and 1');
+    }
+    final desc = description.trim().isEmpty ? 'Discount' : description.trim();
+
+    if (id == null) {
+      final newId = await _db.into(_db.discounts).insert(
+            DiscountsCompanion.insert(
+              code: trimmedCode,
+              percentage: percentage,
+              description: desc,
+              isActive: Value(isActive),
+            ),
+          );
+      if (CloudSyncService.isEnabled) {
+        final err = await CloudSyncService.upsertDiscountToCloud(
+          id: newId,
+          code: trimmedCode,
+          percentage: percentage,
+          description: desc,
+          isActive: isActive,
+        );
+        if (err != null) throw StateError(err);
+      }
+      return newId;
+    }
+
+    await (_db.update(_db.discounts)..where((d) => d.id.equals(id))).write(
+      DiscountsCompanion(
+        code: Value(trimmedCode),
+        percentage: Value(percentage),
+        description: Value(desc),
+        isActive: Value(isActive),
+      ),
+    );
+    if (CloudSyncService.isEnabled) {
+      final err = await CloudSyncService.upsertDiscountToCloud(
+        id: id,
+        code: trimmedCode,
+        percentage: percentage,
+        description: desc,
+        isActive: isActive,
+      );
+      if (err != null) throw StateError(err);
+    }
+    return id;
+  }
+
+  /// Deletes a catalog discount locally and in Supabase when enabled.
+  Future<void> deleteDiscountCatalog(int id) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
+    if (CloudSyncService.isEnabled) {
+      final err = await CloudSyncService.deleteDiscountFromCloud(id);
+      if (err != null) throw StateError(err);
+    }
+    await (_db.delete(_db.discounts)..where((d) => d.id.equals(id))).go();
   }
 
   /// Saves a supply (insert if id is null, update otherwise). Returns the supply id.
@@ -803,6 +1074,41 @@ class PosRepository {
     final qualStock = qLevel != null ? stockFromQualitativeLevel(qLevel) : null;
 
     if (id == null) {
+      if (CloudSyncService.isEnabled) {
+        final initialStock = mode == StockCountMode.qualitative && qualStock != null
+            ? qualStock!
+            : 0.0;
+        final (cerr, cloudId) = await CloudSyncService.insertSupplyRowInCloud(
+          name: name,
+          unit: unit,
+          currentStock: initialStock,
+          costPerUnit: costPerUnit,
+          reorderPoint: reorderPoint,
+          category: cat,
+          stockCountMode: mode,
+          qualitativeLevel: qLevel,
+        );
+        if (cerr != null) {
+          throw StateError(cerr);
+        }
+        final sid = cloudId!;
+        await _db.into(_db.supplies).insert(
+              SuppliesCompanion.insert(
+                id: Value(sid),
+                name: name,
+                unit: unit,
+                costPerUnit: Value(costPerUnit),
+                reorderPoint: Value(reorderPoint),
+                category: Value(cat),
+                stockCountMode: Value(mode),
+                qualitativeLevel: Value(qLevel),
+                currentStock: mode == StockCountMode.qualitative && qualStock != null
+                    ? Value(qualStock)
+                    : const Value.absent(),
+              ),
+            );
+        return sid;
+      }
       final newId = await _db.into(_db.supplies).insert(
         SuppliesCompanion.insert(
           name: name,
@@ -817,24 +1123,34 @@ class PosRepository {
               : const Value.absent(),
         ),
       );
-      if (CloudSyncService.isEnabled) {
-        final s = await (_db.select(_db.supplies)..where((s) => s.id.equals(newId))).getSingleOrNull();
-        if (s != null) {
-          CloudSyncService.upsertSupplyToCloud(
-            id: s.id,
-            name: s.name,
-            unit: s.unit,
-            currentStock: s.currentStock,
-            costPerUnit: s.costPerUnit,
-            reorderPoint: s.reorderPoint,
-            category: s.category,
-            stockCountMode: s.stockCountMode,
-            qualitativeLevel: s.qualitativeLevel,
-          ).catchError((e) => null);
-        }
-      }
       return newId;
     } else {
+      final existing = await (_db.select(_db.supplies)..where((s) => s.id.equals(id)))
+          .getSingleOrNull();
+      if (existing == null) {
+        throw StateError('Supply id=$id not found');
+      }
+      final mergedStock = mode == StockCountMode.qualitative && qualStock != null
+          ? qualStock!
+          : existing.currentStock;
+
+      if (CloudSyncService.isEnabled) {
+        final err = await CloudSyncService.upsertSupplyToCloud(
+          id: id,
+          name: name,
+          unit: unit,
+          currentStock: mergedStock,
+          costPerUnit: costPerUnit,
+          reorderPoint: reorderPoint,
+          category: cat,
+          stockCountMode: mode,
+          qualitativeLevel: mode == StockCountMode.qualitative ? qLevel : null,
+        );
+        if (err != null) {
+          throw StateError(err);
+        }
+      }
+
       await (_db.update(_db.supplies)..where((s) => s.id.equals(id))).write(
         SuppliesCompanion(
           name: Value(name),
@@ -851,22 +1167,6 @@ class PosRepository {
               : const Value.absent(),
         ),
       );
-      if (CloudSyncService.isEnabled) {
-        final s = await (_db.select(_db.supplies)..where((s) => s.id.equals(id))).getSingleOrNull();
-        if (s != null) {
-          CloudSyncService.upsertSupplyToCloud(
-            id: s.id,
-            name: s.name,
-            unit: s.unit,
-            currentStock: s.currentStock,
-            costPerUnit: s.costPerUnit,
-            reorderPoint: s.reorderPoint,
-            category: s.category,
-            stockCountMode: s.stockCountMode,
-            qualitativeLevel: s.qualitativeLevel,
-          ).catchError((e) => null);
-        }
-      }
       return id;
     }
   }
@@ -974,10 +1274,13 @@ class PosRepository {
   /// Deletes a supply by id.
   Future<void> deleteSupply(int id) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
-    await (_db.delete(_db.supplies)..where((s) => s.id.equals(id))).go();
     if (CloudSyncService.isEnabled) {
-      CloudSyncService.deleteSupplyFromCloud(id).catchError((e) => null);
+      final err = await CloudSyncService.deleteSupplyFromCloud(id);
+      if (err != null) {
+        throw StateError(err);
+      }
     }
+    await (_db.delete(_db.supplies)..where((s) => s.id.equals(id))).go();
   }
 
   /// Parks the current order (saves to DB for later restore).
@@ -1009,6 +1312,13 @@ class PosRepository {
     int productId,
   ) async {
     return _getModifierGroupsForProductId(productId);
+  }
+
+  /// Nombres de insumos (sabores) para etiquetas en ticket.
+  Future<Map<int, String>> getSupplyNamesByIds(Set<int> supplyIds) async {
+    if (supplyIds.isEmpty) return {};
+    final rows = await (_db.select(_db.supplies)..where((s) => s.id.isIn(supplyIds))).get();
+    return {for (final s in rows) s.id: s.name};
   }
 
   /// When [getModifierGroupsForProduct] returns empty, use this to find a product
@@ -1098,10 +1408,29 @@ class PosRepository {
     if (sale.cloudSaleId != null &&
         CloudSyncService.isEnabled &&
         ConnectivityService.instance.isConnected) {
-      await CloudSyncService.softCancelSaleInCloud(sale.cloudSaleId!);
+      final cloudErr = await CloudSyncService.softCancelSaleInCloud(sale.cloudSaleId!);
+      if (cloudErr != null) {
+        await logOperationEvent(
+          level: OperationLogLevel.critical,
+          operation: 'sale_cancel_cloud_sync',
+          message: cloudErr,
+          context: {'localSaleId': saleId, 'cloudSaleId': sale.cloudSaleId},
+        );
+      }
     }
-    await (_db.update(_db.sales)..where((t) => t.id.equals(saleId)))
-        .write(SalesCompanion(cancelledAt: Value(DateTime.now())));
+    try {
+      await (_db.update(_db.sales)..where((t) => t.id.equals(saleId)))
+          .write(SalesCompanion(cancelledAt: Value(DateTime.now())));
+    } catch (e, st) {
+      await logOperationEvent(
+        level: OperationLogLevel.critical,
+        operation: 'sale_cancel_local_update',
+        message: e.toString(),
+        context: {'localSaleId': saleId},
+        stackTrace: st,
+      );
+      rethrow;
+    }
   }
 
   /// Deletes ALL local data in FK order. Use before "Sincronizar desde la nube" for a full reload from cloud.
@@ -1119,6 +1448,7 @@ class PosRepository {
     await _db.delete(_db.products).go();
     await _db.delete(_db.supplies).go();
     await _db.delete(_db.categories).go();
+    await _db.delete(_db.pendingCashierApprovals).go();
     await _db.delete(_db.movements).go();
     await _db.delete(_db.cashMovements).go();
     await _db.delete(_db.shiftClosures).go();
@@ -1134,7 +1464,7 @@ class PosRepository {
         _db.saleItems,
         _db.saleItems.saleId.equalsExp(_db.sales.id),
       ),
-      innerJoin(
+      leftOuterJoin(
         _db.products,
         _db.products.id.equalsExp(_db.saleItems.productId),
       ),
@@ -1142,17 +1472,24 @@ class PosRepository {
       ..where(_db.sales.cancelledAt.isNull())
       ..orderBy([OrderingTerm.desc(_db.sales.date)]);
 
-    return query.watch().map((rows) {
+    return query.watch().asyncMap((rows) async {
+      final supplies = await (_db.select(_db.supplies).get());
+      final supplyIdToName = {for (final s in supplies) s.id: s.name};
+
       final grouped = <int, ({Sale sale, List<SaleItemDto> items})>{};
       for (final row in rows) {
         final sale = row.readTable(_db.sales);
         final saleItem = row.readTable(_db.saleItems);
-        final product = row.readTable(_db.products);
+        final product = row.readTableOrNull(_db.products);
 
         final dto = SaleItemDto(
-          productName: product.name,
+          productName: product?.name ?? 'Producto (id ${saleItem.productId})',
           quantity: saleItem.quantity,
           priceAtSale: saleItem.unitPrice,
+          modifierDetails: SaleReceiptPrintMapper.modifierLabelsFromJson(
+            saleItem.modifiersJson,
+            supplyIdToName,
+          ),
         );
 
         if (grouped.containsKey(sale.id)) {
@@ -1165,6 +1502,42 @@ class PosRepository {
           .map((e) => SaleWithItems(sale: e.sale, items: e.items))
           .toList();
     });
+  }
+
+  /// Thermal ticket payload for reprinting a past sale.
+  Future<ReceiptPrintData?> receiptPrintDataForSale(int saleId) async {
+    final sale = await (_db.select(_db.sales)..where((s) => s.id.equals(saleId)))
+        .getSingleOrNull();
+    if (sale == null || sale.cancelledAt != null) return null;
+
+    final rows = await (_db.select(_db.saleItems).join([
+      leftOuterJoin(
+        _db.products,
+        _db.products.id.equalsExp(_db.saleItems.productId),
+      ),
+    ])
+          ..where(_db.saleItems.saleId.equals(saleId)))
+        .get();
+
+    final supplies = await (_db.select(_db.supplies).get());
+    final supplyIdToName = {for (final s in supplies) s.id: s.name};
+
+    final items = rows.map((row) {
+      final saleItem = row.readTable(_db.saleItems);
+      final product = row.readTableOrNull(_db.products);
+      return (
+        productName: product?.name ?? 'Producto (id ${saleItem.productId})',
+        quantity: saleItem.quantity,
+        unitPrice: saleItem.unitPrice,
+        modifiersJson: saleItem.modifiersJson,
+      );
+    }).toList();
+
+    return SaleReceiptPrintMapper.fromLocalSale(
+      sale: sale,
+      items: items,
+      supplyIdToName: supplyIdToName,
+    );
   }
 
   /// Restocks a supply: adds quantity, updates cost (weighted average), logs.
@@ -1211,7 +1584,8 @@ class PosRepository {
   /// Processes a sale in a single Drift transaction.
   /// Creates sale record (with payment method, amount tendered, change), sale items, deducts inventory.
   /// Returns a [SaleSyncPayload] for syncing to Supabase (cloud); null if sync not needed.
-  /// [paymentMethod] should be CASH, CARD_DEBIT, CARD_CREDIT, or TRANSFER.
+  /// [paymentMethod] should be CASH, CARD_DEBIT, CARD_CREDIT, TRANSFER, or SPLIT.
+  /// [payments] required when [paymentMethod] is SPLIT (stored as [Sales.paymentsJson]).
   /// [amountTendered] and [changeGiven] are stored on the sale record.
   Future<SaleSyncPayload?> processSale(
     List<CartItem> items, {
@@ -1220,8 +1594,21 @@ class PosRepository {
     String paymentMethod = 'CASH',
     double amountTendered = 0.0,
     double changeGiven = 0.0,
+    List<SalePaymentLine>? payments,
   }) async {
     if (items.isEmpty) return null;
+
+    final paymentsJson = payments != null && payments.isNotEmpty
+        ? SalePaymentLine.encodeList(payments)
+        : null;
+
+    final shiftForSale = await getCurrentShift();
+    if (shiftForSale == null) {
+      throw StateError(
+        'No hay turno abierto. Abre un turno en «Cierre de caja» antes de cobrar. '
+        'There is no open shift. Open a shift before taking sales.',
+      );
+    }
 
     var amount = totalAmount ?? items.fold<double>(0.0, (sum, item) => sum + item.subtotal);
     if (totalAmount == null && discount != null) {
@@ -1239,8 +1626,6 @@ class PosRepository {
         )
         .toList();
 
-    String? cloudWriteError;
-    var cloudSyncExceptionLogged = false;
     late int localSaleId;
 
     SaleSyncPayload? payload;
@@ -1346,17 +1731,40 @@ class PosRepository {
               paymentMethod: Value(paymentMethod),
               amountTendered: Value(amountTendered),
               changeGiven: Value(changeGiven),
+              paymentsJson: paymentsJson == null
+                  ? const Value.absent()
+                  : Value(paymentsJson),
               cloudSaleId: const Value.absent(),
+              shiftId: shiftForSale.id,
             ),
           );
 
       for (final item in items) {
+        String? modifiersJson;
+        if (item.selectedModifiers.isNotEmpty) {
+          modifiersJson = jsonEncode(
+            item.selectedModifiers
+                .map(
+                  (m) => ModifierOptionDto(
+                    id: m.id,
+                    modifierGroupId: m.modifierGroupId,
+                    supplyId: m.supplyId,
+                    quantityDeducted: m.quantityDeducted,
+                    priceExtra: m.priceExtra,
+                  ).toJson(),
+                )
+                .toList(),
+          );
+        }
         await _db.into(_db.saleItems).insert(
               SaleItemsCompanion.insert(
                 saleId: localSaleId,
                 productId: item.productId,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
+                modifiersJson: modifiersJson == null
+                    ? const Value.absent()
+                    : Value(modifiersJson),
               ),
             );
       }
@@ -1368,6 +1776,7 @@ class PosRepository {
         paymentMethod: paymentMethod,
         amountTendered: amountTendered,
         changeGiven: changeGiven,
+        paymentsJson: paymentsJson,
         items: items
             .map(
               (i) => SaleSyncItem(
@@ -1381,7 +1790,7 @@ class PosRepository {
     });
     } catch (e, st) {
       await logOperationEvent(
-        level: 'error',
+        level: OperationLogLevel.critical,
         operation: 'sale_transaction',
         message: e.toString(),
         context: {
@@ -1395,32 +1804,83 @@ class PosRepository {
       rethrow;
     }
 
-    try {
-      if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
-        final (err, cloudId) = await CloudSyncService.writeSaleToCloud(
-          items,
-          totalAmount: amount,
-          paymentMethod: paymentMethod,
-          amountTendered: amountTendered,
-          changeGiven: changeGiven,
+    if (CloudSyncService.isEnabled) {
+      if (ConnectivityService.instance.isConnected) {
+        unawaited(
+          _syncSaleToCloudAfterLocalCommit(
+            localSaleId: localSaleId,
+            shiftForSale: shiftForSale,
+            items: items,
+            amount: amount,
+            paymentMethod: paymentMethod,
+            amountTendered: amountTendered,
+            changeGiven: changeGiven,
+            paymentsJson: paymentsJson,
+            itemsContext: itemsContext,
+          ),
         );
-        if (err != null) {
-          cloudWriteError = err;
-        }
-        if (cloudId != null) {
-          await (_db.update(_db.sales)..where((s) => s.id.equals(localSaleId))).write(
-                SalesCompanion(cloudSaleId: Value(cloudId)),
-              );
-        }
-      } else if (CloudSyncService.isEnabled && !ConnectivityService.instance.isConnected) {
-        cloudWriteError =
-            'Sin conexión; la venta quedó registrada solo en este dispositivo.';
+      } else {
+        await logOperationEvent(
+          level: OperationLogLevel.info,
+          operation: 'sale_cloud_sync',
+          message: 'Sin conexión; la venta quedó registrada solo en este dispositivo.',
+          context: {
+            'localSaleId': localSaleId,
+            'totalAmount': amount,
+            'paymentMethod': paymentMethod,
+            'items': itemsContext,
+            'kind': 'offline_local_only',
+          },
+        );
       }
+    }
+    return payload;
+  }
+
+  Future<void> _syncSaleToCloudAfterLocalCommit({
+    required int localSaleId,
+    required Shift shiftForSale,
+    required List<CartItem> items,
+    required double amount,
+    required String paymentMethod,
+    required double amountTendered,
+    required double changeGiven,
+    String? paymentsJson,
+    required List<Map<String, Object?>> itemsContext,
+  }) async {
+    try {
+      final cloudSid = CloudSyncService.supabaseShiftId(shiftForSale);
+      final (err, cloudId) = await CloudSyncService.writeSaleToCloud(
+        items,
+        totalAmount: amount,
+        paymentMethod: paymentMethod,
+        amountTendered: amountTendered,
+        changeGiven: changeGiven,
+        paymentsJson: paymentsJson,
+        cloudShiftId: cloudSid,
+      );
+      if (err != null) {
+        debugPrint('CloudSyncService.writeSaleToCloud (background): $err');
+        await logOperationEvent(
+          level: OperationLogLevel.critical,
+          operation: 'sale_cloud_sync',
+          message: err,
+          context: {
+            'localSaleId': localSaleId,
+            'totalAmount': amount,
+            'paymentMethod': paymentMethod,
+            'items': itemsContext,
+          },
+        );
+        return;
+      }
+      if (cloudId == null) return;
+      await (_db.update(_db.sales)..where((s) => s.id.equals(localSaleId))).write(
+            SalesCompanion(cloudSaleId: Value(cloudId)),
+          );
     } catch (e, st) {
-      cloudSyncExceptionLogged = true;
-      cloudWriteError = e.toString();
       await logOperationEvent(
-        level: 'error',
+        level: OperationLogLevel.critical,
         operation: 'sale_cloud_sync',
         message: e.toString(),
         context: {
@@ -1433,28 +1893,6 @@ class PosRepository {
         stackTrace: st,
       );
     }
-
-    if (cloudWriteError != null) {
-      debugPrint('CloudSyncService.writeSaleToCloud (non-blocking): $cloudWriteError');
-      if (!cloudSyncExceptionLogged) {
-        final err = cloudWriteError;
-        final isOfflineOnly = err.contains('Sin conexión') ||
-            err.contains('solo en este dispositivo');
-        await logOperationEvent(
-          level: isOfflineOnly ? 'info' : 'warning',
-          operation: 'sale_cloud_sync',
-          message: err,
-          context: {
-            'localSaleId': localSaleId,
-            'totalAmount': amount,
-            'paymentMethod': paymentMethod,
-            'items': itemsContext,
-            if (isOfflineOnly) 'kind': 'offline_local_only',
-          },
-        );
-      }
-    }
-    return payload;
   }
 
   /// Registra un movimiento (entrada o salida) que afecta caja o banco. No es una venta.
@@ -1466,110 +1904,1021 @@ class PosRepository {
     required double amount,
     required String reason,
     int? shiftId,
+    /// Supabase `shifts.id` when there is no fila local para [shiftId] (p. ej. turno solo en nube).
+    int? cloudShiftIdForSync,
   }) async {
-    final id = await _db.into(_db.movements).insert(
-          MovementsCompanion.insert(
-            type: type,
-            account: account,
-            amount: amount,
-            reason: reason,
-            shiftId: shiftId != null ? Value(shiftId) : const Value.absent(),
-          ),
+    late final int id;
+    late final bool reusedExisting;
+    try {
+      final outcome = await _db.transaction<(int, bool)>(() async {
+        final recent = await _recentMovementWithSameFingerprint(
+          type: type,
+          account: account,
+          amount: amount,
+          reason: reason,
+          shiftId: shiftId,
         );
+        if (recent != null) {
+          return (recent.id, true);
+        }
+        final pendingCloud = CloudSyncService.isEnabled &&
+            !ConnectivityService.instance.isConnected;
+        final newId = await _db.into(_db.movements).insert(
+              MovementsCompanion.insert(
+                type: type,
+                account: account,
+                amount: amount,
+                reason: reason,
+                shiftId: shiftId != null ? Value(shiftId) : const Value.absent(),
+                needsCloudSync: Value(pendingCloud),
+              ),
+            );
+        return (newId, false);
+      });
+      id = outcome.$1;
+      reusedExisting = outcome.$2;
+    } catch (e, st) {
+      await logOperationEvent(
+        level: OperationLogLevel.critical,
+        operation: 'movement_local_insert',
+        message: e.toString(),
+        context: {
+          'type': type,
+          'account': account,
+          'amount': amount,
+          'reason': reason,
+          'shiftId': shiftId,
+        },
+        stackTrace: st,
+      );
+      rethrow;
+    }
     if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
       final movement = await (_db.select(_db.movements)..where((m) => m.id.equals(id))).getSingle();
-      final err = await CloudSyncService.writeMovementToCloud(movement);
-      if (err != null) debugPrint('Cloud write movement: $err');
+      final err = await CloudSyncService.writeMovementToCloud(
+        movement,
+        _db,
+        cloudShiftIdOverride: cloudShiftIdForSync,
+      );
+      if (err == null) {
+        await (_db.update(_db.movements)..where((m) => m.id.equals(id))).write(
+              const MovementsCompanion(needsCloudSync: Value(false)),
+            );
+      } else {
+        debugPrint(
+          reusedExisting ? 'Cloud write movement (idempotent re-sync): $err' : 'Cloud write movement: $err',
+        );
+        await (_db.update(_db.movements)..where((m) => m.id.equals(id))).write(
+              const MovementsCompanion(needsCloudSync: Value(true)),
+            );
+        await logOperationEvent(
+          level: reusedExisting ? OperationLogLevel.warning : OperationLogLevel.critical,
+          operation: reusedExisting ? 'movement_cloud_sync_idempotent' : 'movement_cloud_sync',
+          message: err,
+          context: {
+            'localMovementId': id,
+            'type': type,
+            'account': account,
+            'amount': amount,
+          },
+        );
+      }
     }
     return id;
   }
 
-  /// Lista de movimientos ordenados por fecha descendente.
+  static const _pendingKindMovement = 'movement';
+  static const _pendingKindSaleCancel = 'sale_cancel';
+  static const _pendingKindShiftClose = 'shift_close';
+  static const _pendingApprovalStatusKey = 'approvalStatus';
+  static const _pendingApprovedAtKey = 'approvedAt';
+
+  void _schedulePendingCloudPush(int localId, String kind, Map<String, dynamic> payload) {
+    if (!CloudSyncService.isEnabled) return;
+    unawaited(_pushPendingRowToCloud(localId, kind, payload));
+  }
+
+  Future<void> _pushPendingRowToCloud(int localId, String kind, Map<String, dynamic> payload) async {
+    if (!ConnectivityService.instance.isConnected) return;
+    final uuid = await PendingCashierApprovalsCloudService.pushLocalPendingRow(
+      kind: kind,
+      payload: payload,
+    );
+    if (uuid == null) return;
+    await (_db.update(_db.pendingCashierApprovals)..where((t) => t.id.equals(localId))).write(
+          PendingCashierApprovalsCompanion(cloudPendingId: Value(uuid)),
+        );
+  }
+
+  /// Cuando el admin aprueba/rechaza en web, Realtime dispara esta ruta en la caja.
+  Future<void> applyCloudResolutionForPending({
+    required String cloudId,
+    required String status,
+    String? kind,
+    Map<String, dynamic>? cloudPayload,
+  }) async {
+    PendingCashierApproval? row = await (_db.select(_db.pendingCashierApprovals)
+          ..where((t) => t.cloudPendingId.equals(cloudId)))
+        .getSingleOrNull();
+    row ??= await _findFallbackPendingRow(kind: kind, cloudPayload: cloudPayload);
+    final resolvedRow = row;
+    if (resolvedRow == null) return;
+    if (status == 'rejected') {
+      await (_db.delete(_db.pendingCashierApprovals)
+            ..where((t) => t.id.equals(resolvedRow.id)))
+          .go();
+      return;
+    }
+    final map = jsonDecode(resolvedRow.payloadJson) as Map<String, dynamic>;
+    if (resolvedRow.kind == _pendingKindShiftClose) {
+      map[_pendingApprovalStatusKey] = 'approved';
+      map[_pendingApprovedAtKey] = DateTime.now().toUtc().toIso8601String();
+      await (_db.update(_db.pendingCashierApprovals)
+            ..where((t) => t.id.equals(resolvedRow.id)))
+          .write(
+            PendingCashierApprovalsCompanion(
+              payloadJson: Value(jsonEncode(map)),
+            ),
+          );
+      return;
+    }
+    await (_db.delete(_db.pendingCashierApprovals)
+          ..where((t) => t.id.equals(resolvedRow.id)))
+        .go();
+  }
+
+  Future<PendingCashierApproval?> _findFallbackPendingRow({
+    String? kind,
+    Map<String, dynamic>? cloudPayload,
+  }) async {
+    if (kind == null || cloudPayload == null) return null;
+    final rows = await (_db.select(_db.pendingCashierApprovals)
+          ..where((t) => t.cloudPendingId.isNull() & t.kind.equals(kind)))
+        .get();
+    for (final row in rows) {
+      try {
+        final localPayload = jsonDecode(row.payloadJson) as Map<String, dynamic>;
+        if (_payloadMatchesForResolution(kind, localPayload, cloudPayload)) {
+          return row;
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  bool _payloadMatchesForResolution(
+    String kind,
+    Map<String, dynamic> local,
+    Map<String, dynamic> cloud,
+  ) {
+    switch (kind) {
+      case _pendingKindMovement:
+        return local['type'] == cloud['type'] &&
+            local['account'] == cloud['account'] &&
+            (local['reason'] ?? '') == (cloud['reason'] ?? '') &&
+            ((local['amount'] as num?)?.toDouble() ?? 0) ==
+                ((cloud['amount'] as num?)?.toDouble() ?? 0);
+      case _pendingKindSaleCancel:
+        return (local['saleId'] as num?)?.toInt() == (cloud['saleId'] as num?)?.toInt();
+      case _pendingKindShiftClose:
+        return (local['shiftId'] as num?)?.toInt() == (cloud['shiftId'] as num?)?.toInt();
+      default:
+        return false;
+    }
+  }
+
+  /// Solicitudes de cajero pendientes de aprobación (mismo terminal).
+  Stream<List<PendingCashierApproval>> watchPendingCashierApprovals() {
+    return (_db.select(_db.pendingCashierApprovals)
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
+  /// Snapshot de solicitudes pendientes (mismo terminal).
+  Future<List<PendingCashierApproval>> getPendingCashierApprovals() {
+    return (_db.select(_db.pendingCashierApprovals)
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
+  }
+
+  Future<int> countPendingCashierApprovals() async {
+    final q = await _db.customSelect(
+      'SELECT COUNT(*) AS c FROM pending_cashier_approvals',
+      readsFrom: {_db.pendingCashierApprovals},
+    ).getSingle();
+    final raw = q.data['c'];
+    if (raw is int) return raw;
+    if (raw is BigInt) return raw.toInt();
+    return int.tryParse(raw.toString()) ?? 0;
+  }
+
+  Future<int> enqueuePendingMovement({
+    required String type,
+    required String account,
+    required double amount,
+    required String reason,
+    int? shiftId,
+    int? cloudShiftId,
+  }) async {
+    final payload = <String, dynamic>{
+      'type': type,
+      'account': account,
+      'amount': amount,
+      'reason': reason,
+      if (shiftId != null) 'shiftId': shiftId,
+      if (cloudShiftId != null) 'cloudShiftId': cloudShiftId,
+    };
+    final id = await _db.into(_db.pendingCashierApprovals).insert(
+          PendingCashierApprovalsCompanion.insert(
+            kind: _pendingKindMovement,
+            payloadJson: jsonEncode(payload),
+          ),
+        );
+    _schedulePendingCloudPush(id, _pendingKindMovement, Map<String, dynamic>.from(payload));
+    return id;
+  }
+
+  Future<int> enqueuePendingSaleCancel(int saleId) async {
+    final payload = <String, dynamic>{'saleId': saleId};
+    final id = await _db.into(_db.pendingCashierApprovals).insert(
+          PendingCashierApprovalsCompanion.insert(
+            kind: _pendingKindSaleCancel,
+            payloadJson: jsonEncode(payload),
+          ),
+        );
+    _schedulePendingCloudPush(id, _pendingKindSaleCancel, Map<String, dynamic>.from(payload));
+    return id;
+  }
+
+  /// Incluye [expectedCash] y [difference] solo para mostrar al admin (al aprobar se recalcula en servidor local).
+  Future<int> enqueuePendingShiftClose({
+    required int shiftId,
+    required double declaredCash,
+    String? notes,
+    double? expectedCash,
+    double? difference,
+    int? cloudShiftId,
+  }) async {
+    final existing = await _db.select(_db.pendingCashierApprovals).get();
+    for (final e in existing) {
+      if (e.kind != _pendingKindShiftClose) continue;
+      final m = jsonDecode(e.payloadJson) as Map<String, dynamic>;
+      if ((m['shiftId'] as num?)?.toInt() == shiftId) {
+        throw StateError('pending_shift_close_exists');
+      }
+    }
+    final payload = <String, dynamic>{
+      'shiftId': shiftId,
+      'declaredCash': declaredCash,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (expectedCash != null) 'expectedCash': expectedCash,
+      if (difference != null) 'difference': difference,
+      if (cloudShiftId != null) 'cloudShiftId': cloudShiftId,
+    };
+    final id = await _db.into(_db.pendingCashierApprovals).insert(
+          PendingCashierApprovalsCompanion.insert(
+            kind: _pendingKindShiftClose,
+            payloadJson: jsonEncode(payload),
+          ),
+        );
+    _schedulePendingCloudPush(id, _pendingKindShiftClose, Map<String, dynamic>.from(payload));
+    return id;
+  }
+
+  Future<void> clearPendingShiftCloseForShift(int shiftId) async {
+    final rows = await _db.select(_db.pendingCashierApprovals).get();
+    for (final row in rows) {
+      if (row.kind != _pendingKindShiftClose) continue;
+      try {
+        final payload = jsonDecode(row.payloadJson) as Map<String, dynamic>;
+        if ((payload['shiftId'] as num?)?.toInt() != shiftId) continue;
+        await (_db.delete(_db.pendingCashierApprovals)..where((t) => t.id.equals(row.id))).go();
+      } catch (_) {}
+    }
+  }
+
+  /// Ejecuta la acción y elimina la fila. Devuelve mensaje de error o null si OK.
+  Future<String?> approvePendingCashierApproval(int id) async {
+    final row = await (_db.select(_db.pendingCashierApprovals)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return 'approval_not_found';
+    final cloudId = row.cloudPendingId;
+    final map = jsonDecode(row.payloadJson) as Map<String, dynamic>;
+    try {
+      switch (row.kind) {
+        case _pendingKindMovement:
+          final account = map['account']! as String;
+          final resolved = await resolveMovementShiftForInsert(
+            account: account,
+            pickedLocalShiftId: (map['shiftId'] as num?)?.toInt(),
+            pickedCloudShiftId: (map['cloudShiftId'] as num?)?.toInt(),
+          );
+          await insertMovement(
+            type: map['type']! as String,
+            account: account,
+            amount: (map['amount'] as num).toDouble(),
+            reason: map['reason']! as String,
+            shiftId: resolved.localShiftId,
+            cloudShiftIdForSync: resolved.cloudShiftIdForSync,
+          );
+          break;
+        case _pendingKindSaleCancel:
+          await deleteSale((map['saleId'] as num).toInt());
+          break;
+        case _pendingKindShiftClose:
+          await performCloseShift(
+            shiftId: (map['shiftId'] as num).toInt(),
+            declaredCash: (map['declaredCash'] as num).toDouble(),
+            notes: map['notes'] as String?,
+          );
+          await startShift((map['declaredCash'] as num).toDouble());
+          break;
+        default:
+          return 'approval_unknown_kind';
+      }
+    } catch (e) {
+      return e.toString();
+    }
+    await (_db.delete(_db.pendingCashierApprovals)..where((t) => t.id.equals(id))).go();
+    if (cloudId != null &&
+        CloudSyncService.isEnabled &&
+        ConnectivityService.instance.isConnected) {
+      await PendingCashierApprovalsCloudService.markResolvedOnCloud(cloudId, 'approved');
+    }
+    return null;
+  }
+
+  Future<void> rejectPendingCashierApproval(int id) async {
+    final row = await (_db.select(_db.pendingCashierApprovals)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return;
+    final cloudId = row.cloudPendingId;
+    await (_db.delete(_db.pendingCashierApprovals)..where((t) => t.id.equals(id))).go();
+    if (cloudId != null &&
+        CloudSyncService.isEnabled &&
+        ConnectivityService.instance.isConnected) {
+      await PendingCashierApprovalsCloudService.markResolvedOnCloud(cloudId, 'rejected');
+    }
+  }
+
+  /// Lista de movimientos activos (no cancelados), ordenados por fecha descendente.
   Stream<List<Movement>> watchMovements({String? account, int limit = 200}) {
     if (account != null) {
       return (_db.select(_db.movements)
-            ..where((m) => m.account.equals(account))
+            ..where((m) => m.account.equals(account) & m.cancelledAt.isNull())
             ..orderBy([(m) => OrderingTerm.desc(m.date)])
             ..limit(limit))
           .watch();
     }
     return (_db.select(_db.movements)
+          ..where((m) => m.cancelledAt.isNull())
           ..orderBy([(m) => OrderingTerm.desc(m.date)])
           ..limit(limit))
         .watch();
   }
 
+  /// Admin: borrado lógico local + nube.
+  Future<String?> cancelMovement(int movementId) async {
+    final now = DateTime.now();
+    await (_db.update(_db.movements)..where((m) => m.id.equals(movementId))).write(
+          MovementsCompanion(cancelledAt: Value(now)),
+        );
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+      return CloudSyncService.cancelMovementInCloud(movementId);
+    }
+    return null;
+  }
+
   /// Ventas del turno por forma de pago (rango [rangeStart, rangeEnd]) y neto de movimientos de caja.
+  ///
+  /// Incluye ventas con [shiftId] local correcto y ventas con otro `shift_id` pero fecha en el turno
+  /// (p. ej. id de nube guardado por error en SQLite). `sales.shift_id` es obligatorio (schema ≥ 22).
   Future<({double cashSales, double debitSales, double creditSales, double transferSales, double movementsCajaNet})>
-      _getShiftSalesByPaymentType(int shiftId, DateTime rangeStart, DateTime rangeEnd) async {
-    final dateInRange = _db.sales.date.isBiggerOrEqualValue(rangeStart) &
-        _db.sales.date.isSmallerOrEqualValue(rangeEnd);
-    final notCancelled = _db.sales.cancelledAt.isNull();
-    final cashR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
-        .getSingle();
-    final debitR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange & notCancelled))
-        .getSingle();
-    final creditR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange & notCancelled))
-        .getSingle();
-    final transferR = await (_db.selectOnly(_db.sales)
-          ..addColumns([_db.sales.totalAmount.sum()])
-          ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
-        .getSingle();
+      _getShiftSalesByPaymentType(
+    int shiftId,
+    DateTime rangeStart,
+    DateTime rangeEnd, {
+    Set<int> excludeCloudSaleIds = const <int>{},
+  }) async {
+    final rows = await (_db.select(_db.sales)..where((s) {
+      final dateInRange =
+          s.date.isBiggerOrEqualValue(rangeStart) & s.date.isSmallerOrEqualValue(rangeEnd);
+      final notCancelled = s.cancelledAt.isNull();
+      final forThisShift = s.shiftId.equals(shiftId);
+      final mislinkedInRange = dateInRange & s.shiftId.equals(shiftId).not();
+      final saleWindow = forThisShift | mislinkedInRange;
+      return saleWindow & notCancelled;
+    })).get();
+    double cash = 0.0;
+    double debit = 0.0;
+    double credit = 0.0;
+    double transfer = 0.0;
+    for (final r in rows) {
+      final cloudId = r.cloudSaleId;
+      if (cloudId != null && excludeCloudSaleIds.contains(cloudId)) continue;
+      final breakdown = SalePaymentBreakdown.fromSale(
+        paymentMethod: r.paymentMethod,
+        totalAmount: r.totalAmount,
+        paymentsJson: r.paymentsJson,
+      );
+      cash += breakdown.cash;
+      debit += breakdown.debit;
+      credit += breakdown.credit;
+      transfer += breakdown.transfer;
+    }
     final movementsCajaNet = await getMovementsCajaNetForShift(shiftId);
     return (
-      cashSales: cashR.read(_db.sales.totalAmount.sum()) ?? 0.0,
-      debitSales: debitR.read(_db.sales.totalAmount.sum()) ?? 0.0,
-      creditSales: creditR.read(_db.sales.totalAmount.sum()) ?? 0.0,
-      transferSales: transferR.read(_db.sales.totalAmount.sum()) ?? 0.0,
+      cashSales: cash,
+      debitSales: debit,
+      creditSales: credit,
+      transferSales: transfer,
       movementsCajaNet: movementsCajaNet,
     );
   }
 
-  /// Neto de movimientos de caja para un turno: sum(ENTRADA) - sum(SALIDA). Afecta el esperado en caja.
-  Future<double> getMovementsCajaNetForShift(int shiftId) async {
-    final rows = await (_db.select(_db.movements)
-          ..where((m) => m.account.equals('CAJA') & m.shiftId.equals(shiftId)))
-        .get();
-    double net = 0;
+  /// Ids de venta en Supabase ya representados en SQLite (ventas del turno en la ventana local).
+  Future<Set<int>> _localCloudSaleIdsInShiftWindow(
+    int localShiftId,
+    DateTime rangeStart,
+    DateTime rangeEnd,
+  ) async {
+    final rows = await (_db.select(_db.sales)..where((s) {
+      final dateInRange =
+          s.date.isBiggerOrEqualValue(rangeStart) & s.date.isSmallerOrEqualValue(rangeEnd);
+      final notCancelled = s.cancelledAt.isNull();
+      final forThisShift = s.shiftId.equals(localShiftId);
+      final mislinkedInRange = dateInRange & s.shiftId.equals(localShiftId).not();
+      final saleWindow = forThisShift | mislinkedInRange;
+      return saleWindow & notCancelled;
+    })).get();
+    final ids = <int>{};
     for (final r in rows) {
-      if (r.type == 'ENTRADA') {
-        net += r.amount;
-      } else if (r.type == 'SALIDA') {
-        net -= r.amount;
-      }
+      final cid = r.cloudSaleId;
+      if (cid != null) ids.add(cid);
     }
-    return net;
+    return ids;
   }
 
-  /// Gets the current (open) shift, or null if none.
+  /// Cantidad de ventas locales del turno que quedan excluidas por cancelación en nube.
+  /// Útil para mostrar un badge informativo en cierre de caja.
+  Future<int> countCloudCancelledSalesAppliedToLocalShift(int localShiftId) async {
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(localShiftId)))
+        .getSingleOrNull();
+    if (shift == null) return 0;
+    if (!CloudSyncService.isEnabled || !ConnectivityService.instance.isConnected) return 0;
+    final cloudSid = CloudSyncService.supabaseShiftId(shift);
+    final cancelledIds = await CloudSyncService.fetchCancelledSaleIdsForShift(cloudSid);
+    if (cancelledIds.isEmpty) return 0;
+    final now = DateTime.now();
+    final rows = await (_db.select(_db.sales)..where((s) {
+      final dateInRange =
+          s.date.isBiggerOrEqualValue(shift.startTime) & s.date.isSmallerOrEqualValue(now);
+      final notCancelled = s.cancelledAt.isNull();
+      final forThisShift = s.shiftId.equals(localShiftId);
+      final mislinkedInRange = dateInRange & s.shiftId.equals(localShiftId).not();
+      final saleWindow = forThisShift | mislinkedInRange;
+      return saleWindow & notCancelled;
+    })).get();
+    var count = 0;
+    for (final r in rows) {
+      final cid = r.cloudSaleId;
+      if (cid != null && cancelledIds.contains(cid)) count++;
+    }
+    return count;
+  }
+
+  Future<Set<int>> _localMovementIdsForShift(int localShiftId) async {
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(localShiftId)))
+        .getSingleOrNull();
+    if (shift == null) return {};
+    final rows = await (_db.select(_db.movements)
+          ..where((m) => m.shiftId.equals(localShiftId) & m.cancelledAt.isNull()))
+        .get();
+    return rows
+        .where((m) => isMovementInShiftWindow(movementDate: m.date, shift: shift))
+        .map((e) => e.id)
+        .toSet();
+  }
+
+  /// Desvincula movimientos con [shiftId] local pero fecha fuera del turno (p. ej. id local
+  /// reutilizado o sync de un `shifts.id` antiguo en nube).
+  Future<int> reconcileMislinkedMovementsForShift(int localShiftId) async {
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(localShiftId)))
+        .getSingleOrNull();
+    if (shift == null) return 0;
+    final rows = await (_db.select(_db.movements)
+          ..where((m) => m.shiftId.equals(localShiftId) & m.cancelledAt.isNull()))
+        .get();
+    var detached = 0;
+    for (final m in rows) {
+      if (isMovementInShiftWindow(movementDate: m.date, shift: shift)) continue;
+      await (_db.update(_db.movements)..where((t) => t.id.equals(m.id))).write(
+            const MovementsCompanion(shiftId: Value(null)),
+          );
+      detached++;
+    }
+    if (detached > 0) {
+      await logOperationEvent(
+        level: OperationLogLevel.warning,
+        operation: 'movement_shift_reconcile',
+        message:
+            'Se desvincularon $detached movimiento(s) del turno local $localShiftId '
+            '(cloud_shift_id ${shift.cloudShiftId}): fecha fuera del rango del turno.',
+        context: {
+          'localShiftId': localShiftId,
+          'cloudShiftId': shift.cloudShiftId,
+          'detachedCount': detached,
+        },
+      );
+    }
+    return detached;
+  }
+
+  /// Totales del turno: SQLite + filas en nube del mismo `shifts.id` que no están ya enlazadas localmente.
+  Future<
+      ({
+        double cashSales,
+        double debitSales,
+        double creditSales,
+        double transferSales,
+        double movementsCajaNet,
+        double cloudAddedCash,
+        double cloudAddedDebit,
+        double cloudAddedCredit,
+        double cloudAddedTransfer,
+        double cloudAddedMovNet,
+      })> _getMergedShiftMonetaryTotals(int localShiftId) async {
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(localShiftId)))
+        .getSingleOrNull();
+    if (shift == null) {
+      return (
+        cashSales: 0.0,
+        debitSales: 0.0,
+        creditSales: 0.0,
+        transferSales: 0.0,
+        movementsCajaNet: 0.0,
+        cloudAddedCash: 0.0,
+        cloudAddedDebit: 0.0,
+        cloudAddedCredit: 0.0,
+        cloudAddedTransfer: 0.0,
+        cloudAddedMovNet: 0.0,
+      );
+    }
+    final now = DateTime.now();
+    final cloudSid = CloudSyncService.supabaseShiftId(shift);
+    final cancelledCloudSaleIds = await CloudSyncService.fetchCancelledSaleIdsForShift(cloudSid);
+    final local = await _getShiftSalesByPaymentType(
+      localShiftId,
+      shift.startTime,
+      now,
+      excludeCloudSaleIds: cancelledCloudSaleIds,
+    );
+    if (!CloudSyncService.isEnabled || !ConnectivityService.instance.isConnected) {
+      return (
+        cashSales: local.cashSales,
+        debitSales: local.debitSales,
+        creditSales: local.creditSales,
+        transferSales: local.transferSales,
+        movementsCajaNet: local.movementsCajaNet,
+        cloudAddedCash: 0.0,
+        cloudAddedDebit: 0.0,
+        cloudAddedCredit: 0.0,
+        cloudAddedTransfer: 0.0,
+        cloudAddedMovNet: 0.0,
+      );
+    }
+    final excludedSaleIds = await _localCloudSaleIdsInShiftWindow(localShiftId, shift.startTime, now);
+    final localMovIds = await _localMovementIdsForShift(localShiftId);
+    final cloudSales = await CloudSyncService.fetchCloudOnlySalesTotalsForShift(
+      cloudShiftId: cloudSid,
+      excludeCloudSaleIds: excludedSaleIds,
+    );
+    final cloudMovNet = await CloudSyncService.fetchCloudOnlyCajaMovementNetForShift(
+      cloudShiftId: cloudSid,
+      excludeCloudMovementIds: localMovIds,
+    );
+    return (
+      cashSales: local.cashSales + cloudSales.cash,
+      debitSales: local.debitSales + cloudSales.debit,
+      creditSales: local.creditSales + cloudSales.credit,
+      transferSales: local.transferSales + cloudSales.transfer,
+      movementsCajaNet: local.movementsCajaNet + cloudMovNet,
+      cloudAddedCash: cloudSales.cash,
+      cloudAddedDebit: cloudSales.debit,
+      cloudAddedCredit: cloudSales.credit,
+      cloudAddedTransfer: cloudSales.transfer,
+      cloudAddedMovNet: cloudMovNet,
+    );
+  }
+
+  /// Neto de movimientos de caja para un turno: sum(ENTRADA) - sum(SALIDA). Afecta el esperado en caja.
+  /// Solo cuenta movimientos cuya fecha cae dentro del turno (evita filas con `shift_id` local erróneo).
+  Future<double> getMovementsCajaNetForShift(int shiftId) async {
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(shiftId)))
+        .getSingleOrNull();
+    if (shift == null) return 0;
+    final rows = await (_db.select(_db.movements)
+          ..where((m) =>
+              m.account.equals('CAJA') &
+              m.shiftId.equals(shiftId) &
+              m.cancelledAt.isNull()))
+        .get();
+    final inWindow = rows.where(
+      (m) => isMovementInShiftWindow(movementDate: m.date, shift: shift),
+    );
+    return netCajaFromMovements(inWindow);
+  }
+
+  /// Alinea turnos abiertos locales con Supabase (cierra fantasmas ya cerrados en la nube).
+  Future<void> _maybeReconcileOpenShiftsWithCloud() async {
+    if (!CloudSyncService.isEnabled) return;
+    final now = DateTime.now();
+    if (_lastReconcileOpenShifts != null &&
+        now.difference(_lastReconcileOpenShifts!) < const Duration(seconds: 25)) {
+      return;
+    }
+    _lastReconcileOpenShifts = now;
+    await CloudSyncService.reconcileLocalOpenShiftsWithCloud(_db);
+  }
+
+  /// Turnos abiertos en SQLite (puede haber más de uno antes de reconciliar).
+  Future<List<Shift>> getOpenShiftsLocal() async {
+    await _maybeReconcileOpenShiftsWithCloud();
+    return (_db.select(_db.shifts)
+          ..where((s) => s.endTime.isNull())
+          ..orderBy([(s) => OrderingTerm.desc(s.id)]))
+        .get();
+  }
+
+  /// Resuelve ids de turno para insertar un movimiento de caja en este dispositivo.
+  /// Prioriza fila local; si no hay, envía solo a nube con [cloudShiftIdForSync].
+  Future<({int? localShiftId, int? cloudShiftIdForSync})> resolveMovementShiftForInsert({
+    required String account,
+    int? pickedLocalShiftId,
+    int? pickedCloudShiftId,
+  }) async {
+    if (account != 'CAJA') {
+      return (localShiftId: null, cloudShiftIdForSync: null);
+    }
+    if (pickedLocalShiftId != null) {
+      return (localShiftId: pickedLocalShiftId, cloudShiftIdForSync: null);
+    }
+    if (pickedCloudShiftId == null) {
+      return (localShiftId: null, cloudShiftIdForSync: null);
+    }
+    final local = await findOpenLocalShiftForCloudId(pickedCloudShiftId);
+    if (local != null) {
+      return (localShiftId: local.id, cloudShiftIdForSync: null);
+    }
+    final cur = await getCurrentShift();
+    if (cur != null && CloudSyncService.supabaseShiftId(cur) == pickedCloudShiftId) {
+      return (localShiftId: cur.id, cloudShiftIdForSync: null);
+    }
+    return (localShiftId: null, cloudShiftIdForSync: pickedCloudShiftId);
+  }
+
+  /// Trae movimientos recientes de Supabase a SQLite (misma tienda) para verlos en la app.
+  Future<void> syncMovementsFromCloudIntoLocal({String? account}) async {
+    if (!CloudSyncService.isEnabled || !ConnectivityService.instance.isConnected) {
+      return;
+    }
+    final cloudRows = await CloudSyncService.fetchMovementsFromCloud(account: account);
+    if (cloudRows.isEmpty) return;
+
+    final shifts = await _db.select(_db.shifts).get();
+    final cloudToLocalShift = buildStrictCloudToLocalShiftMap(shifts);
+    final shiftByLocalId = {for (final s in shifts) s.id: s};
+
+    final existingRows = await _db.select(_db.movements).get();
+    final existingById = {for (final m in existingRows) m.id: m};
+
+    int? localShiftIdForCloudMovement(Movement cm) {
+      final cloudSid = cm.shiftId;
+      if (cloudSid == null) return null;
+      final localId = cloudToLocalShift[cloudSid];
+      if (localId == null) return null;
+      final localShift = shiftByLocalId[localId];
+      if (localShift == null) return null;
+      if (!isMovementInShiftWindow(movementDate: cm.date, shift: localShift)) {
+        return null;
+      }
+      return localId;
+    }
+
+    for (final cm in cloudRows) {
+      final localShiftId = localShiftIdForCloudMovement(cm);
+      final existing = existingById[cm.id];
+      if (existing == null) {
+        await _db.into(_db.movements).insert(
+              MovementsCompanion.insert(
+                id: Value(cm.id),
+                type: cm.type,
+                account: cm.account,
+                amount: cm.amount,
+                reason: cm.reason,
+                date: Value(cm.date),
+                shiftId: localShiftId != null
+                    ? Value(localShiftId)
+                    : const Value.absent(),
+                needsCloudSync: const Value(false),
+              ),
+            );
+        continue;
+      }
+      if (existing.shiftId == null && localShiftId != null) {
+        await (_db.update(_db.movements)..where((m) => m.id.equals(cm.id))).write(
+              MovementsCompanion(shiftId: Value(localShiftId)),
+            );
+      }
+    }
+
+    final openShift = await getCurrentShift();
+    if (openShift != null) {
+      await reconcileMislinkedMovementsForShift(openShift.id);
+    }
+
+    // Propaga cancelaciones hechas en web/admin.
+    final cancelledInCloud = await CloudSyncService.fetchCancelledMovementIdsFromCloud(
+      account: account,
+    );
+    if (cancelledInCloud.isEmpty) return;
+    final now = DateTime.now();
+    for (final id in cancelledInCloud) {
+      final existing = existingById[id];
+      if (existing == null || existing.cancelledAt != null) continue;
+      await (_db.update(_db.movements)..where((m) => m.id.equals(id))).write(
+            MovementsCompanion(cancelledAt: Value(now)),
+          );
+    }
+  }
+
+  /// Fila local abierta cuyo [Shift.cloudShiftId] coincide con `shifts.id` en Supabase.
+  ///
+  /// No usa el id autoincrement local: evita enlazar el turno nube 74 (cerrado) con el local 74.
+  Future<Shift?> findOpenLocalShiftForCloudId(int cloudShiftId) async {
+    final openRows = await (_db.select(_db.shifts)..where((s) => s.endTime.isNull())).get();
+    return findOpenLocalShiftByCloudId(openRows, cloudShiftId);
+  }
+
+  /// Turno abierto actual: mayor [id] entre los abiertos (más reciente en SQLite), no solo por fecha.
   Future<Shift?> getCurrentShift() async {
+    await _maybeReconcileOpenShiftsWithCloud();
     final list = await (_db.select(_db.shifts)
           ..where((s) => s.endTime.isNull())
-          ..orderBy([(s) => OrderingTerm.desc(s.startTime)])
+          ..orderBy([(s) => OrderingTerm.desc(s.id)])
           ..limit(1))
         .get();
     return list.isEmpty ? null : list.first;
   }
 
+  /// Cierra en local otros turnos que sigan abiertos dejando solo [keepShiftId] (evita fantasma p. ej. 6 al abrir tras cerrar 5).
+  Future<void> _closeOtherOpenShiftsExcept(int keepShiftId) async {
+    final openRows = await (_db.select(_db.shifts)..where((s) => s.endTime.isNull())).get();
+    final now = DateTime.now();
+    for (final o in openRows) {
+      if (o.id == keepShiftId) continue;
+      await (_db.update(_db.shifts)..where((s) => s.id.equals(o.id))).write(
+        ShiftsCompanion(endTime: Value(now)),
+      );
+      await logOperationEvent(
+        level: 'warning',
+        operation: 'shift_auto_close_stale_open',
+        message: 'Turno ${o.id} cerrado automáticamente al abrir el turno $keepShiftId (quedaba abierto en SQLite).',
+        context: {'closedShiftId': o.id, 'keptShiftId': keepShiftId},
+      );
+      if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+        final updated = await (_db.select(_db.shifts)..where((s) => s.id.equals(o.id))).getSingle();
+        final err = await CloudSyncService.writeShiftToCloud(updated, _db);
+        if (err != null) {
+          debugPrint('Cloud write stale shift close: $err');
+          await logOperationEvent(
+            level: OperationLogLevel.critical,
+            operation: 'shift_stale_close_cloud_sync',
+            message: err,
+            context: {'closedShiftId': o.id, 'keptShiftId': keepShiftId},
+          );
+        }
+      }
+    }
+  }
+
+  /// Deja de usar en **este dispositivo** los turnos abiertos en SQLite (pone `end_time`
+  /// local) sin modificar Supabase: el turno anterior sigue figurando abierto en la nube
+  /// hasta un cierre normal en su caja. Solo para enlazar el terminal a otro turno (admin).
+  Future<void> _adminUnlinkLocalOpenShiftsForDeviceSwitch({required int exceptCloudShiftId}) async {
+    final openRows = await (_db.select(_db.shifts)..where((s) => s.endTime.isNull())).get();
+    final now = DateTime.now();
+    for (final o in openRows) {
+      final cid = CloudSyncService.supabaseShiftId(o);
+      if (cid == exceptCloudShiftId) continue;
+      await (_db.update(_db.shifts)..where((s) => s.id.equals(o.id))).write(
+        ShiftsCompanion(endTime: Value(now)),
+      );
+      await logOperationEvent(
+        level: OperationLogLevel.warning,
+        operation: 'admin_unlink_local_shift_for_device_link',
+        message:
+            'Turno local ${o.id} (nube $cid) desvinculado en este equipo para enlazar otro turno; '
+            'no se envió cierre a Supabase.',
+        context: {'localShiftId': o.id, 'cloudShiftId': cid},
+      );
+    }
+  }
+
+  /// Mayor `cloud_shift_id` asignado (o 0 si no hay filas).
+  Future<int> _maxAssignedCloudShiftId() async {
+    final r = await _db
+        .customSelect(
+          'SELECT COALESCE(MAX(cloud_shift_id), 0) AS m FROM shifts',
+          readsFrom: {_db.shifts},
+        )
+        .getSingle();
+    final n = r.data['m'];
+    if (n is int) return n;
+    if (n is BigInt) return n.toInt();
+    return 0;
+  }
+
   /// Starts a new shift with the given starting fund.
-  /// Envía el turno a la nube automáticamente si Supabase está configurado.
+  ///
+  /// [Shift.id] es autoincrement local (FKs). [Shift.cloudShiftId] es `shifts.id` en Supabase
+  /// (`max` en nube + 1 cuando hay conexión; si no, max local de `cloud_shift_id` + 1).
   Future<Shift> startShift(double startingFund) async {
-    final id = await _db.into(_db.shifts).insert(
-          ShiftsCompanion.insert(startingFund: Value(startingFund)),
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+      await CloudSyncService.reconcileLocalOpenShiftsWithCloud(_db);
+    }
+
+    final assignedCloudMax = await _maxAssignedCloudShiftId();
+    int nextCloudId;
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+      final cloudMax = await CloudSyncService.fetchMaxShiftIdFromCloud();
+      if (cloudMax != null) {
+        nextCloudId = cloudMax + 1;
+        if (nextCloudId <= assignedCloudMax) {
+          nextCloudId = assignedCloudMax + 1;
+          await logOperationEvent(
+            level: 'warning',
+            operation: 'shift_cloud_id_bumped_local',
+            message:
+                'Siguiente id nube sería ${cloudMax + 1} pero cloud_shift_id local ya llega a $assignedCloudMax; se usa $nextCloudId.',
+            context: {
+              'cloudMax': cloudMax,
+              'assignedCloudMax': assignedCloudMax,
+              'chosenCloudId': nextCloudId,
+            },
+          );
+        }
+      } else {
+        nextCloudId = assignedCloudMax + 1;
+        await logOperationEvent(
+          level: 'warning',
+          operation: 'shift_id_cloud_max_unavailable',
+          message:
+              'No se pudo leer max(id) en Supabase; cloud_shift_id = max local asignado + 1 ($nextCloudId).',
+          context: {'assignedCloudMax': assignedCloudMax},
         );
-    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(id)))
+      }
+    } else {
+      nextCloudId = assignedCloudMax + 1;
+    }
+
+    final registerId = await RegisterScope.getActiveRegisterId();
+    final localId = await _db.into(_db.shifts).insert(
+          ShiftsCompanion.insert(
+            cloudShiftId: Value(nextCloudId),
+            cloudRegisterId: Value(registerId),
+            startingFund: Value(startingFund),
+          ),
+        );
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(localId)))
         .getSingle();
     if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
-      final err = await CloudSyncService.writeShiftToCloud(shift);
-      if (err != null) debugPrint('Cloud write shift: $err');
+      final err = await CloudSyncService.writeShiftToCloud(shift, _db);
+      if (err != null) {
+        debugPrint('Cloud write shift: $err');
+        await logOperationEvent(
+          level: OperationLogLevel.critical,
+          operation: 'shift_start_cloud_sync',
+          message: err,
+          context: {'localShiftId': localId, 'cloudShiftId': nextCloudId},
+        );
+      }
     }
+    await _closeOtherOpenShiftsExcept(localId);
     return shift;
+  }
+
+  /// Con nube y red: aplica tienda/cajón desde [pos_devices], reconcilia turnos, y si no hay turno local
+  /// pero en Supabase hay uno abierto para ese cajón, llama a [adoptOpenShiftFromCloud].
+  /// Devuelve mensaje de error solo si la adopción falla; si no hay turno en nube, null.
+  Future<String?> syncPosSessionWithCloud() async {
+    if (!CloudSyncService.isEnabled || !ConnectivityService.instance.isConnected) {
+      return null;
+    }
+    await CloudSyncService.applyDeviceStoreRegisterFromCloudPrefs();
+    final regErr = await CloudSyncService.registerPosDeviceInCloud();
+    if (regErr != null) {
+      debugPrint('syncPosSessionWithCloud register device: $regErr');
+    }
+    await CloudSyncService.reconcileLocalOpenShiftsWithCloud(_db);
+    final existing = await (_db.select(_db.shifts)
+          ..where((s) => s.endTime.isNull())
+          ..orderBy([(s) => OrderingTerm.desc(s.id)])
+          ..limit(1))
+        .getSingleOrNull();
+    if (existing != null) return null;
+    final storeId = await StoreScope.getActiveStoreId();
+    final registerId = await RegisterScope.getActiveRegisterId();
+    var open = await CloudSyncService.fetchOpenShiftForRegisterCloud(
+      storeId: storeId,
+      registerId: registerId,
+    );
+    if (open == null || !open.isOpen) {
+      final device = await DeviceIdService.getDeviceInfo();
+      open = await CloudSyncService.fetchOpenShiftForDeviceCloud(
+        device.deviceId,
+        storeId: storeId,
+      );
+    }
+    if (open == null || !open.isOpen) return null;
+    return adoptOpenShiftFromCloud(open);
+  }
+
+  /// Admin: alinea tienda/cajón con el turno en nube y adopta el turno.
+  /// Actualiza [pos_devices] en la nube.
+  ///
+  /// Si hay otro turno abierto en SQLite distinto del elegido, se **desvincula solo en
+  /// este dispositivo** (fin local sin enviar cierre a Supabase); el turno anterior sigue
+  /// abierto en la nube para su caja o cierre posterior.
+  Future<String?> adminLinkDeviceToCloudOpenShift(CloudShiftSummary cloud) async {
+    OfflineWritePolicy.requireOnlineForMasterWrite();
+    if (!cloud.isOpen) return 'El turno seleccionado ya está cerrado en la nube.';
+    await _maybeReconcileOpenShiftsWithCloud();
+    final localOpen0 = await getCurrentShift();
+    if (localOpen0 != null) {
+      final localCloudId = CloudSyncService.supabaseShiftId(localOpen0);
+      if (localCloudId == cloud.id) {
+        await StoreScope.setActiveStoreId(cloud.storeId);
+        if (cloud.registerId != null && cloud.registerId! >= 1) {
+          await RegisterScope.setActiveRegisterId(cloud.registerId!);
+        }
+        await CloudSyncService.registerPosDeviceInCloud();
+        return null;
+      }
+      await _adminUnlinkLocalOpenShiftsForDeviceSwitch(exceptCloudShiftId: cloud.id);
+    }
+    await StoreScope.setActiveStoreId(cloud.storeId);
+    if (cloud.registerId != null && cloud.registerId! >= 1) {
+      await RegisterScope.setActiveRegisterId(cloud.registerId!);
+    }
+    await _maybeReconcileOpenShiftsWithCloud();
+    final localOpen1 = await getCurrentShift();
+    if (localOpen1 != null) {
+      final lingering = CloudSyncService.supabaseShiftId(localOpen1);
+      if (lingering == cloud.id) {
+        await CloudSyncService.registerPosDeviceInCloud();
+        return null;
+      }
+      return 'No se pudo dejar sin turno local antes de enlazar. Turno nube local $lingering.';
+    }
+    final err = await adoptOpenShiftFromCloud(cloud);
+    if (err != null) return err;
+    await CloudSyncService.registerPosDeviceInCloud();
+    return null;
+  }
+
+  /// Enlaza este dispositivo a un turno ya abierto en la nube (mismo `shifts.id`), p. ej. tras reinstalar la app.
+  /// Requiere cajón correcto en [RegisterScope] y turno abierto en nube para ese cajón.
+  Future<String?> adoptOpenShiftFromCloud(CloudShiftSummary cloud) async {
+    if (!cloud.isOpen) return 'El turno en la nube ya está cerrado.';
+    await _maybeReconcileOpenShiftsWithCloud();
+    final localOpen = await getCurrentShift();
+    if (localOpen != null) {
+      return 'Ya hay un turno abierto en este dispositivo. Ciérralo antes de continuar otro.';
+    }
+    if (cloud.registerId != null) {
+      final activeReg = await RegisterScope.getActiveRegisterId();
+      if (activeReg != cloud.registerId) {
+        return 'El turno es del cajón #${cloud.registerId} (${cloud.registerLabel ?? "?"}) '
+            'y este terminal está en el cajón #$activeReg. Cambia la caja en el menú lateral.';
+      }
+    }
+    final localId = await _db.into(_db.shifts).insert(
+          ShiftsCompanion.insert(
+            cloudShiftId: Value(cloud.id),
+            cloudRegisterId: cloud.registerId != null
+                ? Value(cloud.registerId!)
+                : const Value.absent(),
+            startingFund: Value(cloud.startingFund),
+            startTime: Value(cloud.startTime),
+          ),
+        );
+    final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(localId)))
+        .getSingle();
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+      return await CloudSyncService.writeShiftToCloud(shift, _db);
+    }
+    return null;
   }
 
   /// Actualiza el fondo inicial del turno (hotfix: tras reinstalar la app el turno puede tener 0).
@@ -1581,8 +2930,16 @@ class PosRepository {
       final shift = await (_db.select(_db.shifts)..where((s) => s.id.equals(shiftId)))
           .getSingleOrNull();
       if (shift != null) {
-        final err = await CloudSyncService.writeShiftToCloud(shift);
-        if (err != null) debugPrint('Cloud write shift (starting fund): $err');
+        final err = await CloudSyncService.writeShiftToCloud(shift, _db);
+        if (err != null) {
+          debugPrint('Cloud write shift (starting fund): $err');
+          await logOperationEvent(
+            level: OperationLogLevel.critical,
+            operation: 'shift_starting_fund_cloud_sync',
+            message: err,
+            context: {'shiftId': shiftId},
+          );
+        }
       }
     }
   }
@@ -1594,6 +2951,39 @@ class PosRepository {
     required double declaredCash,
     String? notes,
   }) async {
+    final shiftOpen = await (_db.select(_db.shifts)..where((s) => s.id.equals(shiftId)))
+        .getSingleOrNull();
+    if (shiftOpen == null) {
+      throw StateError('Shift $shiftId not found');
+    }
+    if (shiftOpen.endTime != null) {
+      throw StateError('Shift $shiftId is already closed');
+    }
+
+    await reconcileMislinkedMovementsForShift(shiftId);
+    final merged = await _getMergedShiftMonetaryTotals(shiftId);
+    final cloudExtra = merged.cloudAddedCash +
+        merged.cloudAddedDebit +
+        merged.cloudAddedCredit +
+        merged.cloudAddedTransfer +
+        merged.cloudAddedMovNet.abs();
+    if (cloudExtra > 0.0001 &&
+        CloudSyncService.isEnabled &&
+        ConnectivityService.instance.isConnected) {
+      await CloudSyncService.logShiftCloseDiagnostic(
+        event: 'shift_close_merged_cloud_orphans',
+        shiftId: CloudSyncService.supabaseShiftId(shiftOpen),
+        context: {
+          'localShiftId': shiftId,
+          'cloudAddedCash': merged.cloudAddedCash,
+          'cloudAddedDebit': merged.cloudAddedDebit,
+          'cloudAddedCredit': merged.cloudAddedCredit,
+          'cloudAddedTransfer': merged.cloudAddedTransfer,
+          'cloudAddedMovNet': merged.cloudAddedMovNet,
+        },
+      );
+    }
+
     final tx = await _db.transaction(() async {
       final shift = await (_db.select(_db.shifts)
             ..where((s) => s.id.equals(shiftId)))
@@ -1606,17 +2996,22 @@ class PosRepository {
       }
 
       final now = DateTime.now();
-      final sales = await _getShiftSalesByPaymentType(shiftId, shift.startTime, now);
-      final cashSalesTotal = sales.cashSales;
-      final cardSalesTotal = sales.debitSales + sales.creditSales;
-      final transferSalesTotal = sales.transferSales;
-      final movementsCajaNet = sales.movementsCajaNet;
+      final cashSalesTotal = merged.cashSales;
+      final cardSalesTotal = merged.debitSales + merged.creditSales;
+      final transferSalesTotal = merged.transferSales;
+      final movementsCajaNet = merged.movementsCajaNet;
 
       // systemExpectedCash = startingFund + cashSales + movimientos (entradas - salidas)
       final systemExpectedCash =
           shift.startingFund + cashSalesTotal + movementsCajaNet;
 
       final difference = declaredCash - systemExpectedCash;
+      final adjustmentType = difference < 0
+          ? 'shortage'
+          : difference > 0
+              ? 'surplus'
+              : 'balanced';
+      final adjustmentAmount = difference.abs();
 
       final closureId = await _db.into(_db.shiftClosures).insert(
             ShiftClosuresCompanion.insert(
@@ -1627,6 +3022,25 @@ class PosRepository {
               notes: notes != null ? Value(notes) : const Value.absent(),
             ),
           );
+
+      await _db.customStatement(
+        '''
+INSERT INTO shift_cash_adjustments (
+  shift_closure_id,
+  shift_id,
+  adjustment_type,
+  amount,
+  signed_amount
+) VALUES (?, ?, ?, ?, ?)
+''',
+        [
+          closureId,
+          shiftId,
+          adjustmentType,
+          adjustmentAmount,
+          difference,
+        ],
+      );
 
       await (_db.update(_db.shifts)..where((s) => s.id.equals(shiftId)))
           .write(ShiftsCompanion(endTime: Value(now)));
@@ -1668,7 +3082,7 @@ class PosRepository {
           context: {'error': err, 'closureId': tx.result.closure.id},
         );
         await logOperationEvent(
-          level: 'warning',
+          level: OperationLogLevel.critical,
           operation: 'shift_closure_cloud_sync',
           message: err,
           context: {
@@ -1695,24 +3109,30 @@ class PosRepository {
         },
       );
     }
+    if (CloudSyncService.isEnabled && ConnectivityService.instance.isConnected) {
+      await CloudSyncService.reconcileLocalOpenShiftsWithCloud(_db);
+    }
     return tx.result;
   }
 
   /// Totals for closure form (expected in drawer, sales by payment type). Does not close the shift.
+  ///
+  /// Con nube: incluye ventas y movimientos CAJA en Supabase para el mismo turno (`cloud_shift_id`)
+  /// que no están ya enlazados en SQLite (por `cloud_sale_id` / id de movimiento).
   Future<ShiftTotalsForClosure?> getShiftTotalsForClosure(int shiftId) async {
     final shift = await (_db.select(_db.shifts)
           ..where((s) => s.id.equals(shiftId)))
         .getSingleOrNull();
     if (shift == null) return null;
-    final now = DateTime.now();
-    final sales = await _getShiftSalesByPaymentType(shiftId, shift.startTime, now);
+    await reconcileMislinkedMovementsForShift(shiftId);
+    final merged = await _getMergedShiftMonetaryTotals(shiftId);
     return ShiftTotalsForClosure(
       startingFund: shift.startingFund,
-      cashSales: sales.cashSales,
-      debitSales: sales.debitSales,
-      creditSales: sales.creditSales,
-      transferSales: sales.transferSales,
-      movementsCajaNet: sales.movementsCajaNet,
+      cashSales: merged.cashSales,
+      debitSales: merged.debitSales,
+      creditSales: merged.creditSales,
+      transferSales: merged.transferSales,
+      movementsCajaNet: merged.movementsCajaNet,
     );
   }
 
@@ -1740,33 +3160,30 @@ class PosRepository {
       final closingDate = DateTime(closingLocal.year, closingLocal.month, closingLocal.day);
       if (closingDate != dayStart) continue;
       final endTime = shift.endTime ?? closure.closingTime;
-      final dateInRange = _db.sales.date.isBiggerOrEqualValue(shift.startTime) &
-          _db.sales.date.isSmallerOrEqualValue(endTime);
-      final notCancelled = _db.sales.cancelledAt.isNull();
 
-      final cashRes = await (_db.selectOnly(_db.sales)
-            ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('CASH') & dateInRange & notCancelled))
-          .getSingle();
-      final cashSales = cashRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
+      final salesRows = await (_db.select(_db.sales)
+            ..where((s) {
+              final dateInRange = s.date.isBiggerOrEqualValue(shift.startTime) &
+                  s.date.isSmallerOrEqualValue(endTime);
+              return dateInRange & s.cancelledAt.isNull();
+            }))
+          .get();
 
-      final debitRes = await (_db.selectOnly(_db.sales)
-            ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('CARD_DEBIT') & dateInRange & notCancelled))
-          .getSingle();
-      final cardDebit = debitRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-      final creditRes = await (_db.selectOnly(_db.sales)
-            ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('CARD_CREDIT') & dateInRange & notCancelled))
-          .getSingle();
-      final cardCredit = creditRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
-
-      final transferRes = await (_db.selectOnly(_db.sales)
-            ..addColumns([_db.sales.totalAmount.sum()])
-            ..where(_db.sales.paymentMethod.equals('TRANSFER') & dateInRange & notCancelled))
-          .getSingle();
-      final transferSales = transferRes.read(_db.sales.totalAmount.sum()) ?? 0.0;
+      var cashSales = 0.0;
+      var cardDebit = 0.0;
+      var cardCredit = 0.0;
+      var transferSales = 0.0;
+      for (final s in salesRows) {
+        final b = SalePaymentBreakdown.fromSale(
+          paymentMethod: s.paymentMethod,
+          totalAmount: s.totalAmount,
+          paymentsJson: s.paymentsJson,
+        );
+        cashSales += b.cash;
+        cardDebit += b.debit;
+        cardCredit += b.credit;
+        transferSales += b.transfer;
+      }
 
       final movementsCajaNet = await getMovementsCajaNetForShift(shift.id);
 
@@ -1809,22 +3226,15 @@ class PosRepository {
     for (final s in salesInRange) {
       total += s.totalAmount;
       count++;
-      switch (s.paymentMethod) {
-        case 'CASH':
-          cash += s.totalAmount;
-          break;
-        case 'CARD_DEBIT':
-          cardDebit += s.totalAmount;
-          break;
-        case 'CARD_CREDIT':
-          cardCredit += s.totalAmount;
-          break;
-        case 'TRANSFER':
-          transfer += s.totalAmount;
-          break;
-        default:
-          cash += s.totalAmount;
-      }
+      final b = SalePaymentBreakdown.fromSale(
+        paymentMethod: s.paymentMethod,
+        totalAmount: s.totalAmount,
+        paymentsJson: s.paymentsJson,
+      );
+      cash += b.cash;
+      cardDebit += b.debit;
+      cardCredit += b.credit;
+      transfer += b.transfer;
     }
     return SalesReportSummary(
       totalAmount: total,
@@ -1871,6 +3281,81 @@ class PosRepository {
         .toList();
     list.sort((a, b) => b.revenue.compareTo(a.revenue));
     return list.take(limit).toList();
+  }
+
+  /// Ventas del día (hora local) agrupadas por turno (incluye turnos abiertos).
+  Future<List<ShiftSalesRow>> getSalesByShiftForDay(DateTime day) async {
+    final start = DateTime(day.year, day.month, day.day);
+    final end = DateTime(day.year, day.month, day.day, 23, 59, 59);
+    final sales = await (_db.select(_db.sales)
+          ..where((s) =>
+              s.cancelledAt.isNull() &
+              s.date.isBiggerOrEqualValue(start) &
+              s.date.isSmallerOrEqualValue(end)))
+        .get();
+
+    final totals = <int, ({int count, double total})>{};
+    for (final s in sales) {
+      final prev = totals[s.shiftId] ?? (count: 0, total: 0.0);
+      totals[s.shiftId] = (count: prev.count + 1, total: prev.total + s.totalAmount);
+    }
+
+    final shiftIds = totals.keys.toList()..sort();
+    final rows = <ShiftSalesRow>[];
+    for (final shiftId in shiftIds) {
+      final shift = await (_db.select(_db.shifts)..where((sh) => sh.id.equals(shiftId)))
+          .getSingleOrNull();
+      final meta = totals[shiftId] ?? (count: 0, total: 0.0);
+      rows.add(
+        ShiftSalesRow(
+          shiftId: shiftId,
+          startTime: shift?.startTime ?? start,
+          endTime: shift?.endTime,
+          saleCount: meta.count,
+          totalAmount: meta.total,
+        ),
+      );
+    }
+    rows.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return rows;
+  }
+
+  /// Distribución por categoría del día (hora local), por monto.
+  Future<List<CategorySalesRow>> getCategoryDistributionForDay(DateTime day) async {
+    final start = DateTime(day.year, day.month, day.day);
+    final end = DateTime(day.year, day.month, day.day, 23, 59, 59);
+
+    final query = _db.select(_db.saleItems).join([
+      innerJoin(_db.sales, _db.sales.id.equalsExp(_db.saleItems.saleId)),
+      innerJoin(_db.products, _db.products.id.equalsExp(_db.saleItems.productId)),
+      leftOuterJoin(_db.categories, _db.categories.id.equalsExp(_db.products.categoryId)),
+    ])
+      ..where(_db.sales.cancelledAt.isNull() &
+          _db.sales.date.isBiggerOrEqualValue(start) &
+          _db.sales.date.isSmallerOrEqualValue(end));
+
+    final rows = await query.get();
+    final byCat = <int?, ({String name, double revenue})>{};
+    for (final row in rows) {
+      final item = row.readTable(_db.saleItems);
+      final product = row.readTable(_db.products);
+      final cat = row.readTableOrNull(_db.categories);
+      final catId = product.categoryId;
+      final name = (cat?.name.trim().isNotEmpty == true) ? cat!.name : 'Sin categoría';
+      final rev = item.quantity * item.unitPrice;
+      final prev = byCat[catId] ?? (name: name, revenue: 0.0);
+      byCat[catId] = (name: prev.name, revenue: prev.revenue + rev);
+    }
+
+    final list = byCat.entries
+        .map((e) => CategorySalesRow(
+              categoryId: e.key,
+              categoryName: e.value.name,
+              revenue: e.value.revenue,
+            ))
+        .toList();
+    list.sort((a, b) => b.revenue.compareTo(a.revenue));
+    return list;
   }
 
   /// Resumen de inventario: todos los insumos con stock actual, punto de reorden y valor.
@@ -1955,6 +3440,34 @@ class ProductSalesRow {
   });
   final String productName;
   final double quantitySold;
+  final double revenue;
+}
+
+/// Ventas agrupadas por turno (para resumen rápido).
+class ShiftSalesRow {
+  const ShiftSalesRow({
+    required this.shiftId,
+    required this.startTime,
+    required this.endTime,
+    required this.saleCount,
+    required this.totalAmount,
+  });
+  final int shiftId;
+  final DateTime startTime;
+  final DateTime? endTime;
+  final int saleCount;
+  final double totalAmount;
+}
+
+/// Ventas agrupadas por categoría (para resumen rápido).
+class CategorySalesRow {
+  const CategorySalesRow({
+    required this.categoryId,
+    required this.categoryName,
+    required this.revenue,
+  });
+  final int? categoryId;
+  final String categoryName;
   final double revenue;
 }
 

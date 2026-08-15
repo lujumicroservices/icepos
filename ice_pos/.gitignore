@@ -1,6 +1,14 @@
 # Environment (credenciales - no commitear)
 .env
 
+# Firebase (descargar de Firebase Console por app)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Local/temp tooling (no commitear)
+supabase/.temp/
+tmp/
+
 # Miscellaneous
 *.class
 *.log

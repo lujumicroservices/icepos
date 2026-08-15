@@ -55,7 +55,7 @@ class SupabaseService {
 
     final ou = overrideUrl?.trim();
     final ok = overrideAnonKey?.trim();
-    final String? url = (ou != null && ou.isNotEmpty)
+    final String? urlRaw = (ou != null && ou.isNotEmpty)
         ? ou
         : (envUrl != null && envUrl.isNotEmpty)
             ? envUrl
@@ -66,9 +66,11 @@ class SupabaseService {
             ? envKey
             : stored.anonKey;
 
-    if (url == null || url.isEmpty || anonKey == null || anonKey.isEmpty) {
+    if (urlRaw == null || urlRaw.isEmpty || anonKey == null || anonKey.isEmpty) {
       return; // App works offline without Supabase
     }
+    // Trailing slash breaks functions.invoke URLs (…co//functions/v1/…).
+    final url = urlRaw.endsWith('/') ? urlRaw.substring(0, urlRaw.length - 1) : urlRaw;
 
     try {
       _initializedHost = Uri.parse(url).host;

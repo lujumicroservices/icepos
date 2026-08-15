@@ -36,15 +36,41 @@ class SupabaseSalesHistoryRepository implements SalesHistoryRepository {
     return int.tryParse(v.toString());
   }
 
+  /// Matches [RemoteSale.fromSupabase] so web history shows the same names as "En la nube".
+  static SaleItemDto _saleItemDtoFromRow(
+    Map<String, dynamic> im,
+    Map<int, String> productIdToName,
+  ) {
+    final pid = _asInt(im['product_id']);
+    final productName = pid != null
+        ? (productIdToName[pid] ?? (im['product_name'] as String? ?? 'Producto'))
+        : (im['product_name'] as String? ?? 'Producto');
+    return SaleItemDto(
+      productName: productName,
+      quantity: (im['quantity'] as num?)?.toDouble() ?? 0,
+      priceAtSale: (im['unit_price'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
   Future<List<SaleWithItems>> _fetch() async {
-    final salesRes =
-        await _client.from('sales').select('*').isFilter('cancelled_at', null).order('date', ascending: false);
+    // Prefer nested sale_items so each sale gets its lines (PostgREST caps unbounded
+    // `sale_items` selects at ~1000 rows, which made many sales show empty items on web).
+    dynamic salesRes;
+    try {
+      salesRes = await _client
+          .from('sales')
+          .select('*, sale_items(*)')
+          .isFilter('cancelled_at', null)
+          .order('date', ascending: false);
+    } catch (_) {
+      salesRes = await _client
+          .from('sales')
+          .select('*')
+          .isFilter('cancelled_at', null)
+          .order('date', ascending: false);
+    }
     final salesList = salesRes as List<dynamic>? ?? [];
     if (salesList.isEmpty) return [];
-
-    final itemsRes = await _client.from('sale_items').select('*');
-    final itemsList =
-        (itemsRes as List<dynamic>? ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
     final prodRes = await _client.from('products').select('id, name');
     final productIdToName = <int, String>{};
@@ -56,26 +82,15 @@ class SupabaseSalesHistoryRepository implements SalesHistoryRepository {
       }
     }
 
-    final itemsBySaleId = <int, List<Map<String, dynamic>>>{};
-    for (final it in itemsList) {
-      final sid = _asInt(it['sale_id']);
-      if (sid == null) continue;
-      itemsBySaleId.putIfAbsent(sid, () => []).add(it);
-    }
-
     final out = <SaleWithItems>[];
     for (final row in salesList) {
       final sm = Map<String, dynamic>.from(row as Map);
       final saleId = _asInt(sm['id']);
       if (saleId == null) continue;
 
-      DateTime dt;
-      final rawDate = sm['date'];
-      if (rawDate is String) {
-        dt = DateTime.parse(rawDate).toLocal();
-      } else {
-        dt = DateTime.now();
-      }
+      final rawDate = sm['date'] as String? ?? sm['created_at'] as String?;
+      final dt =
+          rawDate != null ? DateTime.parse(rawDate).toLocal() : DateTime.now();
 
       final sale = Sale(
         id: saleId,
@@ -86,20 +101,25 @@ class SupabaseSalesHistoryRepository implements SalesHistoryRepository {
         changeGiven: (sm['change_given'] as num?)?.toDouble() ?? 0,
         cloudSaleId: saleId,
         cancelledAt: null,
+        // Web-only DTO: maps to public.sales.shift_id (cloud turno id).
+        shiftId: _asInt(sm['shift_id']) ?? 0,
       );
 
-      final dtos = <SaleItemDto>[];
-      for (final im in itemsBySaleId[saleId] ?? const []) {
-        final pid = _asInt(im['product_id']);
-        final productName = pid != null ? (productIdToName[pid] ?? 'Producto') : 'Producto';
-        dtos.add(
-          SaleItemDto(
-            productName: productName,
-            quantity: (im['quantity'] as num).toDouble(),
-            priceAtSale: (im['unit_price'] as num).toDouble(),
-          ),
-        );
+      List<Map<String, dynamic>> itemRows = const [];
+      final nested = sm['sale_items'];
+      if (nested is List) {
+        itemRows =
+            nested.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } else {
+        final itemsRes =
+            await _client.from('sale_items').select('*').eq('sale_id', saleId);
+        itemRows = (itemsRes as List<dynamic>? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
       }
+
+      final dtos =
+          itemRows.map((im) => _saleItemDtoFromRow(im, productIdToName)).toList();
       out.add(SaleWithItems(sale: sale, items: dtos));
     }
     return out;

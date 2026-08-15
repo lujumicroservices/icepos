@@ -109,6 +109,7 @@ class OperationLogsScreen extends ConsumerWidget {
                   itemBuilder: (context, i) {
                     final l = logs[i];
                     final color = switch (l.level) {
+                      'critical' => Theme.of(context).colorScheme.error,
                       'error' => Theme.of(context).colorScheme.error,
                       'warning' => Colors.orange.shade800,
                       _ => Theme.of(context).colorScheme.onSurfaceVariant,
@@ -117,7 +118,8 @@ class OperationLogsScreen extends ConsumerWidget {
                       title: Text(
                         '${l.operation} · ${l.level}',
                         style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w600,
+                          fontWeight:
+                              l.level == 'critical' ? FontWeight.w800 : FontWeight.w600,
                           fontSize: 14,
                           color: color,
                         ),

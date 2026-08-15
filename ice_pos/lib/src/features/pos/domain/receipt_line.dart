@@ -5,6 +5,7 @@ class ReceiptLine {
     required this.amount,
     required this.isBundle,
     required this.quantity,
+    this.modifierDetails = const [],
   });
 
   final String description;
@@ -12,6 +13,8 @@ class ReceiptLine {
   final bool isBundle;
   /// Quantity for this line (bundles or raw items).
   final int quantity;
+  /// Sabores / opciones (ej. bolitas de nieve, sabores de boli).
+  final List<String> modifierDetails;
 }
 
 /// Result of receipt computation: lines and totals.

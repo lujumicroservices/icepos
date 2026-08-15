@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -5,25 +6,87 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:ice_pos/src/core/config/register_scope.dart';
 import 'package:ice_pos/src/core/config/store_scope.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/shift/shift_linkage.dart';
+import 'package:ice_pos/src/core/services/catalog_sync_progress.dart';
+import 'package:ice_pos/src/core/services/connectivity_service.dart';
 import 'package:ice_pos/src/core/services/device_id_service.dart';
+import 'package:ice_pos/src/core/services/sync_coordinator.dart';
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
-import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
+import 'package:ice_pos/src/features/pos/data/pos_repository.dart' show CartItem;
+
+const _kShiftSelectWithRegister =
+    'id, start_time, end_time, starting_fund, store_id, device_id, device_name, register_id, pos_registers ( label )';
 
 const _kCloudProductIdMap = 'cloud_product_id_map';
 const _kCloudSupplyIdMap = 'cloud_supply_id_map';
 const _kStartupSyncErrorKey = 'startup_sync_error';
+const _kLastCatalogSyncMsKey = 'last_successful_catalog_sync_ms';
 
 /// When Supabase is the source of truth:
-/// - syncFromCloud: replace local master data (categories, products, supplies, recipes, modifiers, bundles) from cloud.
+/// - syncFromCloud: replace local master data (categories, products, supplies, recipes, modifiers, bundles, discounts) from cloud.
 /// - writeSaleToCloud: write sale + inventory to Supabase; call before local processSale.
 class CloudSyncService {
   CloudSyncService._();
 
   static bool get isEnabled => SupabaseService.isInitialized;
+
+  /// `public` tables loaded by [syncFromCloud]. Realtime should only trigger a
+  /// catalog pull for these — not `sales`, `shifts`, `pending_cashier_approvals`, etc.
+  static const Set<String> supabaseCatalogTableNames = {
+    'categories',
+    'supplies',
+    'products',
+    'recipes',
+    'modifier_groups',
+    'product_modifiers',
+    'modifier_options',
+    'bundles',
+    'bundle_items',
+    'discounts',
+  };
+
+  /// [Shift.id] en SQLite vs `shifts.id` en Supabase (columna local [Shift.cloudShiftId]).
+  ///
+  /// Siempre asigna [Shift.cloudShiftId] al abrir turno. El fallback a [Shift.id] es solo
+  /// compatibilidad con filas legacy; no usar para enlazar movimientos entre dispositivos.
+  static int supabaseShiftId(Shift s) => s.cloudShiftId ?? s.id;
+
+  /// Cierra en SQLite turnos abiertos localmente que ya tienen [end_time] en Supabase.
+  static Future<void> reconcileLocalOpenShiftsWithCloud(AppDatabase db) async {
+    if (!SupabaseService.isInitialized || !ConnectivityService.instance.isConnected) return;
+    try {
+      final openRows = await (db.select(db.shifts)..where((s) => s.endTime.isNull())).get();
+      if (openRows.isEmpty) return;
+      final cloudIds = openRows.map(supabaseShiftId).toSet().toList();
+      final client = SupabaseService.instance.client;
+      final res = await client.from('shifts').select('id, end_time').inFilter('id', cloudIds);
+      final endByCloudId = <int, DateTime>{};
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final cid = _int(m['id']);
+        final end = _parseTs(m['end_time']);
+        if (cid != null && end != null) {
+          endByCloudId[cid] = end;
+        }
+      }
+      for (final local in openRows) {
+        final cid = supabaseShiftId(local);
+        final end = endByCloudId[cid];
+        if (end == null) continue;
+        await (db.update(db.shifts)..where((s) => s.id.equals(local.id))).write(
+          ShiftsCompanion(endTime: Value(end)),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('CloudSyncService.reconcileLocalOpenShiftsWithCloud: $e');
+      debugPrint('$st');
+    }
+  }
 
   /// Último error de sincronización (fallo o "nube vacía"). La UI puede mostrarlo en el drawer.
   static String? lastSyncError;
@@ -64,47 +127,110 @@ class CloudSyncService {
 
   static const int _syncMaxAttempts = 3;
   static const Duration _syncRetryDelay = Duration(seconds: 2);
-
-  /// Solo una sincronización a la vez. Si [syncFromCloud] se llama en paralelo (Realtime + Insumos + refresh),
-  /// todas esperan el mismo [Future]; sin esto dos corridas intercalan DELETE/INSERT y rompen UNIQUE (p. ej. bundles.id).
-  static Future<String?>? _syncFromCloudMutex;
+  static const Duration _syncOverallTimeout = Duration(seconds: 90);
 
   static bool _isRetryableNetworkError(Object e) {
     final s = e.toString();
     return s.contains('SocketException') ||
+        s.contains('HandshakeException') ||
         s.contains('Failed host lookup') ||
         s.contains('No address associated') ||
         s.contains('connection abort') ||
+        s.contains('Connection aborted') ||
+        s.contains('Connection reset') ||
         s.contains('Connection refused') ||
         s.contains('TimeoutException') ||
-        s.contains('ClientException');
+        s.contains('ClientException') ||
+        s.contains('network is unreachable') ||
+        s.contains(' 502') ||
+        s.contains(' 503') ||
+        s.contains(' 504');
   }
 
   /// Replaces local master data with Supabase data. Does not sync sales (those are write-through).
   /// Fetches all data from cloud first; only clears local DB after a successful fetch so a failed
   /// sync (network, RLS, etc.) never wipes local data. Retries up to [_syncMaxAttempts] on network errors.
   ///
-  /// Llamadas concurrentes comparten una sola ejecución (mutex) para evitar condiciones de carrera en SQLite.
-  static Future<String?> syncFromCloud(AppDatabase? db) {
+  /// Concurrent calls serialize via [SyncCoordinator] (shared with outbox replay).
+  /// [onProgress] reports UI-friendly stages (manual sync dialog).
+  static Future<String?> syncFromCloud(
+    AppDatabase? db, {
+    void Function(CatalogSyncProgress progress)? onProgress,
+  }) {
     if (db == null) return Future.value(null);
-    final pending = _syncFromCloudMutex;
-    if (pending != null) return pending;
-
-    final future = _syncFromCloudImpl(db);
-    _syncFromCloudMutex = future;
-    future.whenComplete(() {
-      if (identical(_syncFromCloudMutex, future)) {
-        _syncFromCloudMutex = null;
+    return SyncCoordinator.synchronized(() async {
+      try {
+        return await _syncFromCloudImpl(db, onProgress: onProgress).timeout(
+          _syncOverallTimeout,
+          onTimeout: () {
+            const msg = 'Tiempo de espera agotado al sincronizar desde la nube.';
+            lastSyncError = msg;
+            return msg;
+          },
+        );
+      } catch (e, st) {
+        debugPrint('CloudSyncService.syncFromCloud: $e');
+        debugPrint('$st');
+        lastSyncError = e.toString();
+        return lastSyncError;
       }
     });
-    return future;
   }
 
-  static Future<String?> _syncFromCloudImpl(AppDatabase db) async {
+  /// Cloud-first: pull catalog from Supabase into local Drift cache (alias of [syncFromCloud]).
+  static Future<String?> applyCloudCatalogToLocalCache(AppDatabase? db) =>
+      syncFromCloud(db);
+
+  /// If the catalog cache is older than [maxAge], triggers a background [syncFromCloud].
+  static Future<void> refreshCatalogCacheIfStale(
+    AppDatabase db, {
+    Duration maxAge = const Duration(minutes: 5),
+  }) async {
+    if (!isEnabled || !ConnectivityService.instance.isConnected) return;
+    final last = await getLastSuccessfulCatalogSyncTime();
+    if (last != null && DateTime.now().difference(last) < maxAge) return;
+    unawaited(syncFromCloud(db));
+  }
+
+  /// When the local catalog cache last matched a successful cloud pull (persisted).
+  static Future<DateTime?> getLastSuccessfulCatalogSyncTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getInt(_kLastCatalogSyncMsKey);
+      if (v == null) return null;
+      return DateTime.fromMillisecondsSinceEpoch(v);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _setLastCatalogSyncNow() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kLastCatalogSyncMsKey, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
+  }
+
+  static Future<String?> _syncFromCloudImpl(
+    AppDatabase db, {
+    void Function(CatalogSyncProgress progress)? onProgress,
+  }) async {
     if (!SupabaseService.isInitialized) return null;
     final client = SupabaseService.instance.client;
+    const totalSteps = 9;
 
-    // 1. Fetch everything from cloud first (no local writes). Retry on network errors.
+    void report(int step, String stageKey, [String? detail]) {
+      onProgress?.call(CatalogSyncProgress(
+        step: step,
+        totalSteps: totalSteps,
+        stageKey: stageKey,
+        detail: detail,
+      ));
+    }
+
+    report(1, 'syncStepStarting');
+
+    // 1. Fetch from cloud first (no local writes). Retry on network errors.
     List<Map<String, dynamic>> catRows = [];
     List<Map<String, dynamic>> supRows = [];
     List<Map<String, dynamic>> prodRows = [];
@@ -114,35 +240,54 @@ class CloudSyncService {
     List<Map<String, dynamic>> moRows = [];
     List<Map<String, dynamic>> bundleRows = [];
     List<Map<String, dynamic>> biRows = [];
+    List<Map<String, dynamic>> discRows = [];
 
     Object? lastError;
     StackTrace? lastStack;
     for (var attempt = 1; attempt <= _syncMaxAttempts; attempt++) {
       try {
+        report(
+          2,
+          'syncStepDownloadingCategories',
+          attempt > 1 ? 'Reintento $attempt/$_syncMaxAttempts' : null,
+        );
         final catRaw = await client.from('categories').select('*').order('id');
         catRows = _list(catRaw).map((r) => _map(r)).toList();
         if (catRows.isEmpty) {
           lastSyncError = 'La nube no tiene categorías. En el primer dispositivo usa Cargar menú desde JSON en el menú (≡); los datos se enviarán a la nube al guardar.';
           return lastSyncError;
         }
-        final rest = await Future.wait([
+
+        report(3, 'syncStepDownloadingProducts');
+        final productsBatch = await Future.wait([
           client.from('supplies').select('*').order('id'),
           client.from('products').select('*').order('id'),
+        ]);
+        supRows = _list(productsBatch[0]).map((r) => _map(r)).toList();
+        prodRows = _list(productsBatch[1]).map((r) => _map(r)).toList();
+
+        report(4, 'syncStepDownloadingRecipes');
+        final recipesBatch = await Future.wait([
           client.from('recipes').select('*').order('id'),
           client.from('modifier_groups').select('*').order('id'),
           client.from('product_modifiers').select('*'),
           client.from('modifier_options').select('*'),
+        ]);
+        recRows = _list(recipesBatch[0]).map((r) => _map(r)).toList();
+        mgRows = _list(recipesBatch[1]).map((r) => _map(r)).toList();
+        pmRows = _list(recipesBatch[2]).map((r) => _map(r)).toList();
+        moRows = _list(recipesBatch[3]).map((r) => _map(r)).toList();
+
+        report(5, 'syncStepDownloadingBundles');
+        final bundlesBatch = await Future.wait([
           client.from('bundles').select('*').order('id'),
           client.from('bundle_items').select('*'),
+          client.from('discounts').select('*').order('id'),
         ]);
-        supRows = _list(rest[0]).map((r) => _map(r)).toList();
-        prodRows = _list(rest[1]).map((r) => _map(r)).toList();
-        recRows = _list(rest[2]).map((r) => _map(r)).toList();
-        mgRows = _list(rest[3]).map((r) => _map(r)).toList();
-        pmRows = _list(rest[4]).map((r) => _map(r)).toList();
-        moRows = _list(rest[5]).map((r) => _map(r)).toList();
-        bundleRows = _list(rest[6]).map((r) => _map(r)).toList();
-        biRows = _list(rest[7]).map((r) => _map(r)).toList();
+        bundleRows = _list(bundlesBatch[0]).map((r) => _map(r)).toList();
+        biRows = _list(bundlesBatch[1]).map((r) => _map(r)).toList();
+        discRows = _list(bundlesBatch[2]).map((r) => _map(r)).toList();
+
         lastError = null;
         break;
       } catch (e, st) {
@@ -151,6 +296,7 @@ class CloudSyncService {
         debugPrint('CloudSyncService.syncFromCloud fetch failed (intento $attempt/$_syncMaxAttempts): $e');
         if (_isRetryableNetworkError(e) && attempt < _syncMaxAttempts) {
           debugPrint('CloudSyncService.syncFromCloud: reintento en ${_syncRetryDelay.inSeconds}s...');
+          report(2, 'syncStepDownloadingCategories', 'Reintento $attempt/$_syncMaxAttempts…');
           await Future<void>.delayed(_syncRetryDelay);
         } else {
           debugPrint('$st');
@@ -179,110 +325,139 @@ class CloudSyncService {
     moRows = _dedupeModifierOptionRows(moRows);
     bundleRows = _dedupeByIdKey(bundleRows, 'id');
     biRows = _dedupeBundleItemRows(biRows);
+    discRows = _dedupeByIdKey(discRows, 'id');
 
     try {
-      // 2. Now replace local master data (FK order: delete dependents first)
-      await (db.delete(db.modifierOptions)).go();
-      await (db.delete(db.productModifiers)).go();
-      await (db.delete(db.modifierGroups)).go();
-      await (db.delete(db.recipes)).go();
-      await (db.delete(db.bundleItems)).go();
-      await (db.delete(db.bundles)).go();
-      await (db.delete(db.products)).go();
-      await (db.delete(db.supplies)).go();
-      await (db.delete(db.categories)).go();
+      report(
+        6,
+        'syncStepSavingLocal',
+        '${prodRows.length} productos · ${bundleRows.length} bundles',
+      );
+      // 2. Replace local master data atomically so readers don't see half-synced tables.
+      await db.transaction(() async {
+        // FK order: delete dependents first.
+        await (db.delete(db.modifierOptions)).go();
+        await (db.delete(db.productModifiers)).go();
+        await (db.delete(db.modifierGroups)).go();
+        await (db.delete(db.recipes)).go();
+        await (db.delete(db.bundleItems)).go();
+        await (db.delete(db.bundles)).go();
+        await (db.delete(db.products)).go();
+        await (db.delete(db.supplies)).go();
+        await (db.delete(db.categories)).go();
 
-      for (final row in catRows) {
-        final cloudId = _int(row['id'])!;
-        final cloudParentId = _int(row['parent_id']);
-        await db.into(db.categories).insert(CategoriesCompanion(
-          id: Value(cloudId),
-          name: Value(row['name'] as String),
-          parentId: Value(cloudParentId),
-          color: Value(row['color'] as String?),
-          imageUrl: Value(row['image_url'] as String?),
-        ));
-      }
-      for (final row in supRows) {
-        final cloudId = _int(row['id'])!;
-        final stockModeRaw = row['stock_count_mode'];
-        final stockMode = stockModeRaw is String && stockModeRaw.isNotEmpty
-            ? stockModeRaw
-            : 'quantity';
-        final qualRaw = row['qualitative_level'];
-        final qualLevel = qualRaw is String && qualRaw.isNotEmpty ? qualRaw : null;
-        await db.into(db.supplies).insert(SuppliesCompanion(
-          id: Value(cloudId),
-          name: Value(row['name'] as String),
-          unit: Value(row['unit'] as String),
-          currentStock: Value(_double(row['current_stock'])),
-          costPerUnit: Value(_double(row['cost_per_unit'])),
-          reorderPoint: Value(_double(row['reorder_point'])),
-          category: Value(row['category'] as String?),
-          stockCountMode: Value(stockMode),
-          qualitativeLevel: Value(qualLevel),
-        ));
-      }
-      for (final row in prodRows) {
-        final cloudId = _int(row['id'])!;
-        final cloudCatId = _int(row['category_id']);
-        await db.into(db.products).insert(ProductsCompanion(
-          id: Value(cloudId),
-          name: Value(row['name'] as String),
-          price: Value(_double(row['price'])),
-          imageUrl: Value(row['image_url'] as String?),
-          isActive: Value(_bool(row['is_active'])),
-          categoryId: Value(cloudCatId),
-        ));
-      }
-      for (final row in recRows) {
-        await db.into(db.recipes).insert(RecipesCompanion.insert(
-          productId: _int(row['product_id'])!,
-          supplyId: _int(row['supply_id'])!,
-          quantityRequired: _double(row['quantity_required']),
-        ));
-      }
-      for (final row in mgRows) {
-        final cloudId = _int(row['id'])!;
-        await db.into(db.modifierGroups).insert(ModifierGroupsCompanion(
-          id: Value(cloudId),
-          name: Value(row['name'] as String),
-          minSelection: Value(_int(row['min_selection']) ?? 0),
-          maxSelection: Value(_int(row['max_selection'])!),
-        ));
-      }
-      for (final row in pmRows) {
-        await db.into(db.productModifiers).insert(ProductModifiersCompanion.insert(
-          productId: _int(row['product_id'])!,
-          modifierGroupId: _int(row['modifier_group_id'])!,
-        ));
-      }
-      for (final row in moRows) {
-        await db.into(db.modifierOptions).insert(ModifierOptionsCompanion.insert(
-          modifierGroupId: _int(row['modifier_group_id'])!,
-          supplyId: _int(row['supply_id'])!,
-          quantityDeducted: _double(row['quantity_deducted']),
-          priceExtra: Value(_double(row['price_extra'])),
-        ));
-      }
-      for (final row in bundleRows) {
-        final cloudId = _int(row['id'])!;
-        await db.into(db.bundles).insert(BundlesCompanion(
-          id: Value(cloudId),
-          name: Value(row['name'] as String),
-          price: Value(_double(row['price'])),
-          isActive: Value(_bool(row['is_active'])),
-          categoryId: Value(_int(row['category_id'])),
-        ));
-      }
-      for (final row in biRows) {
-        await db.into(db.bundleItems).insert(BundleItemsCompanion.insert(
-          bundleId: _int(row['bundle_id'])!,
-          productId: _int(row['product_id'])!,
-          quantityRequired: Value(_double(row['quantity'])),
-        ));
-      }
+        report(6, 'syncStepSavingCategories', '${catRows.length} categorías');
+        for (final row in catRows) {
+          final cloudId = _int(row['id'])!;
+          final cloudParentId = _int(row['parent_id']);
+          await db.into(db.categories).insert(CategoriesCompanion(
+            id: Value(cloudId),
+            name: Value(row['name'] as String),
+            parentId: Value(cloudParentId),
+            color: Value(row['color'] as String?),
+            imageUrl: Value(row['image_url'] as String?),
+          ));
+        }
+        report(7, 'syncStepSavingProducts', '${prodRows.length} productos · ${supRows.length} insumos');
+        for (final row in supRows) {
+          final cloudId = _int(row['id'])!;
+          final stockModeRaw = row['stock_count_mode'];
+          final stockMode = stockModeRaw is String && stockModeRaw.isNotEmpty
+              ? stockModeRaw
+              : 'quantity';
+          final qualRaw = row['qualitative_level'];
+          final qualLevel = qualRaw is String && qualRaw.isNotEmpty ? qualRaw : null;
+          await db.into(db.supplies).insert(SuppliesCompanion(
+            id: Value(cloudId),
+            name: Value(row['name'] as String),
+            unit: Value(row['unit'] as String),
+            currentStock: Value(_double(row['current_stock'])),
+            costPerUnit: Value(_double(row['cost_per_unit'])),
+            reorderPoint: Value(_double(row['reorder_point'])),
+            category: Value(row['category'] as String?),
+            stockCountMode: Value(stockMode),
+            qualitativeLevel: Value(qualLevel),
+          ));
+        }
+        for (final row in prodRows) {
+          final cloudId = _int(row['id'])!;
+          final cloudCatId = _int(row['category_id']);
+          await db.into(db.products).insert(ProductsCompanion(
+            id: Value(cloudId),
+            name: Value(row['name'] as String),
+            price: Value(_double(row['price'])),
+            imageUrl: Value(row['image_url'] as String?),
+            isActive: Value(_bool(row['is_active'])),
+            categoryId: Value(cloudCatId),
+          ));
+        }
+        report(8, 'syncStepSavingRecipes', '${recRows.length} recetas · ${moRows.length} opciones');
+        for (final row in recRows) {
+          await db.into(db.recipes).insert(RecipesCompanion.insert(
+            productId: _int(row['product_id'])!,
+            supplyId: _int(row['supply_id'])!,
+            quantityRequired: _double(row['quantity_required']),
+          ));
+        }
+        for (final row in mgRows) {
+          final cloudId = _int(row['id'])!;
+          await db.into(db.modifierGroups).insert(ModifierGroupsCompanion(
+            id: Value(cloudId),
+            name: Value(row['name'] as String),
+            minSelection: Value(_int(row['min_selection']) ?? 0),
+            maxSelection: Value(_int(row['max_selection'])!),
+          ));
+        }
+        for (final row in pmRows) {
+          await db.into(db.productModifiers).insert(ProductModifiersCompanion.insert(
+            productId: _int(row['product_id'])!,
+            modifierGroupId: _int(row['modifier_group_id'])!,
+          ));
+        }
+        for (final row in moRows) {
+          await db.into(db.modifierOptions).insert(ModifierOptionsCompanion.insert(
+            modifierGroupId: _int(row['modifier_group_id'])!,
+            supplyId: _int(row['supply_id'])!,
+            quantityDeducted: _double(row['quantity_deducted']),
+            priceExtra: Value(_double(row['price_extra'])),
+          ));
+        }
+        report(8, 'syncStepSavingBundles', '${bundleRows.length} bundles · ${discRows.length} descuentos');
+        for (final row in bundleRows) {
+          final cloudId = _int(row['id'])!;
+          await db.into(db.bundles).insert(BundlesCompanion(
+            id: Value(cloudId),
+            name: Value(row['name'] as String),
+            price: Value(_double(row['price'])),
+            isActive: Value(_bool(row['is_active'])),
+            categoryId: Value(_int(row['category_id'])),
+          ));
+        }
+        for (final row in biRows) {
+          await db.into(db.bundleItems).insert(BundleItemsCompanion.insert(
+            bundleId: _int(row['bundle_id'])!,
+            productId: _int(row['product_id'])!,
+            quantityRequired: Value(_double(row['quantity'])),
+          ));
+        }
+        if (discRows.isNotEmpty) {
+          await (db.delete(db.discounts)).go();
+          for (final row in discRows) {
+            final cloudId = _int(row['id'])!;
+            final rawDesc = row['description'];
+            final desc = rawDesc is String ? rawDesc.trim() : '';
+            await db.into(db.discounts).insert(DiscountsCompanion(
+              id: Value(cloudId),
+              code: Value(row['code'] as String),
+              percentage: Value(_double(row['percentage'])),
+              description: Value(desc.isEmpty ? 'Discount' : desc),
+              isActive: Value(_bool(row['is_active'])),
+            ));
+          }
+        }
+      });
 
+      report(9, 'syncStepFinishing');
       final allProducts = await (db.select(db.products)..orderBy([(p) => OrderingTerm.asc(p.id)])).get();
       final allSupplies = await (db.select(db.supplies)..orderBy([(s) => OrderingTerm.asc(s.id)])).get();
       final localToCloudProduct = {for (final p in allProducts) p.id: p.id};
@@ -291,6 +466,7 @@ class CloudSyncService {
         await _saveIdMaps(localToCloudProduct, localToCloudSupply);
       }
       lastSyncError = null;
+      await _setLastCatalogSyncNow();
       return null;
     } catch (e, st) {
       debugPrint('CloudSyncService.syncFromCloud write failed: $e');
@@ -302,12 +478,19 @@ class CloudSyncService {
 
   /// Writes sale + sale_items + supply deductions + inventory_logs to Supabase.
   /// Returns (error, cloudSaleId): on success (null, id), on failure (message, null). When cloud disabled, (null, null).
+  ///
+  /// Order: validate maps → insert [sales] → batch insert [sale_items] → cloud inventory.
+  /// Previously inventory ran before sale_items; if line inserts failed, a header-only sale
+  /// could remain in the cloud. Sale is deleted if sale_items insert fails.
   static Future<(String? error, int? cloudSaleId)> writeSaleToCloud(
     List<CartItem> items, {
     required double totalAmount,
     required String paymentMethod,
     double amountTendered = 0,
     double changeGiven = 0,
+    String? paymentsJson,
+    /// `shifts.id` en Supabase (opcional; agrega ventas al corte por turno).
+    int? cloudShiftId,
   }) async {
     if (!SupabaseService.isInitialized || items.isEmpty) return (null, null);
     try {
@@ -322,26 +505,10 @@ class CloudSyncService {
         if (cloudProductId == null) {
           return ('Producto (id ${cartItem.productId}) no está en la nube. Espera a que la sincronización automática actualice los datos o comprueba la conexión.', null);
         }
-        final recipeRows = await client.from('recipes').select('*').eq('product_id', cloudProductId);
-        for (final r in _list(recipeRows)) {
-          final row = _map(r);
-          final supplyId = _int(row['supply_id'])!;
-          final qty = _double(row['quantity_required']) * cartItem.quantity;
-          final res = await client.from('supplies').select('current_stock').eq('id', supplyId).maybeSingle();
-          final cur = res == null ? 0.0 : _double(_map(res)['current_stock']);
-          await client.from('supplies').update({'current_stock': cur - qty}).eq('id', supplyId);
-          await client.from('inventory_logs').insert({'supply_id': supplyId, 'change_amount': -qty, 'reason': 'SALE'});
-        }
         for (final mod in cartItem.selectedModifiers) {
-          final amount = mod.quantityDeducted * cartItem.quantity;
-          final cloudSupplyId = supplyMap[mod.supplyId];
-          if (cloudSupplyId == null) {
+          if (supplyMap[mod.supplyId] == null) {
             return ('Insumo (id ${mod.supplyId}) no está en la nube. Espera a que la sincronización automática actualice los datos.', null);
           }
-          final res = await client.from('supplies').select('current_stock').eq('id', cloudSupplyId).maybeSingle();
-          final cur = res == null ? 0.0 : _double(_map(res)['current_stock']);
-          await client.from('supplies').update({'current_stock': cur - amount}).eq('id', cloudSupplyId);
-          await client.from('inventory_logs').insert({'supply_id': cloudSupplyId, 'change_amount': -amount, 'reason': 'SALE'});
         }
       }
 
@@ -355,25 +522,42 @@ class CloudSyncService {
         'device_id': device.deviceId,
         'device_name': device.deviceName,
         'store_id': storeId,
+        if (cloudShiftId != null) 'shift_id': cloudShiftId,
       };
+      if (paymentsJson != null) {
+        try {
+          saleRow['payments_json'] = jsonDecode(paymentsJson);
+        } catch (_) {}
+      }
       dynamic saleRes;
       try {
         saleRes = await client.from('sales').insert(saleRow).select('id').single();
       } catch (e) {
         final msg = e.toString();
-        if (msg.contains('device_id') || msg.contains('device_name') || msg.contains('does not exist')) {
+        if (msg.contains('shift_id')) {
+          saleRow.remove('shift_id');
+          try {
+            saleRes = await client.from('sales').insert(saleRow).select('id').single();
+          } catch (e2) {
+            rethrow;
+          }
+        } else if (msg.contains('device_id') || msg.contains('device_name') || msg.contains('does not exist')) {
           saleRow = {
             'total_amount': totalAmount,
             'payment_method': paymentMethod,
             'amount_tendered': amountTendered,
             'change_given': changeGiven,
             'store_id': storeId,
+            if (cloudShiftId != null && !msg.contains('shift_id')) 'shift_id': cloudShiftId,
           };
           try {
             saleRes = await client.from('sales').insert(saleRow).select('id').single();
           } catch (e2) {
             final m2 = e2.toString();
-            if (m2.contains('store_id') || m2.contains('does not exist')) {
+            if (m2.contains('shift_id')) {
+              saleRow.remove('shift_id');
+              saleRes = await client.from('sales').insert(saleRow).select('id').single();
+            } else if (m2.contains('store_id') || m2.contains('does not exist')) {
               saleRow.remove('store_id');
               saleRes = await client.from('sales').insert(saleRow).select('id').single();
             } else {
@@ -390,18 +574,132 @@ class CloudSyncService {
       final saleId = _int(_map(saleRes)['id']);
       if (saleId == null) return ('Error al crear venta', null);
 
+      final itemRows = <Map<String, dynamic>>[];
       for (final item in items) {
-        final cloudProductId = productMap[item.productId];
-        if (cloudProductId == null) {
-          return ('Producto (id ${item.productId}) no está en la nube. Espera a que la sincronización automática actualice los datos o comprueba la conexión.', null);
-        }
-        await client.from('sale_items').insert({
+        final cloudProductId = productMap[item.productId]!;
+        itemRows.add({
           'sale_id': saleId,
           'product_id': cloudProductId,
           'quantity': item.quantity,
           'unit_price': item.unitPrice,
         });
       }
+      try {
+        await client.from('sale_items').insert(itemRows);
+      } catch (e) {
+        try {
+          await client.from('sales').delete().eq('id', saleId);
+        } catch (_) {}
+        rethrow;
+      }
+      // Guardrail: verify sale_items actually persisted for this sale.
+      // If mismatch, fail hard so PosRepository logs a visible critical error.
+      try {
+        final rows = await client
+            .from('sale_items')
+            .select('id')
+            .eq('sale_id', saleId);
+        final insertedCount = _list(rows).length;
+        if (insertedCount != itemRows.length) {
+          try {
+            await client.from('sales').delete().eq('id', saleId);
+          } catch (_) {}
+          return (
+            'Venta nube inconsistente: sale_items esperados=${itemRows.length}, insertados=$insertedCount (sale_id=$saleId).',
+            null,
+          );
+        }
+      } catch (e) {
+        try {
+          await client.from('sales').delete().eq('id', saleId);
+        } catch (_) {}
+        return ('No se pudo verificar sale_items en nube para sale_id=$saleId: $e', null);
+      }
+
+      // Batch inventory deduction: aggregate quantities first to minimize roundtrips.
+      final soldQtyByCloudProductId = <int, double>{};
+      for (final item in items) {
+        final cloudProductId = productMap[item.productId]!;
+        soldQtyByCloudProductId.update(
+          cloudProductId,
+          (current) => current + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
+      }
+
+      final deductionBySupplyId = <int, double>{};
+      if (soldQtyByCloudProductId.isNotEmpty) {
+        final cloudProductIds = soldQtyByCloudProductId.keys.toList(growable: false);
+        final recipeRows = await client
+            .from('recipes')
+            .select('product_id,supply_id,quantity_required')
+            .inFilter('product_id', cloudProductIds);
+        for (final r in _list(recipeRows)) {
+          final row = _map(r);
+          final cloudProductId = _int(row['product_id']);
+          final supplyId = _int(row['supply_id']);
+          if (cloudProductId == null || supplyId == null) continue;
+          final soldQty = soldQtyByCloudProductId[cloudProductId];
+          if (soldQty == null || soldQty <= 0) continue;
+          final qtyRequired = _double(row['quantity_required']);
+          final deduction = qtyRequired * soldQty;
+          if (deduction == 0) continue;
+          deductionBySupplyId.update(
+            supplyId,
+            (current) => current + deduction,
+            ifAbsent: () => deduction,
+          );
+        }
+      }
+
+      for (final item in items) {
+        for (final mod in item.selectedModifiers) {
+          final cloudSupplyId = supplyMap[mod.supplyId]!;
+          final deduction = mod.quantityDeducted * item.quantity;
+          if (deduction == 0) continue;
+          deductionBySupplyId.update(
+            cloudSupplyId,
+            (current) => current + deduction,
+            ifAbsent: () => deduction,
+          );
+        }
+      }
+
+      if (deductionBySupplyId.isNotEmpty) {
+        final supplyIds = deductionBySupplyId.keys.toList(growable: false);
+        final supplyRows = await client
+            .from('supplies')
+            .select('id,current_stock')
+            .inFilter('id', supplyIds);
+        final currentStockBySupplyId = <int, double>{};
+        for (final row in _list(supplyRows)) {
+          final mapped = _map(row);
+          final id = _int(mapped['id']);
+          if (id == null) continue;
+          currentStockBySupplyId[id] = _double(mapped['current_stock']);
+        }
+
+        for (final entry in deductionBySupplyId.entries) {
+          final supplyId = entry.key;
+          final currentStock = currentStockBySupplyId[supplyId] ?? 0.0;
+          await client
+              .from('supplies')
+              .update({'current_stock': currentStock - entry.value})
+              .eq('id', supplyId);
+        }
+
+        final inventoryLogsRows = deductionBySupplyId.entries
+            .map(
+              (entry) => <String, dynamic>{
+                'supply_id': entry.key,
+                'change_amount': -entry.value,
+                'reason': 'SALE',
+              },
+            )
+            .toList(growable: false);
+        await client.from('inventory_logs').insert(inventoryLogsRows);
+      }
+
       return (null, saleId);
     } catch (e, st) {
       debugPrint('CloudSyncService.writeSaleToCloud: $e');
@@ -424,22 +722,60 @@ class CloudSyncService {
     }
   }
 
-  /// Envía el turno a la nube (al iniciar turno). Upsert por id para alinear con local.
-  static Future<String?> writeShiftToCloud(Shift shift) async {
+  /// Envía el turno a la nube usando [supabaseShiftId] como `shifts.id`.
+  ///
+  /// Si el turno está abierto localmente pero en Supabase ya tiene `end_time`, **no** reabre
+  /// en la nube: alinea SQLite con la nube y devuelve error.
+  /// [payloadStoreId]: si no es null, se usa en el upsert en lugar de [StoreScope]
+  /// (p. ej. al cerrar un turno local tras cambiar de tienda en el mismo flujo).
+  static Future<String?> writeShiftToCloud(
+    Shift shift,
+    AppDatabase db, {
+    int? payloadStoreId,
+  }) async {
     if (!SupabaseService.isInitialized) return null;
     try {
       final client = SupabaseService.instance.client;
+      final cloudId = supabaseShiftId(shift);
+      if (ConnectivityService.instance.isConnected && shift.endTime == null) {
+        final existing =
+            await client.from('shifts').select('end_time').eq('id', cloudId).maybeSingle();
+        if (existing != null) {
+          final end = _parseTs(_map(existing)['end_time']);
+          if (end != null) {
+            await (db.update(db.shifts)..where((s) => s.id.equals(shift.id))).write(
+              ShiftsCompanion(endTime: Value(end)),
+            );
+            return 'Turno $cloudId ya cerrado en la nube; no se puede reabrir ahí. '
+                'SQLite alineado con la fecha de cierre de Supabase.';
+          }
+        }
+      }
       final device = await DeviceIdService.getDeviceInfo();
-      final storeId = await StoreScope.getActiveStoreId();
-      await client.from('shifts').upsert({
-        'id': shift.id,
+      final storeId = payloadStoreId ?? await StoreScope.getActiveStoreId();
+      final regId = shift.cloudRegisterId;
+      final payload = <String, dynamic>{
+        'id': cloudId,
         'start_time': shift.startTime.toUtc().toIso8601String(),
         'end_time': shift.endTime?.toUtc().toIso8601String(),
         'starting_fund': shift.startingFund,
         'device_id': device.deviceId,
         'device_name': device.deviceName,
         'store_id': storeId,
-      }, onConflict: 'id');
+        if (regId != null) 'register_id': regId,
+      };
+      try {
+        await client.from('shifts').upsert(payload, onConflict: 'id');
+      } catch (e, st) {
+        if (e.toString().contains('register_id')) {
+          payload.remove('register_id');
+          await client.from('shifts').upsert(payload, onConflict: 'id');
+        } else {
+          debugPrint('CloudSyncService.writeShiftToCloud: $e');
+          debugPrint('$st');
+          rethrow;
+        }
+      }
       return null;
     } catch (e, st) {
       debugPrint('CloudSyncService.writeShiftToCloud: $e');
@@ -474,14 +810,26 @@ class CloudSyncService {
       final device = await DeviceIdService.getDeviceInfo();
       final pkg = await PackageInfo.fromPlatform();
       final storeId = await StoreScope.getActiveStoreId();
-      await client.from('pos_devices').upsert({
+      final registerId = await RegisterScope.getActiveRegisterId();
+      final payload = <String, dynamic>{
         'device_id': device.deviceId,
         'device_name': device.deviceName,
         'last_seen_at': DateTime.now().toUtc().toIso8601String(),
         'app_version': '${pkg.version}+${pkg.buildNumber}',
         'platform': _platformLabel(),
         'store_id': storeId,
-      }, onConflict: 'device_id');
+        'register_id': registerId,
+      };
+      try {
+        await client.from('pos_devices').upsert(payload, onConflict: 'device_id');
+      } catch (e) {
+        if (e.toString().contains('register_id')) {
+          payload.remove('register_id');
+          await client.from('pos_devices').upsert(payload, onConflict: 'device_id');
+        } else {
+          rethrow;
+        }
+      }
       return null;
     } catch (e, st) {
       debugPrint('CloudSyncService.registerPosDeviceInCloud: $e');
@@ -495,13 +843,14 @@ class CloudSyncService {
     final err = await registerPosDeviceInCloud();
     if (err != null) return err;
     if (db != null) {
+      await reconcileLocalOpenShiftsWithCloud(db);
       final open = await (db.select(db.shifts)
             ..where((s) => s.endTime.isNull())
-            ..orderBy([(s) => OrderingTerm.desc(s.startTime)])
+            ..orderBy([(s) => OrderingTerm.desc(s.id)])
             ..limit(1))
           .getSingleOrNull();
       if (open != null) {
-        return await writeShiftToCloud(open);
+        return await writeShiftToCloud(open, db);
       }
     }
     return null;
@@ -511,6 +860,157 @@ class CloudSyncService {
     if (v == null) return null;
     if (v is DateTime) return v;
     return DateTime.tryParse(v.toString());
+  }
+
+  /// Señal de actualización remota para este terminal (fila en pos_devices).
+  static Future<({DateTime at, String? message})?> fetchRemoteUpdateRequestForCurrentDevice() async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final deviceId = await DeviceIdService.getDeviceId();
+      final row = await SupabaseService.instance.client
+          .from('pos_devices')
+          .select('remote_update_requested_at, remote_update_message')
+          .eq('device_id', deviceId)
+          .maybeSingle();
+      if (row == null) return null;
+      final m = _map(row);
+      final at = _parseTs(m['remote_update_requested_at']);
+      if (at == null) return null;
+      final msg = m['remote_update_message'] as String?;
+      return (at: at, message: msg?.trim().isEmpty == true ? null : msg?.trim());
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchRemoteUpdateRequestForCurrentDevice: $e');
+      debugPrint('$st');
+      return null;
+    }
+  }
+
+  /// Admin: marcar que esta caja debe mostrar aviso y comprobar actualización.
+  static Future<String?> setRemoteUpdateRequestForDevice({
+    required String deviceId,
+    String? message,
+  }) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final payload = <String, dynamic>{
+        'remote_update_requested_at': DateTime.now().toUtc().toIso8601String(),
+        'remote_update_message': message?.trim().isEmpty == true ? null : message?.trim(),
+      };
+      await SupabaseService.instance.client.from('pos_devices').update(payload).eq('device_id', deviceId);
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.setRemoteUpdateRequestForDevice: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Admin: quitar la señal de actualización para un terminal.
+  static Future<String?> clearRemoteUpdateRequestForDevice(String deviceId) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      await SupabaseService.instance.client.from('pos_devices').update({
+        'remote_update_requested_at': null,
+        'remote_update_message': null,
+      }).eq('device_id', deviceId);
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.clearRemoteUpdateRequestForDevice: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Aplica [store_id] y [register_id] de la fila en [pos_devices] a [StoreScope] / [RegisterScope].
+  /// Solo con red; la nube manda cuando el terminal ya está provisionado.
+  static Future<void> applyDeviceStoreRegisterFromCloudPrefs() async {
+    if (!SupabaseService.isInitialized) return;
+    if (!ConnectivityService.instance.isConnected) return;
+    try {
+      final deviceId = await DeviceIdService.getDeviceId();
+      final row = await fetchPosDeviceFromCloud(deviceId);
+      if (row == null) return;
+      if (row.storeId >= 1) {
+        await StoreScope.setActiveStoreId(row.storeId);
+      }
+      if (row.registerId != null && row.registerId! >= 1) {
+        await RegisterScope.setActiveRegisterId(row.registerId!);
+      }
+    } catch (e, st) {
+      debugPrint('CloudSyncService.applyDeviceStoreRegisterFromCloudPrefs: $e');
+      debugPrint('$st');
+    }
+  }
+
+  /// Turno abierto en nube para la tienda y cajón indicados (mismo [register_id]).
+  static Future<CloudShiftSummary?> fetchOpenShiftForRegisterCloud({
+    required int storeId,
+    required int registerId,
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      dynamic row;
+      try {
+        row = await SupabaseService.instance.client
+            .from('shifts')
+            .select(_kShiftSelectWithRegister)
+            .eq('store_id', storeId)
+            .eq('register_id', registerId)
+            .isFilter('end_time', null)
+            .order('start_time', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      } catch (_) {
+        row = await SupabaseService.instance.client
+            .from('shifts')
+            .select()
+            .eq('store_id', storeId)
+            .eq('register_id', registerId)
+            .isFilter('end_time', null)
+            .order('start_time', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      }
+      if (row == null) return null;
+      return _cloudShiftSummaryFromRow(_map(row));
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchOpenShiftForRegisterCloud: $e');
+      debugPrint('$st');
+      return null;
+    }
+  }
+
+  /// Una fila de [pos_devices] por [deviceId], o null.
+  static Future<CloudPosDeviceRecord?> fetchPosDeviceFromCloud(String deviceId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      final row = await SupabaseService.instance.client
+          .from('pos_devices')
+          .select()
+          .eq('device_id', deviceId)
+          .maybeSingle();
+      if (row == null) return null;
+      final m = _map(row);
+      final id = m['device_id'] as String? ?? '';
+      if (id.isEmpty) return null;
+      return CloudPosDeviceRecord(
+        deviceId: id,
+        deviceName: m['device_name'] as String? ?? id,
+        lastSeenAt: _parseTs(m['last_seen_at']) ?? DateTime.now(),
+        appVersion: m['app_version'] as String?,
+        platform: m['platform'] as String?,
+        storeId: _int(m['store_id']) ?? kDefaultStoreId,
+        registerId: _int(m['register_id']),
+        remoteUpdateRequestedAt: _parseTs(m['remote_update_requested_at']),
+        remoteUpdateMessage: m['remote_update_message'] as String?,
+      );
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchPosDeviceFromCloud: $e');
+      debugPrint('$st');
+      return null;
+    }
   }
 
   static Future<List<CloudPosDeviceRecord>> fetchPosDevicesFromCloud() async {
@@ -532,6 +1032,9 @@ class CloudSyncService {
           appVersion: m['app_version'] as String?,
           platform: m['platform'] as String?,
           storeId: _int(m['store_id']) ?? kDefaultStoreId,
+          registerId: _int(m['register_id']),
+          remoteUpdateRequestedAt: _parseTs(m['remote_update_requested_at']),
+          remoteUpdateMessage: m['remote_update_message'] as String?,
         ));
       }
       return out;
@@ -539,6 +1042,55 @@ class CloudSyncService {
       debugPrint('CloudSyncService.fetchPosDevicesFromCloud: $e');
       debugPrint('$st');
       return [];
+    }
+  }
+
+  /// Mayor [id] en `public.shifts` (todas las filas). Vacío → 0. Error/red → null.
+  static Future<int?> fetchMaxShiftIdFromCloud() async {
+    if (!SupabaseService.isInitialized) return null;
+    if (!ConnectivityService.instance.isConnected) return null;
+    try {
+      final row = await SupabaseService.instance.client
+          .from('shifts')
+          .select('id')
+          .order('id', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (row == null) return 0;
+      return _int(_map(row)['id']) ?? 0;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchMaxShiftIdFromCloud: $e');
+      debugPrint('$st');
+      return null;
+    }
+  }
+
+  /// Fila en [shifts] por id en **Supabase** (usa [supabaseShiftId] de la fila local).
+  static Future<CloudShiftSummary?> fetchShiftByIdFromCloud(int supabaseShiftId) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      Map<String, dynamic>? m;
+      try {
+        final row = await SupabaseService.instance.client
+            .from('shifts')
+            .select(_kShiftSelectWithRegister)
+            .eq('id', supabaseShiftId)
+            .maybeSingle();
+        if (row != null) m = _map(row);
+      } catch (_) {
+        final row = await SupabaseService.instance.client
+            .from('shifts')
+            .select()
+            .eq('id', supabaseShiftId)
+            .maybeSingle();
+        if (row != null) m = _map(row);
+      }
+      if (m == null) return null;
+      return _cloudShiftSummaryFromRow(m);
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchShiftByIdFromCloud: $e');
+      debugPrint('$st');
+      return null;
     }
   }
 
@@ -551,26 +1103,28 @@ class CloudSyncService {
     try {
       var q = SupabaseService.instance.client
           .from('shifts')
-          .select()
+          .select(_kShiftSelectWithRegister)
           .eq('device_id', deviceId)
           .isFilter('end_time', null);
       if (storeId != null) {
         q = q.eq('store_id', storeId);
       }
-      final row = await q.order('start_time', ascending: false).limit(1).maybeSingle();
+      dynamic row;
+      try {
+        row = await q.order('start_time', ascending: false).limit(1).maybeSingle();
+      } catch (_) {
+        var q2 = SupabaseService.instance.client
+            .from('shifts')
+            .select()
+            .eq('device_id', deviceId)
+            .isFilter('end_time', null);
+        if (storeId != null) {
+          q2 = q2.eq('store_id', storeId);
+        }
+        row = await q2.order('start_time', ascending: false).limit(1).maybeSingle();
+      }
       if (row == null) return null;
-      final m = _map(row);
-      final sid = _int(m['id']);
-      if (sid == null) return null;
-      return CloudShiftSummary(
-        id: sid,
-        startTime: _parseTs(m['start_time']) ?? DateTime.now(),
-        endTime: null,
-        startingFund: _double(m['starting_fund']),
-        deviceId: m['device_id'] as String?,
-        deviceName: m['device_name'] as String?,
-        storeId: _int(m['store_id']) ?? kDefaultStoreId,
-      );
+      return _cloudShiftSummaryFromRow(_map(row));
     } catch (e, st) {
       debugPrint('CloudSyncService.fetchOpenShiftForDeviceCloud: $e');
       debugPrint('$st');
@@ -587,7 +1141,9 @@ class CloudSyncService {
     try {
       var q = SupabaseService.instance.client
           .from('shifts')
-          .select('*, shift_closures(*)')
+          .select(
+            'id, start_time, end_time, starting_fund, store_id, device_id, device_name, register_id, pos_registers ( label ), shift_closures (*)',
+          )
           .eq('device_id', deviceId);
       if (storeId != null) {
         q = q.eq('store_id', storeId);
@@ -624,16 +1180,8 @@ class CloudSyncService {
             closureKind: cm['closure_kind'] as String? ?? 'device',
           ));
         }
-        out.add(CloudShiftSummary(
-          id: sid,
-          startTime: _parseTs(m['start_time']) ?? DateTime.now(),
-          endTime: _parseTs(m['end_time']),
-          startingFund: _double(m['starting_fund']),
-          deviceId: m['device_id'] as String?,
-          deviceName: m['device_name'] as String?,
-          storeId: _int(m['store_id']) ?? kDefaultStoreId,
-          closures: closures,
-        ));
+        final summary = _cloudShiftSummaryFromRow(m, closures: closures);
+        if (summary != null) out.add(summary);
       }
       return out;
     } catch (e, st) {
@@ -679,7 +1227,111 @@ class CloudSyncService {
     }
   }
 
-  /// Cierra el turno solo en Supabase (corte remoto). Requiere [shifts.device_id] para sumar ventas.
+  /// Ventas en nube con `sales.shift_id` = [cloudShiftId], excluyendo ids que ya están en SQLite (`cloud_sale_id`).
+  /// Usado en cierre de caja: total local + estas = turno completo sin duplicar.
+  static Future<({double cash, double debit, double credit, double transfer})>
+      fetchCloudOnlySalesTotalsForShift({
+    required int cloudShiftId,
+    required Set<int> excludeCloudSaleIds,
+  }) async {
+    if (!SupabaseService.isInitialized) {
+      return (cash: 0.0, debit: 0.0, credit: 0.0, transfer: 0.0);
+    }
+    try {
+      final res = await SupabaseService.instance.client
+          .from('sales')
+          .select('id, total_amount, payment_method')
+          .eq('shift_id', cloudShiftId)
+          .isFilter('cancelled_at', null);
+      var cash = 0.0;
+      var debit = 0.0;
+      var credit = 0.0;
+      var transfer = 0.0;
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final id = _int(m['id']);
+        if (id == null || excludeCloudSaleIds.contains(id)) continue;
+        final amt = _double(m['total_amount']);
+        switch (m['payment_method'] as String? ?? 'CASH') {
+          case 'CARD_DEBIT':
+            debit += amt;
+            break;
+          case 'CARD_CREDIT':
+            credit += amt;
+            break;
+          case 'TRANSFER':
+            transfer += amt;
+            break;
+          default:
+            cash += amt;
+        }
+      }
+      return (cash: cash, debit: debit, credit: credit, transfer: transfer);
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchCloudOnlySalesTotalsForShift: $e');
+      debugPrint('$st');
+      return (cash: 0.0, debit: 0.0, credit: 0.0, transfer: 0.0);
+    }
+  }
+
+  /// IDs de ventas canceladas en nube para un turno (`sales.shift_id`).
+  static Future<Set<int>> fetchCancelledSaleIdsForShift(int cloudShiftId) async {
+    if (!SupabaseService.isInitialized) return <int>{};
+    try {
+      final res = await SupabaseService.instance.client
+          .from('sales')
+          .select('id')
+          .eq('shift_id', cloudShiftId)
+          .not('cancelled_at', 'is', null);
+      final out = <int>{};
+      for (final e in _list(res)) {
+        final id = _int(_map(e)['id']);
+        if (id != null) out.add(id);
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchCancelledSaleIdsForShift: $e');
+      debugPrint('$st');
+      return <int>{};
+    }
+  }
+
+  /// Neto movimientos CAJA en nube para el turno, excluyendo ids ya presentes en SQLite (mismo id que nube).
+  static Future<double> fetchCloudOnlyCajaMovementNetForShift({
+    required int cloudShiftId,
+    required Set<int> excludeCloudMovementIds,
+  }) async {
+    if (!SupabaseService.isInitialized) return 0;
+    try {
+      final res = await SupabaseService.instance.client
+          .from('movements')
+          .select('id, type, amount')
+          .eq('shift_id', cloudShiftId)
+          .eq('account', 'CAJA')
+          .isFilter('cancelled_at', null);
+      var net = 0.0;
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final id = _int(m['id']);
+        if (id == null || excludeCloudMovementIds.contains(id)) continue;
+        final t = m['type'] as String? ?? '';
+        final amt = _double(m['amount']);
+        if (t == 'ENTRADA') {
+          net += amt;
+        } else if (t == 'SALIDA') {
+          net -= amt;
+        }
+      }
+      return net;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchCloudOnlyCajaMovementNetForShift: $e');
+      debugPrint('$st');
+      return 0;
+    }
+  }
+
+  /// Cierra el turno solo en Supabase (corte remoto). Suma ventas por [sales.shift_id] y,
+  /// en datos antiguos, por dispositivo y rango de fechas del turno.
   static Future<String?> adminRemoteCloseShiftInCloud({
     required int shiftId,
     required double declaredCash,
@@ -694,28 +1346,43 @@ class CloudSyncService {
       final sm = _map(shiftRow);
       if (sm['end_time'] != null) return 'El turno ya está cerrado';
       final deviceId = sm['device_id'] as String?;
-      if (deviceId == null || deviceId.isEmpty) {
-        return 'El turno no tiene dispositivo en la nube. En la caja use el botón Registrar en la nube con el turno abierto.';
-      }
       final start = _parseTs(sm['start_time']) ?? DateTime.now();
       final startStr = start.toUtc().toIso8601String();
       final end = DateTime.now();
       final endStr = end.toUtc().toIso8601String();
       final shiftStoreId = _int(sm['store_id']) ?? kDefaultStoreId;
-      final salesRes = await client
-          .from('sales')
-          .select('total_amount, payment_method')
-          .gte('date', startStr)
-          .lte('date', endStr)
-          .eq('device_id', deviceId)
-          .eq('store_id', shiftStoreId)
-          .isFilter('cancelled_at', null);
       var cashSales = 0.0;
-      for (final row in _list(salesRes)) {
-        final r = _map(row);
-        if ((r['payment_method'] as String?) == 'CASH') {
-          cashSales += _double(r['total_amount']);
+      void addCashSalesFrom(List<dynamic> rows) {
+        for (final row in _list(rows)) {
+          final r = _map(row);
+          if ((r['payment_method'] as String?) == 'CASH') {
+            cashSales += _double(r['total_amount']);
+          }
         }
+      }
+
+      try {
+        final byShift = await client
+            .from('sales')
+            .select('total_amount, payment_method')
+            .eq('shift_id', shiftId)
+            .isFilter('cancelled_at', null);
+        addCashSalesFrom(byShift);
+      } catch (_) {}
+
+      if (deviceId != null && deviceId.isNotEmpty) {
+        try {
+          final legacy = await client
+              .from('sales')
+              .select('total_amount, payment_method')
+              .isFilter('shift_id', null)
+              .gte('date', startStr)
+              .lte('date', endStr)
+              .eq('device_id', deviceId)
+              .eq('store_id', shiftStoreId)
+              .isFilter('cancelled_at', null);
+          addCashSalesFrom(legacy);
+        } catch (_) {}
       }
       final movRes =
           await client.from('movements').select('type, amount').eq('shift_id', shiftId).eq('account', 'CAJA');
@@ -761,42 +1428,70 @@ class CloudSyncService {
     }
   }
 
-  /// Descarga movimientos del turno desde la nube y los inserta en local si no existen (para incluir movimientos de otros dispositivos antes de cerrar turno).
-  static Future<String?> pullMovementsForShift(AppDatabase db, int shiftId) async {
+  /// Descarga movimientos del turno desde la nube; asocia filas locales al turno **local** [shift.id].
+  static Future<String?> pullMovementsForShift(AppDatabase db, Shift shift) async {
     if (!SupabaseService.isInitialized) return null;
     try {
       final client = SupabaseService.instance.client;
+      final cloudShiftKey = supabaseShiftId(shift);
       final res = await client
           .from('movements')
-          .select('id, date, type, account, amount, reason, shift_id')
-          .eq('shift_id', shiftId)
+          .select('id, date, type, account, amount, reason, shift_id, cancelled_at')
+          .eq('shift_id', cloudShiftKey)
+          .isFilter('cancelled_at', null)
           .order('id');
-      final rows = _list(res).map((r) => _map(r)).toList();
+      final rowsRaw = _list(res).map((r) => _map(r)).toList();
+      // PostgREST / proxies en redes inestables pueden devolver filas repetidas por id.
+      final rows = _dedupeByIdKey(rowsRaw, 'id');
       var insertedLocally = 0;
+      var skippedOutsideWindow = 0;
       for (final row in rows) {
         final cloudId = _int(row['id'])!;
-        final existing = await (db.select(db.movements)..where((m) => m.id.equals(cloudId))).getSingleOrNull();
-        if (existing != null) continue;
         final dateStr = row['date'] as String?;
         final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
+        final movementDate = date ?? DateTime.now();
+        final inWindow = isMovementInShiftWindow(movementDate: movementDate, shift: shift);
+        final existing = await (db.select(db.movements)..where((m) => m.id.equals(cloudId))).getSingleOrNull();
+        if (existing != null) {
+          if (existing.cancelledAt == null && row['cancelled_at'] != null) {
+            final cancelled = DateTime.tryParse(row['cancelled_at'].toString());
+            if (cancelled != null) {
+              await (db.update(db.movements)..where((m) => m.id.equals(cloudId))).write(
+                    MovementsCompanion(cancelledAt: Value(cancelled.toLocal())),
+                  );
+            }
+          }
+          if (!inWindow && existing.shiftId == shift.id) {
+            await (db.update(db.movements)..where((m) => m.id.equals(cloudId))).write(
+                  const MovementsCompanion(shiftId: Value(null)),
+                );
+          }
+          continue;
+        }
+        if (!inWindow) {
+          skippedOutsideWindow++;
+          continue;
+        }
         await db.into(db.movements).insert(MovementsCompanion.insert(
               type: row['type'] as String,
               account: row['account'] as String,
               amount: _double(row['amount']),
               reason: row['reason'] as String,
               id: Value(cloudId),
-              date: Value(date ?? DateTime.now()),
-              shiftId: Value(_int(row['shift_id'])),
+              date: Value(movementDate),
+              shiftId: Value(shift.id),
             ));
         insertedLocally++;
       }
       await logShiftCloseDiagnostic(
         event: 'pull_movements_for_shift',
-        shiftId: shiftId,
+        shiftId: cloudShiftKey,
         context: {
           'ok': true,
+          'localShiftId': shift.id,
           'cloudRowCount': rows.length,
           'insertedLocally': insertedLocally,
+          'skippedOutsideWindow': skippedOutsideWindow,
         },
       );
       return null;
@@ -805,8 +1500,8 @@ class CloudSyncService {
       debugPrint('$st');
       await logShiftCloseDiagnostic(
         event: 'pull_movements_for_shift',
-        shiftId: shiftId,
-        context: {'ok': false, 'error': e.toString()},
+        shiftId: supabaseShiftId(shift),
+        context: {'ok': false, 'error': e.toString(), 'localShiftId': shift.id},
       );
       return e.toString();
     }
@@ -837,72 +1532,152 @@ class CloudSyncService {
     }
   }
 
-  /// Envía un movimiento a la nube (para que otros dispositivos lo vean al hacer pull antes de cerrar turno).
-  static Future<String?> writeMovementToCloud(Movement movement) async {
+  /// Envía un movimiento a la nube (`shift_id` = id Supabase del turno).
+  /// Reintenta en errores de red típicos (conexión inestable) para evitar fila local sin upsert en nube.
+  static Future<String?> writeMovementToCloud(
+    Movement movement,
+    AppDatabase db, {
+    int? cloudShiftIdOverride,
+  }) async {
     if (!SupabaseService.isInitialized) return null;
+    const maxAttempts = 4;
+    Object? lastErr;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final client = SupabaseService.instance.client;
+        final storeId = await StoreScope.getActiveStoreId();
+        int? cloudSid = cloudShiftIdOverride;
+        if (cloudSid == null && movement.shiftId != null) {
+          final sh = await (db.select(db.shifts)..where((s) => s.id.equals(movement.shiftId!)))
+              .getSingleOrNull();
+          cloudSid = sh != null ? supabaseShiftId(sh) : movement.shiftId;
+        }
+        await client.from('movements').upsert({
+          'id': movement.id,
+          'date': movement.date.toUtc().toIso8601String(),
+          'type': movement.type,
+          'account': movement.account,
+          'amount': movement.amount,
+          'reason': movement.reason,
+          'shift_id': cloudSid,
+          'store_id': storeId,
+        }, onConflict: 'id');
+        return null;
+      } catch (e, st) {
+        lastErr = e;
+        debugPrint('CloudSyncService.writeMovementToCloud (intento $attempt/$maxAttempts): $e');
+        if (attempt < maxAttempts && _isRetryableNetworkError(e)) {
+          await Future<void>.delayed(Duration(milliseconds: 350 * attempt));
+          continue;
+        }
+        debugPrint('$st');
+        return e.toString();
+      }
+    }
+    return lastErr?.toString();
+  }
+
+  static Movement _movementFromSupabaseRow(Map<String, dynamic> m) {
+    final id = _int(m['id']) ?? 0;
+    final date = DateTime.tryParse(m['date'].toString()) ?? DateTime.now();
+    final shiftRaw = m['shift_id'];
+    return Movement(
+      id: id,
+      date: date,
+      type: m['type'] as String? ?? '',
+      account: m['account'] as String? ?? '',
+      amount: _double(m['amount']),
+      reason: m['reason'] as String? ?? '',
+      shiftId: shiftRaw == null ? null : _int(shiftRaw),
+      needsCloudSync: false,
+      cancelledAt: m['cancelled_at'] == null
+          ? null
+          : DateTime.tryParse(m['cancelled_at'].toString())?.toLocal(),
+    );
+  }
+
+  /// Marca un movimiento como cancelado en Supabase (admin).
+  static Future<String?> cancelMovementInCloud(int movementId) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
     try {
-      final client = SupabaseService.instance.client;
-      final storeId = await StoreScope.getActiveStoreId();
-      await client.from('movements').upsert({
-        'id': movement.id,
-        'date': movement.date.toUtc().toIso8601String(),
-        'type': movement.type,
-        'account': movement.account,
-        'amount': movement.amount,
-        'reason': movement.reason,
-        'shift_id': movement.shiftId,
-        'store_id': storeId,
-      }, onConflict: 'id');
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      await SupabaseService.instance.client.from('movements').update({
+        'cancelled_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', movementId);
       return null;
     } catch (e, st) {
-      debugPrint('CloudSyncService.writeMovementToCloud: $e');
+      debugPrint('CloudSyncService.cancelMovementInCloud: $e');
       debugPrint('$st');
       return e.toString();
     }
   }
 
-  /// Movimientos desde Supabase (p. ej. web sin Drift).
+  /// Movimientos desde Supabase (p. ej. web sin Drift), filtrados por tienda activa.
   static Future<List<Movement>> fetchMovementsFromCloud({String? account, int limit = 200}) async {
     if (!SupabaseService.isInitialized) return [];
+    final client = SupabaseService.instance.client;
+    final storeId = await StoreScope.getActiveStoreId();
+    var query = client
+        .from('movements')
+        .select()
+        .eq('store_id', storeId)
+        .isFilter('cancelled_at', null);
+    if (account != null) {
+      query = query.eq('account', account);
+    }
+    final res = await query.order('date', ascending: false).limit(limit);
+    final list = _list(res);
+    return list.map((e) => _movementFromSupabaseRow(_map(e))).toList();
+  }
+
+  /// Ids cancelados recientes (para alinear SQLite tras sync).
+  static Future<Set<int>> fetchCancelledMovementIdsFromCloud({
+    String? account,
+    int limit = 200,
+  }) async {
+    if (!SupabaseService.isInitialized) return {};
     try {
       final client = SupabaseService.instance.client;
-      var query = client.from('movements').select();
+      final storeId = await StoreScope.getActiveStoreId();
+      var query = client
+          .from('movements')
+          .select('id')
+          .eq('store_id', storeId)
+          .not('cancelled_at', 'is', null);
       if (account != null) {
         query = query.eq('account', account);
       }
       final res = await query.order('date', ascending: false).limit(limit);
-      final list = _list(res);
-      return list.map((e) {
-        final m = _map(e);
-        final id = _int(m['id']) ?? 0;
-        final date = DateTime.tryParse(m['date'].toString()) ?? DateTime.now();
-        final shiftRaw = m['shift_id'];
-        return Movement(
-          id: id,
-          date: date,
-          type: m['type'] as String? ?? '',
-          account: m['account'] as String? ?? '',
-          amount: _double(m['amount']),
-          reason: m['reason'] as String? ?? '',
-          shiftId: shiftRaw == null ? null : _int(shiftRaw),
-        );
-      }).toList();
+      final ids = <int>{};
+      for (final e in _list(res)) {
+        final id = _int(_map(e)['id']);
+        if (id != null) ids.add(id);
+      }
+      return ids;
     } catch (e, st) {
-      debugPrint('CloudSyncService.fetchMovementsFromCloud: $e');
+      debugPrint('CloudSyncService.fetchCancelledMovementIdsFromCloud: $e');
       debugPrint('$st');
-      return [];
+      return {};
     }
   }
 
+  /// Turnos abiertos en la tienda activa (para asociar movimientos de caja).
+  static Future<List<CloudShiftSummary>> fetchOpenShiftsForActiveStore() async {
+    final storeId = await StoreScope.getActiveStoreId();
+    final all = await fetchAllOpenShiftsForAdmin();
+    return all.where((s) => s.storeId == storeId && s.isOpen).toList();
+  }
+
   /// Inserta un movimiento solo en Supabase (sin fila local).
-  static Future<String?> insertMovementToCloud({
+  /// [shiftId] es el id del turno en Supabase (`shifts.id`).
+  static Future<(String?, Movement?)> insertMovementToCloud({
     required String type,
     required String account,
     required double amount,
     required String reason,
     int? shiftId,
   }) async {
-    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    if (!SupabaseService.isInitialized) return ('Supabase no inicializado', null);
     try {
       OfflineWritePolicy.requireOnlineForMasterWrite();
       final client = SupabaseService.instance.client;
@@ -918,12 +1693,12 @@ class CloudSyncService {
       if (shiftId != null) {
         payload['shift_id'] = shiftId;
       }
-      await client.from('movements').insert(payload);
-      return null;
+      final row = await client.from('movements').insert(payload).select().single();
+      return (null, _movementFromSupabaseRow(_map(row)));
     } catch (e, st) {
       debugPrint('CloudSyncService.insertMovementToCloud: $e');
       debugPrint('$st');
-      return e.toString();
+      return (e.toString(), null);
     }
   }
 
@@ -1118,17 +1893,30 @@ class CloudSyncService {
       final client = SupabaseService.instance.client;
       final device = await DeviceIdService.getDeviceInfo();
       final storeId = await StoreScope.getActiveStoreId();
-      await client.from('shifts').upsert({
-        'id': shiftWithEndTime.id,
+      final cloudSid = supabaseShiftId(shiftWithEndTime);
+      final regId = shiftWithEndTime.cloudRegisterId;
+      final closurePayload = <String, dynamic>{
+        'id': cloudSid,
         'start_time': shiftWithEndTime.startTime.toUtc().toIso8601String(),
         'end_time': shiftWithEndTime.endTime?.toUtc().toIso8601String(),
         'starting_fund': shiftWithEndTime.startingFund,
         'device_id': device.deviceId,
         'device_name': device.deviceName,
         'store_id': storeId,
-      }, onConflict: 'id');
+        if (regId != null) 'register_id': regId,
+      };
+      try {
+        await client.from('shifts').upsert(closurePayload, onConflict: 'id');
+      } catch (e) {
+        if (e.toString().contains('register_id')) {
+          closurePayload.remove('register_id');
+          await client.from('shifts').upsert(closurePayload, onConflict: 'id');
+        } else {
+          rethrow;
+        }
+      }
       await client.from('shift_closures').insert({
-        'shift_id': closure.shiftId,
+        'shift_id': cloudSid,
         'closing_time': closure.closingTime.toUtc().toIso8601String(),
         'system_expected_cash': closure.systemExpectedCash,
         'declared_cash': closure.declaredCash,
@@ -1238,7 +2026,269 @@ class CloudSyncService {
     return v == 1 || v == 'true';
   }
 
+  static CloudShiftSummary? _cloudShiftSummaryFromRow(
+    Map<String, dynamic> m, {
+    List<CloudShiftClosureBrief> closures = const [],
+  }) {
+    final sid = _int(m['id']);
+    if (sid == null) return null;
+    final reg = m['pos_registers'];
+    String? registerLabel;
+    if (reg is Map) {
+      registerLabel = reg['label'] as String?;
+    }
+    String? storeName;
+    final st = m['stores'];
+    if (st is Map) {
+      storeName = st['name'] as String?;
+    }
+    return CloudShiftSummary(
+      id: sid,
+      startTime: _parseTs(m['start_time']) ?? DateTime.now(),
+      endTime: _parseTs(m['end_time']),
+      startingFund: _double(m['starting_fund']),
+      deviceId: m['device_id'] as String?,
+      deviceName: m['device_name'] as String?,
+      storeId: _int(m['store_id']) ?? kDefaultStoreId,
+      storeName: storeName,
+      registerId: _int(m['register_id']),
+      registerLabel: registerLabel,
+      closures: closures,
+    );
+  }
+
+  /// Cajones de una tienda (orden [display_order], luego etiqueta).
+  /// [activeOnly]: false incluye cajones desactivados (pantalla admin).
+  static Future<List<CloudPosRegisterRecord>> fetchRegistersForStore(
+    int storeId, {
+    bool activeOnly = true,
+  }) async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      var q = SupabaseService.instance.client
+          .from('pos_registers')
+          .select()
+          .eq('store_id', storeId);
+      if (activeOnly) {
+        q = q.eq('active', true);
+      }
+      final res = await q.order('display_order').order('label');
+      final out = <CloudPosRegisterRecord>[];
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final id = _int(m['id']);
+        if (id == null) continue;
+        out.add(CloudPosRegisterRecord(
+          id: id,
+          storeId: _int(m['store_id']) ?? kDefaultStoreId,
+          label: m['label'] as String? ?? 'Caja $id',
+          displayOrder: _int(m['display_order']) ?? 0,
+          active: _bool(m['active']),
+        ));
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchRegistersForStore: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  /// Turnos abiertos en nube para un cajón concreto (misma tienda).
+  static Future<List<CloudShiftSummary>> fetchOpenShiftsForRegisterCloud({
+    required int storeId,
+    required int registerId,
+  }) async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      final res = await SupabaseService.instance.client
+          .from('shifts')
+          .select(_kShiftSelectWithRegister)
+          .eq('store_id', storeId)
+          .eq('register_id', registerId)
+          .isFilter('end_time', null)
+          .order('start_time', ascending: false);
+      final out = <CloudShiftSummary>[];
+      for (final e in _list(res)) {
+        final s = _cloudShiftSummaryFromRow(_map(e));
+        if (s != null) out.add(s);
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchOpenShiftsForRegisterCloud: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  /// Turnos abiertos en toda la nube (admin: enlazar terminal a otra caja/tienda).
+  static Future<List<CloudShiftSummary>> fetchAllOpenShiftsForAdmin() async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      final res = await SupabaseService.instance.client
+          .from('shifts')
+          .select(
+            'id, start_time, end_time, starting_fund, store_id, device_id, device_name, register_id, stores ( name ), pos_registers ( label )',
+          )
+          .isFilter('end_time', null)
+          .order('start_time', ascending: false);
+      final out = <CloudShiftSummary>[];
+      for (final e in _list(res)) {
+        final s = _cloudShiftSummaryFromRow(_map(e));
+        if (s != null) out.add(s);
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchAllOpenShiftsForAdmin: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  static Future<List<CloudStoreRecord>> fetchStoresFromCloud() async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      final res = await SupabaseService.instance.client
+          .from('stores')
+          .select('id, name')
+          .order('id');
+      final out = <CloudStoreRecord>[];
+      for (final e in _list(res)) {
+        final m = _map(e);
+        final id = _int(m['id']);
+        if (id == null) continue;
+        out.add(CloudStoreRecord(id: id, name: m['name'] as String? ?? 'Store $id'));
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.fetchStoresFromCloud: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
+  static Future<(String? error, int? newId)> insertStoreToCloud(String name) async {
+    if (!SupabaseService.isInitialized) return ('Supabase no inicializado', null);
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final trimmed = name.trim();
+      if (trimmed.isEmpty) return ('El nombre no puede estar vacío', null);
+      final row = await SupabaseService.instance.client
+          .from('stores')
+          .insert({'name': trimmed})
+          .select('id')
+          .single();
+      return (null, _int(_map(row)['id']));
+    } catch (e, st) {
+      debugPrint('CloudSyncService.insertStoreToCloud: $e');
+      debugPrint('$st');
+      return (e.toString(), null);
+    }
+  }
+
+  static Future<String?> updateStoreToCloud({required int id, required String name}) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final trimmed = name.trim();
+      if (trimmed.isEmpty) return 'El nombre no puede estar vacío';
+      await SupabaseService.instance.client.from('stores').update({'name': trimmed}).eq('id', id);
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.updateStoreToCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  static Future<(String? error, int? newId)> insertRegisterToCloud({
+    required int storeId,
+    required String label,
+    int displayOrder = 0,
+  }) async {
+    if (!SupabaseService.isInitialized) return ('Supabase no inicializado', null);
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final trimmed = label.trim();
+      if (trimmed.isEmpty) return ('La etiqueta no puede estar vacía', null);
+      final row = await SupabaseService.instance.client
+          .from('pos_registers')
+          .insert({
+            'store_id': storeId,
+            'label': trimmed,
+            'display_order': displayOrder,
+            'active': true,
+          })
+          .select('id')
+          .single();
+      return (null, _int(_map(row)['id']));
+    } catch (e, st) {
+      debugPrint('CloudSyncService.insertRegisterToCloud: $e');
+      debugPrint('$st');
+      return (e.toString(), null);
+    }
+  }
+
+  static Future<String?> updateRegisterToCloud({
+    required int id,
+    String? label,
+    int? displayOrder,
+    bool? active,
+  }) async {
+    if (!SupabaseService.isInitialized) return 'Supabase no inicializado';
+    try {
+      OfflineWritePolicy.requireOnlineForMasterWrite();
+      final payload = <String, dynamic>{};
+      if (label != null) {
+        final t = label.trim();
+        if (t.isEmpty) return 'La etiqueta no puede estar vacía';
+        payload['label'] = t;
+      }
+      if (displayOrder != null) payload['display_order'] = displayOrder;
+      if (active != null) payload['active'] = active;
+      if (payload.isEmpty) return null;
+      await SupabaseService.instance.client.from('pos_registers').update(payload).eq('id', id);
+      return null;
+    } catch (e, st) {
+      debugPrint('CloudSyncService.updateRegisterToCloud: $e');
+      debugPrint('$st');
+      return e.toString();
+    }
+  }
+
   // ----- Write-through: sync single entities to cloud so other devices get changes via Realtime -----
+
+  /// Inserts a new category row in Supabase and returns its id (cloud-first create).
+  static Future<(String? error, int? id)> insertCategoryRowInCloud({
+    required String name,
+    int? parentId,
+    String? color,
+    String? imageUrl,
+  }) async {
+    if (!SupabaseService.isInitialized) {
+      return ('Supabase no inicializado', null);
+    }
+    try {
+      final res = await SupabaseService.instance.client
+          .from('categories')
+          .insert(<String, dynamic>{
+            'name': name.trim(),
+            'parent_id': parentId,
+            'color': color,
+            'image_url': imageUrl,
+          })
+          .select('id')
+          .single();
+      final m = _map(res);
+      final id = _int(m['id']);
+      if (id == null) return ('Respuesta sin id', null);
+      return (null, id);
+    } catch (e, st) {
+      debugPrint('CloudSyncService.insertCategoryRowInCloud: $e');
+      debugPrint('$st');
+      return (e.toString(), null);
+    }
+  }
 
   static Future<String?> upsertCategoryToCloud({
     required int id,
@@ -1307,6 +2357,46 @@ class CloudSyncService {
     } catch (e) {
       debugPrint('CloudSyncService.deleteProductFromCloud: $e');
       return e.toString();
+    }
+  }
+
+  /// Inserts a new supply row in Supabase and returns its id (cloud-first create).
+  static Future<(String? error, int? id)> insertSupplyRowInCloud({
+    required String name,
+    required String unit,
+    required double currentStock,
+    double costPerUnit = 0,
+    double reorderPoint = 0,
+    String? category,
+    String stockCountMode = 'quantity',
+    String? qualitativeLevel,
+  }) async {
+    if (!SupabaseService.isInitialized) {
+      return ('Supabase no inicializado', null);
+    }
+    try {
+      final res = await SupabaseService.instance.client
+          .from('supplies')
+          .insert(<String, dynamic>{
+            'name': name,
+            'unit': unit,
+            'current_stock': currentStock,
+            'cost_per_unit': costPerUnit,
+            'reorder_point': reorderPoint,
+            'category': category,
+            'stock_count_mode': stockCountMode,
+            'qualitative_level': qualitativeLevel,
+          })
+          .select('id')
+          .single();
+      final m = _map(res);
+      final id = _int(m['id']);
+      if (id == null) return ('Respuesta sin id', null);
+      return (null, id);
+    } catch (e, st) {
+      debugPrint('CloudSyncService.insertSupplyRowInCloud: $e');
+      debugPrint('$st');
+      return (e.toString(), null);
     }
   }
 
@@ -1579,8 +2669,10 @@ class CloudSyncService {
     }
   }
 
-  /// Pushes local master data to Supabase (use once to make cloud the source of truth).
-  /// Overwrites cloud tables: categories, supplies, products, recipes, modifiers, bundles.
+  /// **Migration / recovery only.** Pushes local master data to Supabase and overwrites
+  /// cloud tables: categories, supplies, products, recipes, modifiers, bundles.
+  /// Not used in normal cloud-first operation (catalog is pulled via [syncFromCloud]).
+  @Deprecated('Use syncFromCloud / admin cloud-first writes; keep for one-off data migration only.')
   static Future<String?> pushToCloud(AppDatabase db) async {
     if (!SupabaseService.isInitialized) return 'Supabase no configurado';
     try {
@@ -1590,7 +2682,15 @@ class CloudSyncService {
       if (categories.isEmpty) return 'No hay categorías locales';
 
       // Truncate in FK order: dependents first (modifier_options, product_modifiers), then modifier_groups, then rest. Do not truncate products/supplies/categories (sale_items reference products).
-      await _truncateCloud(client, ['bundle_items', 'bundles', 'modifier_options', 'product_modifiers', 'modifier_groups', 'recipes']);
+      await _truncateCloud(client, [
+        'discounts',
+        'bundle_items',
+        'bundles',
+        'modifier_options',
+        'product_modifiers',
+        'modifier_groups',
+        'recipes',
+      ]);
 
       // Upsert categories, supplies, products (update prices/names in place; no delete so sale_items FK is not violated)
       final categoryRows = categories.map((c) => {
@@ -1694,6 +2794,17 @@ class CloudSyncService {
         });
       }
 
+      final discList = await (db.select(db.discounts)..orderBy([(d) => OrderingTerm.asc(d.id)])).get();
+      for (final d in discList) {
+        await client.from('discounts').insert({
+          'id': d.id,
+          'code': d.code,
+          'percentage': d.percentage,
+          'description': d.description,
+          'is_active': d.isActive,
+        });
+      }
+
       await client.rpc('sync_sequences');
       // IDs are aligned: local id = cloud id. Save identity maps.
       final productMap = {for (final p in products) p.id: p.id};
@@ -1704,6 +2815,104 @@ class CloudSyncService {
     } catch (e, st) {
       debugPrint('CloudSyncService.pushToCloud: $e');
       debugPrint('$st');
+      return e.toString();
+    }
+  }
+
+  /// Maps a Supabase `discounts` row to Drift [Discount].
+  static Discount discountFromSupabaseRow(Map<String, dynamic> row) {
+    final rawDesc = row['description'];
+    final desc = rawDesc is String ? rawDesc.trim() : '';
+    return Discount(
+      id: _int(row['id'])!,
+      code: row['code'] as String,
+      percentage: _double(row['percentage']),
+      description: desc.isEmpty ? 'Discount' : desc,
+      isActive: _bool(row['is_active']),
+    );
+  }
+
+  /// Loads all discount rows from Supabase (empty if offline / not configured).
+  static Future<List<Discount>> fetchDiscountsFromCloud() async {
+    if (!isEnabled) return [];
+    try {
+      final raw = await SupabaseService.instance.client.from('discounts').select('*').order('id');
+      return _list(raw).map((r) => discountFromSupabaseRow(_map(r))).toList();
+    } catch (e) {
+      debugPrint('CloudSyncService.fetchDiscountsFromCloud: $e');
+      return [];
+    }
+  }
+
+  /// Active discounts only, ordered for display.
+  static Future<List<Discount>> fetchActiveDiscountsFromCloud() async {
+    final all = await fetchDiscountsFromCloud();
+    all.sort((a, b) {
+      final c = a.description.toLowerCase().compareTo(b.description.toLowerCase());
+      if (c != 0) return c;
+      return a.code.compareTo(b.code);
+    });
+    return all.where((d) => d.isActive).toList();
+  }
+
+  /// Inserts a new discount in Supabase (cloud id returned). For web admin without Drift.
+  static Future<(String?, Discount?)> insertDiscountToCloud({
+    required String code,
+    required double percentage,
+    required String description,
+    required bool isActive,
+  }) async {
+    if (!isEnabled) return ('Supabase no configurado', null);
+    final trimmed = code.trim().toUpperCase();
+    if (trimmed.isEmpty) return ('Código vacío', null);
+    try {
+      final row = await SupabaseService.instance.client
+          .from('discounts')
+          .insert({
+            'code': trimmed,
+            'percentage': percentage,
+            'description': description.trim().isEmpty ? null : description.trim(),
+            'is_active': isActive,
+          })
+          .select('*')
+          .single();
+      return (null, discountFromSupabaseRow(_map(row)));
+    } catch (e) {
+      return (e.toString(), null);
+    }
+  }
+
+  /// Upserts a discount with explicit [id] (matches local Drift id after insert).
+  static Future<String?> upsertDiscountToCloud({
+    required int id,
+    required String code,
+    required double percentage,
+    required String description,
+    required bool isActive,
+  }) async {
+    if (!isEnabled) return 'Supabase no configurado';
+    final trimmed = code.trim().toUpperCase();
+    if (trimmed.isEmpty) return 'Código vacío';
+    try {
+      await SupabaseService.instance.client.from('discounts').upsert({
+        'id': id,
+        'code': trimmed,
+        'percentage': percentage,
+        'description': description.trim().isEmpty ? null : description.trim(),
+        'is_active': isActive,
+      }, onConflict: 'id');
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteDiscountFromCloud(int id) async {
+    if (!isEnabled) return 'Supabase no configurado';
+    try {
+      await SupabaseService.instance.client.from('discounts').delete().eq('id', id);
+      return null;
+    } catch (e) {
       return e.toString();
     }
   }
@@ -1756,6 +2965,31 @@ class CloudSyncService {
   }
 }
 
+/// Fila de [pos_registers] en Supabase.
+/// Fila de [stores] en Supabase.
+class CloudStoreRecord {
+  const CloudStoreRecord({required this.id, required this.name});
+
+  final int id;
+  final String name;
+}
+
+class CloudPosRegisterRecord {
+  const CloudPosRegisterRecord({
+    required this.id,
+    required this.storeId,
+    required this.label,
+    required this.displayOrder,
+    required this.active,
+  });
+
+  final int id;
+  final int storeId;
+  final String label;
+  final int displayOrder;
+  final bool active;
+}
+
 /// Fila de [pos_devices] en Supabase.
 class CloudPosDeviceRecord {
   const CloudPosDeviceRecord({
@@ -1763,8 +2997,11 @@ class CloudPosDeviceRecord {
     required this.deviceName,
     required this.lastSeenAt,
     required this.storeId,
+    this.registerId,
     this.appVersion,
     this.platform,
+    this.remoteUpdateRequestedAt,
+    this.remoteUpdateMessage,
   });
 
   final String deviceId;
@@ -1772,8 +3009,12 @@ class CloudPosDeviceRecord {
   final DateTime lastSeenAt;
   /// [stores.id] en Supabase.
   final int storeId;
+  /// [pos_registers.id] si el terminal está asignado a un cajón.
+  final int? registerId;
   final String? appVersion;
   final String? platform;
+  final DateTime? remoteUpdateRequestedAt;
+  final String? remoteUpdateMessage;
 }
 
 class CloudShiftClosureBrief {
@@ -1801,8 +3042,11 @@ class CloudShiftSummary {
     this.endTime,
     required this.startingFund,
     required this.storeId,
+    this.storeName,
     this.deviceId,
     this.deviceName,
+    this.registerId,
+    this.registerLabel,
     this.closures = const [],
   });
 
@@ -1811,8 +3055,13 @@ class CloudShiftSummary {
   final DateTime? endTime;
   final double startingFund;
   final int storeId;
+  /// From join `stores(name)` when listing shifts for admin.
+  final String? storeName;
   final String? deviceId;
   final String? deviceName;
+  /// [pos_registers.id] en Supabase (cajón lógico).
+  final int? registerId;
+  final String? registerLabel;
   final List<CloudShiftClosureBrief> closures;
 
   bool get isOpen => endTime == null;

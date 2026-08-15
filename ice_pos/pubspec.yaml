@@ -16,8 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+2
-
+version: 5.0.0+90
 environment:
   # Flutter 3.35 = Dart 3.9 (riverpod_generator 4.x requiere analyzer 8.2+ = SDK 3.9+)
   sdk: '>=3.9.0 <4.0.0'
@@ -63,6 +62,11 @@ dependencies:
   fl_chart: ^0.70.2
   intl: ^0.20.2
   connectivity_plus: ^6.1.4
+  synchronized: ^3.3.0
+  firebase_core: ^3.13.0
+  firebase_messaging: ^15.2.5
+  flutter_local_notifications: ^18.0.1
+  speech_to_text: ^7.0.0
 
 dev_dependencies:
   flutter_test:
@@ -100,6 +104,7 @@ flutter:
     # Para desarrollo con .env local, añade temporalmente:  - .env
     - assets/data/
     - assets/images/category_placeholder.png
+    - assets/images/flavors/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

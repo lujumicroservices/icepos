@@ -47,6 +47,22 @@ class AppLocalizations {
   String get syncingFromCloud => _('syncingFromCloud');
   String get syncSuccess => _('syncSuccess');
   String get syncError => _('syncError');
+  String get syncStepStarting => _('syncStepStarting');
+  String get syncStepDownloadingCategories => _('syncStepDownloadingCategories');
+  String get syncStepDownloadingProducts => _('syncStepDownloadingProducts');
+  String get syncStepDownloadingRecipes => _('syncStepDownloadingRecipes');
+  String get syncStepDownloadingBundles => _('syncStepDownloadingBundles');
+  String get syncStepSavingLocal => _('syncStepSavingLocal');
+  String get syncStepSavingCategories => _('syncStepSavingCategories');
+  String get syncStepSavingProducts => _('syncStepSavingProducts');
+  String get syncStepSavingRecipes => _('syncStepSavingRecipes');
+  String get syncStepSavingBundles => _('syncStepSavingBundles');
+  String get syncStepFinishing => _('syncStepFinishing');
+  String syncStepProgress(String stepLabel) =>
+      _('syncStepProgress').replaceAll('{step}', stepLabel);
+  String catalogMenuCacheLastSync(String when) =>
+      _('catalogMenuCacheLastSync').replaceAll('{when}', when);
+  String get catalogMenuCacheNever => _('catalogMenuCacheNever');
   String get offlineBanner => _('offlineBanner');
   String get offlineRequiresInternet => _('offlineRequiresInternet');
   String get sendingToCloud => _('sendingToCloud');
@@ -109,6 +125,18 @@ class AppLocalizations {
   String get versionBuild => _('versionBuild');
   String get downloadHint => _('downloadHint');
   String get downloadLinkCopied => _('downloadLinkCopied');
+  String get alreadyLatestVersion => _('alreadyLatestVersion');
+  String get remoteUpdateRequestedTitle => _('remoteUpdateRequestedTitle');
+  String get remoteUpdateRequestedBodyDefault => _('remoteUpdateRequestedBodyDefault');
+  String get remoteUpdateCheckNow => _('remoteUpdateCheckNow');
+  String get remoteUpdateAckLater => _('remoteUpdateAckLater');
+  String get cloudRequestAppUpdate => _('cloudRequestAppUpdate');
+  String get cloudRequestAppUpdateSubtitle => _('cloudRequestAppUpdateSubtitle');
+  String get cloudClearUpdateRequest => _('cloudClearUpdateRequest');
+  String get cloudUpdateRequestSent => _('cloudUpdateRequestSent');
+  String get cloudUpdateRequestCleared => _('cloudUpdateRequestCleared');
+  String get cloudUpdateRequestMessageHint => _('cloudUpdateRequestMessageHint');
+  String get cloudUpdatePendingBadge => _('cloudUpdatePendingBadge');
 
   // Seguridad / roles / login
   String get login => _('login');
@@ -149,6 +177,7 @@ class AppLocalizations {
   String get ticketSent => _('ticketSent');
   String get printError => _('printError');
   String get printingTicket => _('printingTicket');
+  String get reprintTicket => _('reprintTicket');
   String get saleCompletePrintError => _('saleCompletePrintError');
   // Checkout dialog
   String get amountReceived => _('amountReceived');
@@ -161,6 +190,15 @@ class AppLocalizations {
   String get debit => _('debit');
   String get credit => _('credit');
   String get verifyTransfer => _('verifyTransfer');
+  String get singlePayment => _('singlePayment');
+  String get splitPayment => _('splitPayment');
+  String get addPaymentMethod => _('addPaymentMethod');
+  String get splitPaymentRemaining => _('splitPaymentRemaining');
+  String get splitPaymentComplete => _('splitPaymentComplete');
+  String get splitPaymentOverpaid => _('splitPaymentOverpaid');
+  String get amount => _('amount');
+  String get payment => _('payment');
+  String get remove => _('remove');
   String get errorLoading => _('errorLoading');
   String get discountPercent => _('discountPercent');
   String get productDiscountLabel => _('productDiscountLabel');
@@ -173,6 +211,15 @@ class AppLocalizations {
   String get webAdminHomeTitle => _('webAdminHomeTitle');
   String get webAdminHomeSubtitle => _('webAdminHomeSubtitle');
   String get webQuickAccess => _('webQuickAccess');
+  String get drawerSectionGeneral => _('drawerSectionGeneral');
+  String get drawerSectionDeviceCloud => _('drawerSectionDeviceCloud');
+  String get drawerSectionCloudData => _('drawerSectionCloudData');
+  String get drawerSectionCatalog => _('drawerSectionCatalog');
+  String get drawerSectionSalesReports => _('drawerSectionSalesReports');
+  String get drawerSectionOrganization => _('drawerSectionOrganization');
+  String get drawerSectionSupport => _('drawerSectionSupport');
+  String get drawerSectionRegisterOps => _('drawerSectionRegisterOps');
+  String get drawerSectionAdvanced => _('drawerSectionAdvanced');
   String get bundleManagement => _('bundleManagement');
   String get closeShift => _('closeShift');
   String get printer => _('printer');
@@ -241,10 +288,51 @@ class AppLocalizations {
   String get reconcileSearchHint => _('reconcileSearchHint');
   String get reconcileSearchNoResults => _('reconcileSearchNoResults');
   String get salesHistory => _('salesHistory');
+  String get cancelMovement => _('cancelMovement');
+  String get cancelMovementConfirmBody => _('cancelMovementConfirmBody');
   String get cancelSale => _('cancelSale');
   String get cancelSaleConfirmTitle => _('cancelSaleConfirmTitle');
   String get cancelSaleConfirmBody => _('cancelSaleConfirmBody');
   String get saleCancelled => _('saleCancelled');
+  String get pendingCashierApprovalsTitle => _('pendingCashierApprovalsTitle');
+  String get pendingCashierApprovalsSubtitle =>
+      _('pendingCashierApprovalsSubtitle');
+  String get pendingApprovalKindMovement => _('pendingApprovalKindMovement');
+  String get pendingApprovalKindSaleCancel => _('pendingApprovalKindSaleCancel');
+  String get pendingApprovalKindShiftClose => _('pendingApprovalKindShiftClose');
+  String get pendingApprovalApprove => _('pendingApprovalApprove');
+  String get pendingApprovalReject => _('pendingApprovalReject');
+  String get pendingApprovalEmpty => _('pendingApprovalEmpty');
+  String get pendingApprovalQueued => _('pendingApprovalQueued');
+  String get pendingApprovalDuplicateShiftClose =>
+      _('pendingApprovalDuplicateShiftClose');
+  String get pendingApprovalRejectedSnack => _('pendingApprovalRejectedSnack');
+  String get pendingApprovalShiftIdLabel => _('pendingApprovalShiftIdLabel');
+  String get pendingApprovalExpectedCashLabel =>
+      _('pendingApprovalExpectedCashLabel');
+  String get pendingApprovalCashDifferenceLabel =>
+      _('pendingApprovalCashDifferenceLabel');
+  String pendingApprovalDeviceLine(String deviceId) =>
+      _('pendingApprovalDeviceLine').replaceAll('{id}', deviceId);
+  String pendingApprovalsDrawerSubtitle(int count) =>
+      _('pendingApprovalsDrawerSubtitle')
+          .replaceAll('{count}', '$count');
+  String get salesHistoryAllDays => _('salesHistoryAllDays');
+  String get salesHistoryPickDay => _('salesHistoryPickDay');
+  String salesHistorySalesOnDate(String formattedDate) =>
+      _('salesHistorySalesOnDate').replaceAll('{date}', formattedDate);
+
+  String get platformOrdersTitle => _('platformOrdersTitle');
+  String get platformOrdersSubtitle => _('platformOrdersSubtitle');
+  String get platformOrdersUberEatsSection => _('platformOrdersUberEatsSection');
+  String get platformOrdersByDayHint => _('platformOrdersByDayHint');
+  String get platformOrdersRequiresCloud => _('platformOrdersRequiresCloud');
+  String get platformOrdersLoadError => _('platformOrdersLoadError');
+  String get platformOrdersEmptyUberEats => _('platformOrdersEmptyUberEats');
+  String get platformOrdersEmptyHint => _('platformOrdersEmptyHint');
+  String get platformOrdersNoSummary => _('platformOrdersNoSummary');
+  String platformOrdersDayTotal(int count) =>
+      _('platformOrdersDayTotal').replaceAll('{count}', '$count');
 
   // Reports
   String get reports => _('reports');
@@ -290,9 +378,83 @@ class AppLocalizations {
   String get movements => _('movements');
   String get movementsCajaNetLabel => _('movementsCajaNetLabel');
   String get movementsSubtitle => _('movementsSubtitle');
+  String get movementLinkShift => _('movementLinkShift');
+  String get movementShiftNone => _('movementShiftNone');
+  String movementShiftLabel(int shiftId) =>
+      _('movementShiftLabel').replaceAll('{id}', '$shiftId');
   String get entry => _('entry');
   String get exit => _('exit');
   String get addMovement => _('addMovement');
+  String get staffTasksTitle => _('staffTasksTitle');
+  String get staffTasksAdminTitle => _('staffTasksAdminTitle');
+  String get staffTasksMyTitle => _('staffTasksMyTitle');
+  String get staffTasksSubtitle => _('staffTasksSubtitle');
+  String get staffTaskNew => _('staffTaskNew');
+  String get staffTaskEdit => _('staffTaskEdit');
+  String get staffTaskTitleLabel => _('staffTaskTitleLabel');
+  String get staffTaskDescriptionLabel => _('staffTaskDescriptionLabel');
+  String get staffTaskScheduledAt => _('staffTaskScheduledAt');
+  String get staffTaskNotifyAt => _('staffTaskNotifyAt');
+  String get staffTaskNotifyNow => _('staffTaskNotifyNow');
+  String get staffTaskCancel => _('staffTaskCancel');
+  String get staffTaskCancelled => _('staffTaskCancelled');
+  String get staffTaskMarkDone => _('staffTaskMarkDone');
+  String get staffTaskMarkSkipped => _('staffTaskMarkSkipped');
+  String get staffTaskComment => _('staffTaskComment');
+  String get staffTaskCommentOptional => _('staffTaskCommentOptional');
+  String get staffTaskStatusPending => _('staffTaskStatusPending');
+  String get staffTaskStatusDone => _('staffTaskStatusDone');
+  String get staffTaskStatusSkipped => _('staffTaskStatusSkipped');
+  String get staffTaskDue => _('staffTaskDue');
+  String get staffTaskResponses => _('staffTaskResponses');
+  String get staffTaskNoTasks => _('staffTaskNoTasks');
+  String get staffTaskCloudRequired => _('staffTaskCloudRequired');
+  String get staffTaskSaved => _('staffTaskSaved');
+  String get staffTaskSendDueReminders => _('staffTaskSendDueReminders');
+  String staffTaskRemindersResult(int tasks, int push) =>
+      _('staffTaskRemindersResult')
+          .replaceAll('{tasks}', '$tasks')
+          .replaceAll('{push}', '$push');
+  String staffTaskDueAlert(int count) =>
+      _('staffTaskDueAlert').replaceAll('{n}', '$count');
+  String get staffTaskStatusInProgress => _('staffTaskStatusInProgress');
+  String get staffTaskStatusScheduled => _('staffTaskStatusScheduled');
+  String get staffTaskMarkInProgress => _('staffTaskMarkInProgress');
+  String get staffTaskMarkOmitted => _('staffTaskMarkOmitted');
+  String get staffTaskCommentRequired => _('staffTaskCommentRequired');
+  String get staffTaskInvasiveTitle => _('staffTaskInvasiveTitle');
+  String staffTaskInvasiveSubtitle(int count) =>
+      _('staffTaskInvasiveSubtitle').replaceAll('{n}', '$count');
+  String staffTaskPendingAlertTooltip(int count) =>
+      _('staffTaskPendingAlertTooltip').replaceAll('{n}', '$count');
+  String get voiceMicTooltip => _('voiceMicTooltip');
+  String get voiceListening => _('voiceListening');
+  String get voiceListeningHint => _('voiceListeningHint');
+  String get voiceContinue => _('voiceContinue');
+  String get voiceConfirmTitle => _('voiceConfirmTitle');
+  String get voiceConfirmIncomplete => _('voiceConfirmIncomplete');
+  String get voiceAmountLabel => _('voiceAmountLabel');
+  String get voiceRegister => _('voiceRegister');
+  String get voiceInvalidAmount => _('voiceInvalidAmount');
+  String get voiceMissingReason => _('voiceMissingReason');
+  String get voiceCommandNotUnderstood => _('voiceCommandNotUnderstood');
+  String get voiceMicPermissionDenied => _('voiceMicPermissionDenied');
+  String get voiceSttUnavailable => _('voiceSttUnavailable');
+  String get voiceTextFallbackTitle => _('voiceTextFallbackTitle');
+  String get voiceTextFallbackHint => _('voiceTextFallbackHint');
+  String get staffTaskInvasiveDismiss => _('staffTaskInvasiveDismiss');
+  String get staffTaskManageResponses => _('staffTaskManageResponses');
+  String get staffTaskNoResponsesYet => _('staffTaskNoResponsesYet');
+  String get staffTaskAdminChangeStatus => _('staffTaskAdminChangeStatus');
+  String get staffTaskAdminStatusUpdated => _('staffTaskAdminStatusUpdated');
+  String get staffTaskEmployee => _('staffTaskEmployee');
+  String get quickSalesSummaryTitle => _('quickSalesSummaryTitle');
+  String get quickSalesByShift => _('quickSalesByShift');
+  String get quickCategoryDistribution => _('quickCategoryDistribution');
+  String get quickTopProductsToday => _('quickTopProductsToday');
+  String get quickTopProducts7d => _('quickTopProducts7d');
+  String get quickTopProducts30d => _('quickTopProducts30d');
+  String get quickNoData => _('quickNoData');
   String get concept => _('concept');
   String get accountCash => _('accountCash');
   String get accountBank => _('accountBank');
@@ -336,6 +498,18 @@ class AppLocalizations {
   String get codeApplied => _('codeApplied');
   String get invalidCode => _('invalidCode');
   String get discountAppliedProduct => _('discountAppliedProduct');
+  String get discountCatalogTitle => _('discountCatalogTitle');
+  String get discountPickFromList => _('discountPickFromList');
+  String get discountDisplayNameHint => _('discountDisplayNameHint');
+  String get discountCatalogEmpty => _('discountCatalogEmpty');
+  String discountCatalogAppliedToast(String name) =>
+      _('discountCatalogAppliedToast').replaceAll('{name}', name);
+  String get discountInactiveLabel => _('discountInactiveLabel');
+  String get discountShowAtRegister => _('discountShowAtRegister');
+  String get discountSave => _('discountSave');
+  String get discountDeleteConfirmTitle => _('discountDeleteConfirmTitle');
+  String get discountDeleteAction => _('discountDeleteAction');
+  String get discountCatalogSaved => _('discountCatalogSaved');
 
   // Reset / Vaciar
   String get clearLocalSalesConfirmTitle => _('clearLocalSalesConfirmTitle');
@@ -365,6 +539,28 @@ class AppLocalizations {
   String get submitCount => _('submitCount');
   String get next => _('next');
   String get closureSummary => _('closureSummary');
+  String closeShiftTurnIdLine(int shiftId) =>
+      _('closeShiftTurnIdLine').replaceAll('{id}', '$shiftId');
+  String closeShiftTurnIdsLocalCloud(int localId, int cloudId) =>
+      _('closeShiftTurnIdsLocalCloud')
+          .replaceAll('{l}', '$localId')
+          .replaceAll('{c}', '$cloudId');
+  String get supabaseIdShort => _('supabaseIdShort');
+  String get closeShiftTurnIdHint => _('closeShiftTurnIdHint');
+  String get closeShiftCloudLoading => _('closeShiftCloudLoading');
+  String get closeShiftCloudSectionTitle => _('closeShiftCloudSectionTitle');
+  String get closeShiftCloudNoNetwork => _('closeShiftCloudNoNetwork');
+  String closeShiftCloudQueryError(String msg) =>
+      _('closeShiftCloudQueryError').replaceAll('{msg}', msg);
+  String get closeShiftCloudRowMissing => _('closeShiftCloudRowMissing');
+  String closeShiftCloudAlreadyClosed(String at) =>
+      _('closeShiftCloudAlreadyClosed').replaceAll('{at}', at);
+  String closeShiftCloudOpenMismatch(String localId, String openId) =>
+      _('closeShiftCloudOpenMismatch')
+          .replaceAll('{local}', localId)
+          .replaceAll('{open}', openId);
+  String get closeShiftCloudAligned => _('closeShiftCloudAligned');
+  String get closeShiftCloudNoOpenForDevice => _('closeShiftCloudNoOpenForDevice');
   String get closeCut => _('closeCut');
   String get goBack => _('goBack');
   String get notesOptional => _('notesOptional');
@@ -379,6 +575,76 @@ class AppLocalizations {
   String get closureIncorrectCardOnly => _('closureIncorrectCardOnly');
   String get closureIncorrectCashAndCard => _('closureIncorrectCashAndCard');
   String get differenceInCash => _('differenceInCash');
+  String get closeShiftNoOpen => _('closeShiftNoOpen');
+  String get closeShiftNoOpenHint => _('closeShiftNoOpenHint');
+  String get openShiftButton => _('openShiftButton');
+  String get openShiftStartingFundTitle => _('openShiftStartingFundTitle');
+  String get openShiftStartingFundBody => _('openShiftStartingFundBody');
+  String get posRegisterTitle => _('posRegisterTitle');
+  String get posRegisterSubtitle => _('posRegisterSubtitle');
+  String get posRegisterChooseHint => _('posRegisterChooseHint');
+  String get posRegisterSaved => _('posRegisterSaved');
+  String get continueOpenShiftButton => _('continueOpenShiftButton');
+  String get continueOpenShiftTitle => _('continueOpenShiftTitle');
+  String get continueOpenShiftEmpty => _('continueOpenShiftEmpty');
+  String get continueOpenShiftLoading => _('continueOpenShiftLoading');
+  String closeShiftCloudCancelledApplied(int count) =>
+      _('closeShiftCloudCancelledApplied').replaceAll('{count}', '$count');
+  String continueOpenShiftLine(String label, String shiftId, String started) =>
+      _('continueOpenShiftLine')
+          .replaceAll('{label}', label)
+          .replaceAll('{shift}', shiftId)
+          .replaceAll('{started}', started);
+  String get posRequiresOpenShiftBanner => _('posRequiresOpenShiftBanner');
+  String get posRequiresOpenShiftAction => _('posRequiresOpenShiftAction');
+  String get posTopSellersStrip => _('posTopSellersStrip');
+  String get posTopSellersEmpty => _('posTopSellersEmpty');
+
+  String get retry => _('retry');
+  String get storesRegistersAdminTitle => _('storesRegistersAdminTitle');
+  String get storesAdminAddStoreTitle => _('storesAdminAddStoreTitle');
+  String get storesAdminStoreNameLabel => _('storesAdminStoreNameLabel');
+  String get storesAdminEmpty => _('storesAdminEmpty');
+  String storesAdminStoreIdLine(int id) =>
+      _('storesAdminStoreIdLine').replaceAll('{id}', '$id');
+  String get storesAdminSaved => _('storesAdminSaved');
+  String get storesAdminEditStoreTitle => _('storesAdminEditStoreTitle');
+  String get storesAdminRegistersSubtitle => _('storesAdminRegistersSubtitle');
+  String get storesAdminAddRegisterTitle => _('storesAdminAddRegisterTitle');
+  String get storesAdminRegisterLabelHint => _('storesAdminRegisterLabelHint');
+  String get storesAdminEditRegisterTitle => _('storesAdminEditRegisterTitle');
+  String get storesAdminDisplayOrderLabel => _('storesAdminDisplayOrderLabel');
+  String get storesAdminNoRegisters => _('storesAdminNoRegisters');
+  String storesAdminRegisterIdLine(int id) =>
+      _('storesAdminRegisterIdLine').replaceAll('{id}', '$id');
+  String get storesAdminOrderLabel => _('storesAdminOrderLabel');
+  String get storesAdminActive => _('storesAdminActive');
+  String get storesAdminInactive => _('storesAdminInactive');
+  String get storesAdminDeactivate => _('storesAdminDeactivate');
+  String get storesAdminActivate => _('storesAdminActivate');
+
+  String get adminLinkOpenShiftTitle => _('adminLinkOpenShiftTitle');
+  String get adminLinkOpenShiftSubtitle => _('adminLinkOpenShiftSubtitle');
+  String get adminLinkOpenShiftLoading => _('adminLinkOpenShiftLoading');
+  String get adminLinkOpenShiftEmpty => _('adminLinkOpenShiftEmpty');
+  String get adminLinkOpenShiftRequiresLocalDb => _('adminLinkOpenShiftRequiresLocalDb');
+  String get adminLinkOpenShiftConfirmTitle => _('adminLinkOpenShiftConfirmTitle');
+  String adminLinkOpenShiftConfirmBody(int shiftId, String store, String register) =>
+      _('adminLinkOpenShiftConfirmBody')
+          .replaceAll('{id}', '$shiftId')
+          .replaceAll('{store}', store)
+          .replaceAll('{register}', register);
+  String get adminLinkOpenShiftUnlinkNote => _('adminLinkOpenShiftUnlinkNote');
+  String get adminLinkOpenShiftLinking => _('adminLinkOpenShiftLinking');
+  String get adminLinkOpenShiftLinkedOk => _('adminLinkOpenShiftLinkedOk');
+  String adminLinkOpenShiftLine(String store, String register, String shiftId, String started) =>
+      _('adminLinkOpenShiftLine')
+          .replaceAll('{store}', store)
+          .replaceAll('{register}', register)
+          .replaceAll('{shift}', shiftId)
+          .replaceAll('{started}', started);
+  String adminLinkOpenShiftDeviceLine(String device) =>
+      _('adminLinkOpenShiftDeviceLine').replaceAll('{device}', device);
 
   static const Map<String, String> _es = {
     'appTitle': 'ICE POS',
@@ -417,6 +683,20 @@ class AppLocalizations {
     'syncingFromCloud': 'Sincronizando desde la nube...',
     'syncSuccess': 'Sincronización correcta. Datos locales actualizados desde la nube.',
     'syncError': 'Error al sincronizar',
+    'syncStepStarting': 'Iniciando sincronización…',
+    'syncStepDownloadingCategories': 'Descargando categorías…',
+    'syncStepDownloadingProducts': 'Descargando productos e insumos…',
+    'syncStepDownloadingRecipes': 'Descargando recetas y modificadores…',
+    'syncStepDownloadingBundles': 'Descargando bundles y descuentos…',
+    'syncStepSavingLocal': 'Preparando base local…',
+    'syncStepSavingCategories': 'Guardando categorías…',
+    'syncStepSavingProducts': 'Guardando productos e insumos…',
+    'syncStepSavingRecipes': 'Guardando recetas y modificadores…',
+    'syncStepSavingBundles': 'Guardando bundles y descuentos…',
+    'syncStepFinishing': 'Finalizando…',
+    'syncStepProgress': 'Paso {step}',
+    'catalogMenuCacheLastSync': 'Menú en caché (nube): {when}',
+    'catalogMenuCacheNever': 'Menú en caché: aún no sincronizado desde la nube',
     'offlineBanner':
         'Sin conexión: puedes cobrar y usar caja; el menú y administración solo con internet.',
     'offlineRequiresInternet':
@@ -454,7 +734,7 @@ class AppLocalizations {
     'download': 'Descargar',
     'operationLogTitle': 'Registro de operaciones',
     'operationLogSubtitle':
-        'Errores de venta y sincronización con la nube (solo en este dispositivo).',
+        'Nivel critical = fallo de escritura en base local o nube. También: venta, sync al arranque, Flutter/async, Riverpod. Solo en este dispositivo.',
     'operationLogEmpty':
         'No hay entradas todavía. Si una venta falla o la nube no guarda la venta, aparecerá aquí.',
     'shiftCloseDiagnosticsTitle': 'Diagnóstico cierre de caja',
@@ -492,6 +772,20 @@ class AppLocalizations {
     'versionBuild': 'Versión',
     'downloadHint': 'Pulsa "Descargar" para abrir el enlace e instalar la nueva versión.',
     'downloadLinkCopied': 'Enlace copiado. Pégalo en el navegador para descargar.',
+    'alreadyLatestVersion': 'Ya tienes la última versión.',
+    'remoteUpdateRequestedTitle': 'Actualización solicitada',
+    'remoteUpdateRequestedBodyDefault':
+        'El administrador pide que esta caja compruebe e instale la última versión cuando pueda.',
+    'remoteUpdateCheckNow': 'Comprobar actualización',
+    'remoteUpdateAckLater': 'Más tarde',
+    'cloudRequestAppUpdate': 'Solicitar actualización en la caja',
+    'cloudRequestAppUpdateSubtitle':
+        'La próxima vez que abran la app o vuelvan a esta pantalla verán un aviso (requiere internet en la caja).',
+    'cloudClearUpdateRequest': 'Quitar solicitud',
+    'cloudUpdateRequestSent': 'Solicitud registrada para este dispositivo.',
+    'cloudUpdateRequestCleared': 'Solicitud quitada.',
+    'cloudUpdateRequestMessageHint': 'Mensaje opcional para la caja',
+    'cloudUpdatePendingBadge': 'Actualización pendiente',
     'login': 'Iniciar sesión',
     'username': 'Usuario',
     'emailOrUsername': 'Usuario o correo',
@@ -510,6 +804,8 @@ class AppLocalizations {
     'salesToday': 'Ventas del día',
     'employeeMode': 'Modo empleado',
     'pointOfSale': 'Punto de venta',
+    'quickSearchHint': 'Buscar por nombre…',
+    'searchNoResults': 'Sin resultados',
     'cart': 'Carrito',
     'cartEmpty': 'Carrito vacío',
     'checkout': 'Cobrar',
@@ -526,6 +822,7 @@ class AppLocalizations {
     'ticketSent': 'Ticket enviado a impresora',
     'printError': 'Error al imprimir',
     'printingTicket': 'Imprimiendo ticket...',
+    'reprintTicket': 'Reimprimir ticket',
     'saleCompletePrintError': 'Venta completada. No se pudo imprimir el ticket',
     'amountReceived': 'Cantidad recibida',
     'change': 'Cambio',
@@ -537,6 +834,15 @@ class AppLocalizations {
     'debit': 'Débito',
     'credit': 'Crédito',
     'verifyTransfer': 'Verifica la transferencia en tu app bancaria antes de confirmar.',
+    'singlePayment': 'Un método',
+    'splitPayment': 'Dividido',
+    'addPaymentMethod': 'Agregar pago',
+    'splitPaymentRemaining': 'Falta por cubrir',
+    'splitPaymentComplete': 'Total cubierto',
+    'splitPaymentOverpaid': 'Sobra',
+    'amount': 'Monto',
+    'payment': 'Pago',
+    'remove': 'Quitar',
     'errorLoading': 'Error al cargar',
     'discountPercent': 'Descuento',
     'productDiscountLabel': '% en',
@@ -548,6 +854,15 @@ class AppLocalizations {
     'webAdminHomeSubtitle':
         'Gestiona catálogo, inventario y ventas conectado a Supabase. Usa el menú lateral para más opciones.',
     'webQuickAccess': 'Accesos rápidos',
+    'drawerSectionGeneral': 'General',
+    'drawerSectionDeviceCloud': 'Dispositivo y nube',
+    'drawerSectionCloudData': 'Nube y datos',
+    'drawerSectionCatalog': 'Catálogo e inventario',
+    'drawerSectionSalesReports': 'Ventas e informes',
+    'drawerSectionOrganization': 'Organización',
+    'drawerSectionSupport': 'Soporte y diagnóstico',
+    'drawerSectionRegisterOps': 'Caja y equipo',
+    'drawerSectionAdvanced': 'Avanzado',
     'bundleManagement': 'Bundles',
     'closeShift': 'Cierre de caja',
     'printer': 'Impresora',
@@ -604,9 +919,45 @@ class AppLocalizations {
     'reconcileSearchNoResults': 'Ningún insumo coincide con la búsqueda.',
     'salesHistory': 'Historial de ventas',
     'cancelSale': 'Cancelar venta',
+    'cancelMovement': 'Cancelar movimiento',
+    'cancelMovementConfirmBody': 'El movimiento dejará de contar en el corte de caja. Esta acción no se puede deshacer.',
     'cancelSaleConfirmTitle': 'Cancelar venta',
     'cancelSaleConfirmBody': 'Se borrará esta venta solo en este dispositivo. El inventario no se revierte (si fue una venta de prueba, ajusta el stock manualmente si hace falta).',
     'saleCancelled': 'Venta cancelada',
+    'pendingCashierApprovalsTitle': 'Aprobaciones de cajero',
+    'pendingCashierApprovalsSubtitle':
+        'Movimientos, cancelaciones de venta y cierres con faltante de efectivo',
+    'pendingApprovalKindMovement': 'Movimiento',
+    'pendingApprovalKindSaleCancel': 'Cancelar venta',
+    'pendingApprovalKindShiftClose': 'Cierre de caja',
+    'pendingApprovalApprove': 'Aprobar',
+    'pendingApprovalReject': 'Rechazar',
+    'pendingApprovalEmpty': 'No hay solicitudes pendientes.',
+    'pendingApprovalQueued':
+        'Solicitud enviada. Un administrador debe aprobarla en este mismo dispositivo.',
+    'pendingApprovalDuplicateShiftClose':
+        'Ya hay un cierre de caja pendiente de aprobación para este turno.',
+    'pendingApprovalRejectedSnack': 'Solicitud rechazada',
+    'pendingApprovalShiftIdLabel': 'Turno local',
+    'pendingApprovalExpectedCashLabel': 'Efectivo esperado en caja',
+    'pendingApprovalCashDifferenceLabel': 'Diferencia (declarado − esperado)',
+    'pendingApprovalDeviceLine': 'Dispositivo: {id}',
+    'pendingApprovalsDrawerSubtitle': '{count} pendiente(s)',
+    'salesHistoryAllDays': 'Todos',
+    'salesHistoryPickDay': 'Elegir día',
+    'salesHistorySalesOnDate': 'Ventas del {date}',
+    'platformOrdersTitle': 'Pedidos por plataforma',
+    'platformOrdersSubtitle': 'Uber Eats por día (desde la nube)',
+    'platformOrdersUberEatsSection': 'Uber Eats',
+    'platformOrdersByDayHint':
+        'Pedidos cuya hora cae en el día elegido (hora del dispositivo). Los datos vienen de la tabla platform_orders en Supabase.',
+    'platformOrdersRequiresCloud': 'Configura Supabase para ver pedidos de plataformas.',
+    'platformOrdersLoadError': 'No se pudieron cargar los pedidos',
+    'platformOrdersEmptyUberEats': 'No hay pedidos de Uber Eats este día.',
+    'platformOrdersEmptyHint':
+        'Cuando la integración escriba filas en platform_orders (store_id de la tienda, platform = uber_eats), aparecerán aquí.',
+    'platformOrdersNoSummary': 'Sin detalle de líneas.',
+    'platformOrdersDayTotal': '{count} pedidos · total del día',
     'reports': 'Reportes',
     'reportsSubtitle': 'Estadísticas de ventas e inventario',
     'temperatureHistory': 'Temperatura (congelador)',
@@ -649,9 +1000,76 @@ class AppLocalizations {
     'movements': 'Movimientos',
     'movementsCajaNetLabel': 'Movimientos (entradas - salidas)',
     'movementsSubtitle': 'Entradas y salidas de caja o banco (no son ventas)',
+    'movementLinkShift': 'Turno (caja)',
+    'movementShiftNone': 'Sin turno',
+    'movementShiftLabel': 'Turno #{id}',
     'entry': 'Entrada',
     'exit': 'Salida',
     'addMovement': 'Nuevo movimiento',
+    'staffTasksTitle': 'Tareas',
+    'staffTasksAdminTitle': 'Tareas del personal',
+    'staffTasksMyTitle': 'Mis tareas',
+    'staffTasksSubtitle': 'Asigna y da seguimiento a tareas del equipo',
+    'staffTaskNew': 'Nueva tarea',
+    'staffTaskEdit': 'Editar tarea',
+    'staffTaskTitleLabel': 'Título',
+    'staffTaskDescriptionLabel': 'Descripción (opcional)',
+    'staffTaskScheduledAt': 'Fecha y hora límite',
+    'staffTaskNotifyAt': 'Recordatorio (opcional)',
+    'staffTaskNotifyNow': 'Enviar recordatorio ahora',
+    'staffTaskCancel': 'Cancelar tarea',
+    'staffTaskCancelled': 'Cancelada',
+    'staffTaskMarkDone': 'Completada',
+    'staffTaskMarkSkipped': 'Omitida',
+    'staffTaskComment': 'Comentario',
+    'staffTaskCommentOptional': 'Comentario (opcional)',
+    'staffTaskStatusPending': 'Pendiente',
+    'staffTaskStatusDone': 'Hecha',
+    'staffTaskStatusSkipped': 'Omitida',
+    'staffTaskDue': 'Vence',
+    'staffTaskResponses': 'Respuestas',
+    'staffTaskNoTasks': 'No hay tareas',
+    'staffTaskCloudRequired': 'Requiere conexión a la nube',
+    'staffTaskSaved': 'Tarea guardada',
+    'staffTaskSendDueReminders': 'Enviar recordatorios programados',
+    'staffTaskRemindersResult': 'Recordatorios: {tasks} tarea(s), {push} push enviado(s)',
+    'staffTaskDueAlert': 'Tienes {n} tarea(s) por completar.',
+    'staffTaskStatusInProgress': 'En progreso',
+    'staffTaskStatusScheduled': 'Programada',
+    'staffTaskMarkInProgress': 'Iniciar',
+    'staffTaskMarkOmitted': 'Omitir',
+    'staffTaskCommentRequired': 'Motivo (obligatorio)',
+    'staffTaskInvasiveTitle': 'Tareas pendientes',
+    'staffTaskInvasiveSubtitle': 'Completa {n} actividad(es) antes de continuar',
+    'staffTaskPendingAlertTooltip': '{n} tarea(s) pendiente(s). Toca para ver',
+    'voiceMicTooltip': 'Movimiento por voz',
+    'voiceListening': 'Escuchando…',
+    'voiceListeningHint': 'Di por ejemplo: entrada 200 pesos por sueldo',
+    'voiceContinue': 'Continuar',
+    'voiceConfirmTitle': 'Confirmar movimiento',
+    'voiceConfirmIncomplete': 'Completa los campos faltantes antes de registrar.',
+    'voiceAmountLabel': 'Monto',
+    'voiceRegister': 'Registrar',
+    'voiceInvalidAmount': 'Monto inválido',
+    'voiceMissingReason': 'Indica el concepto',
+    'voiceCommandNotUnderstood': 'No entendí el comando. Intenta de nuevo.',
+    'voiceMicPermissionDenied': 'Se necesita permiso de micrófono',
+    'voiceSttUnavailable': 'Reconocimiento de voz no disponible en este dispositivo',
+    'voiceTextFallbackTitle': 'Comando de voz (texto)',
+    'voiceTextFallbackHint': 'Ej. entrada 200 pesos por sueldo',
+    'staffTaskInvasiveDismiss': 'Recordar en 15 minutos',
+    'staffTaskManageResponses': 'Respuestas del equipo',
+    'staffTaskNoResponsesYet': 'Nadie ha respondido aún.',
+    'staffTaskAdminChangeStatus': 'Cambiar estado',
+    'staffTaskAdminStatusUpdated': 'Estado actualizado',
+    'staffTaskEmployee': 'Empleado',
+    'quickSalesSummaryTitle': 'Resumen de ventas',
+    'quickSalesByShift': 'Ventas por turno',
+    'quickCategoryDistribution': 'Distribución por categoría',
+    'quickTopProductsToday': 'Más vendidos (hoy)',
+    'quickTopProducts7d': 'Más vendidos (7 días)',
+    'quickTopProducts30d': 'Más vendidos (30 días)',
+    'quickNoData': 'Sin datos en este período.',
     'concept': 'Concepto',
     'accountCash': 'Caja',
     'accountBank': 'Banco',
@@ -693,6 +1111,17 @@ class AppLocalizations {
     'codeApplied': 'Código aplicado',
     'invalidCode': 'Código inválido',
     'discountAppliedProduct': 'Descuento aplicado a productos que contengan',
+    'discountCatalogTitle': 'Catálogo de descuentos',
+    'discountPickFromList': 'Elegir del catálogo',
+    'discountDisplayNameHint': 'Nombre en ticket (ej. Estudiantes)',
+    'discountCatalogEmpty': 'No hay descuentos en el catálogo. Configúralos en administración.',
+    'discountCatalogAppliedToast': 'Descuento aplicado: {name}',
+    'discountInactiveLabel': 'Inactivo (no aparece en caja)',
+    'discountShowAtRegister': 'Visible en caja',
+    'discountSave': 'Guardar',
+    'discountDeleteConfirmTitle': '¿Borrar este descuento?',
+    'discountDeleteAction': 'Borrar',
+    'discountCatalogSaved': 'Descuento guardado',
     'clearLocalSalesConfirmTitle': 'Vaciar ventas locales',
     'clearLocalSalesConfirmBody': '¿Borrar todas las ventas guardadas en este dispositivo? El historial local quedará vacío. La nube no se modifica.',
     'clear': 'Vaciar',
@@ -716,6 +1145,24 @@ class AppLocalizations {
     'submitCount': 'Ver resumen',
     'next': 'Siguiente',
     'closureSummary': 'Resumen del corte',
+    'closeShiftTurnIdLine': 'Turno local · shift_id {id}',
+    'closeShiftTurnIdsLocalCloud': 'Turno · SQLite id {l} · Supabase id {c}',
+    'supabaseIdShort': 'Supabase',
+    'closeShiftTurnIdHint':
+        'Si otro equipo ya cerró en la nube un turno distinto, el número aquí puede no coincidir con Supabase. Usa «Registrar en la nube» con el turno abierto para alinear.',
+    'closeShiftCloudLoading': 'Consultando turno en la nube…',
+    'closeShiftCloudSectionTitle': 'Estado en la nube (Supabase)',
+    'closeShiftCloudNoNetwork': 'Sin conexión: no se pudo verificar el turno en Supabase.',
+    'closeShiftCloudQueryError': 'No se pudo consultar la nube: {msg}',
+    'closeShiftCloudRowMissing':
+        'No hay fila en Supabase con este shift_id. Pulsa «Registrar en la nube» en el menú con el turno abierto.',
+    'closeShiftCloudAlreadyClosed':
+        'En la nube este turno ya figura cerrado (fin: {at}). Cerrar otra vez aquí puede fallar o duplicar el cierre.',
+    'closeShiftCloudOpenMismatch':
+        'En la nube este dispositivo tiene abierto el turno {open}; en este equipo el turno local es {local}. Revisa o registra en la nube para alinear.',
+    'closeShiftCloudAligned': 'Nube: turno abierto y coincide con este shift_id en este dispositivo.',
+    'closeShiftCloudNoOpenForDevice':
+        'En la nube no hay turno abierto para este dispositivo. Usa «Registrar en la nube» para actualizar el vínculo.',
     'closeCut': 'Cerrar corte',
     'goBack': 'Volver',
     'notesOptional': 'Notas (opcional)',
@@ -730,6 +1177,65 @@ class AppLocalizations {
     'closureIncorrectCardOnly': 'Cuadre incorrecto: inconsistencia en tarjetas',
     'closureIncorrectCashAndCard': 'Cuadre incorrecto: diferencia en caja {amount} e inconsistencia en tarjetas',
     'differenceInCash': 'Diferencia en caja: {amount}',
+    'closeShiftNoOpen': 'No hay turno abierto',
+    'closeShiftNoOpenHint':
+        'Abre un turno explícitamente para vender o para hacer un corte. Ya no se abre un turno nuevo solo al cerrar el anterior.',
+    'openShiftButton': 'Abrir turno',
+    'openShiftStartingFundTitle': 'Abrir turno',
+    'openShiftStartingFundBody': 'Indica el efectivo inicial en caja para este turno.',
+    'posRegisterTitle': 'Caja / cajón',
+    'posRegisterSubtitle': 'Este terminal opera en el cajón seleccionado (turnos y cortes).',
+    'posRegisterChooseHint': 'Elige el cajón físico de esta tablet.',
+    'posRegisterSaved': 'Cajón guardado. Vuelve a registrar en la nube si hace falta.',
+    'continueOpenShiftButton': 'Continuar turno abierto en la nube',
+    'continueOpenShiftTitle': 'Turnos abiertos en este cajón',
+    'continueOpenShiftEmpty': 'No hay turnos abiertos en la nube para este cajón.',
+    'continueOpenShiftLoading': 'Buscando turnos…',
+    'continueOpenShiftLine': '{label} · Turno #{shift} · Inicio {started}',
+    'posRequiresOpenShiftBanner':
+        'No hay turno abierto. Debes abrir o continuar un turno en Cierre de caja para cobrar.',
+    'posRequiresOpenShiftAction': 'Abrir turno',
+    'posTopSellersStrip': 'Más vendidos',
+    'posTopSellersEmpty':
+        'Los más vendidos salen de las ventas en Supabase (tienda activa, últimos días) y requieren internet. Si hay ventas en la nube y esto sale vacío, falta aplicar en Supabase la migración 032 (función pos_top_selling_product_ids).',
+    'closeShiftCloudCancelledApplied':
+        'Ajuste nube aplicado: {count} venta(s) cancelada(s) en la nube no cuentan en este cierre.',
+    'retry': 'Reintentar',
+    'storesRegistersAdminTitle': 'Tiendas y cajones',
+    'storesAdminAddStoreTitle': 'Nueva tienda',
+    'storesAdminStoreNameLabel': 'Nombre de la tienda',
+    'storesAdminEmpty': 'No hay tiendas en la nube.',
+    'storesAdminStoreIdLine': 'Tienda id {id}',
+    'storesAdminSaved': 'Guardado en la nube.',
+    'storesAdminEditStoreTitle': 'Editar tienda',
+    'storesAdminRegistersSubtitle': 'Cajones (pos_registers)',
+    'storesAdminAddRegisterTitle': 'Nuevo cajón',
+    'storesAdminRegisterLabelHint': 'Etiqueta (ej. Caja 1)',
+    'storesAdminEditRegisterTitle': 'Editar cajón',
+    'storesAdminDisplayOrderLabel': 'Orden de lista',
+    'storesAdminNoRegisters': 'No hay cajones en esta tienda.',
+    'storesAdminRegisterIdLine': 'Cajón id {id}',
+    'storesAdminOrderLabel': 'Orden',
+    'storesAdminActive': 'Activo',
+    'storesAdminInactive': 'Inactivo',
+    'storesAdminDeactivate': 'Desactivar cajón',
+    'storesAdminActivate': 'Activar cajón',
+    'adminLinkOpenShiftTitle': 'Enlazar a turno abierto',
+    'adminLinkOpenShiftSubtitle':
+        'Alinea esta tienda/cajón con un turno ya abierto en otra caja o tienda (Supabase).',
+    'adminLinkOpenShiftLoading': 'Cargando turnos abiertos…',
+    'adminLinkOpenShiftEmpty': 'No hay turnos abiertos en la nube.',
+    'adminLinkOpenShiftRequiresLocalDb':
+        'Esta acción solo está disponible en la app con base local (no en la consola web sin POS).',
+    'adminLinkOpenShiftConfirmTitle': 'Enlazar terminal a este turno',
+    'adminLinkOpenShiftConfirmBody':
+        '¿Usar el turno #{id} en {store} · {register}? Se actualizarán tienda, cajón y registro del dispositivo en la nube.',
+    'adminLinkOpenShiftUnlinkNote':
+        'Este equipo dejará de usar el turno actual solo aquí. Ese turno sigue abierto en la nube hasta que se cierre con corte en su caja.',
+    'adminLinkOpenShiftLinking': 'Enlazando…',
+    'adminLinkOpenShiftLinkedOk': 'Terminal enlazado al turno. Revisa el POS o Cierre de caja.',
+    'adminLinkOpenShiftLine': '{store} · {register} · Turno #{shift} · {started}',
+    'adminLinkOpenShiftDeviceLine': 'Dispositivo: {device}',
   };
 
   static const Map<String, String> _en = {
@@ -769,6 +1275,20 @@ class AppLocalizations {
     'syncingFromCloud': 'Syncing from cloud...',
     'syncSuccess': 'Sync complete. Local data updated from cloud.',
     'syncError': 'Sync error',
+    'syncStepStarting': 'Starting sync…',
+    'syncStepDownloadingCategories': 'Downloading categories…',
+    'syncStepDownloadingProducts': 'Downloading products and supplies…',
+    'syncStepDownloadingRecipes': 'Downloading recipes and modifiers…',
+    'syncStepDownloadingBundles': 'Downloading bundles and discounts…',
+    'syncStepSavingLocal': 'Preparing local database…',
+    'syncStepSavingCategories': 'Saving categories…',
+    'syncStepSavingProducts': 'Saving products and supplies…',
+    'syncStepSavingRecipes': 'Saving recipes and modifiers…',
+    'syncStepSavingBundles': 'Saving bundles and discounts…',
+    'syncStepFinishing': 'Finishing…',
+    'syncStepProgress': 'Step {step}',
+    'catalogMenuCacheLastSync': 'Menu cache (cloud): {when}',
+    'catalogMenuCacheNever': 'Menu cache: not yet synced from cloud',
     'offlineBanner':
         'Offline: you can ring sales and use the register; menu and admin changes need internet.',
     'offlineRequiresInternet':
@@ -806,7 +1326,7 @@ class AppLocalizations {
     'download': 'Download',
     'operationLogTitle': 'Operation log',
     'operationLogSubtitle':
-        'Sale and cloud sync issues (this device only).',
+        'Level critical = failed write to local DB or Supabase. Also: sales, startup sync, Flutter/async, Riverpod. This device only.',
     'operationLogEmpty':
         'No entries yet. Failed checkouts or cloud write issues will appear here.',
     'shiftCloseDiagnosticsTitle': 'Shift close diagnostics',
@@ -844,6 +1364,20 @@ class AppLocalizations {
     'versionBuild': 'Version',
     'downloadHint': 'Tap "Download" to open the link and install the new version.',
     'downloadLinkCopied': 'Link copied. Paste it in your browser to download.',
+    'alreadyLatestVersion': 'You already have the latest version.',
+    'remoteUpdateRequestedTitle': 'Update requested',
+    'remoteUpdateRequestedBodyDefault':
+        'An administrator asked this register to check and install the latest app version when possible.',
+    'remoteUpdateCheckNow': 'Check for update',
+    'remoteUpdateAckLater': 'Later',
+    'cloudRequestAppUpdate': 'Request update on device',
+    'cloudRequestAppUpdateSubtitle':
+        'The register will see a prompt next time they open the app or return to it (device needs internet).',
+    'cloudClearUpdateRequest': 'Clear request',
+    'cloudUpdateRequestSent': 'Update request saved for this device.',
+    'cloudUpdateRequestCleared': 'Request cleared.',
+    'cloudUpdateRequestMessageHint': 'Optional message for the register',
+    'cloudUpdatePendingBadge': 'Update pending',
     'login': 'Log in',
     'username': 'Username',
     'emailOrUsername': 'Email or username',
@@ -880,6 +1414,7 @@ class AppLocalizations {
     'ticketSent': 'Ticket sent to printer',
     'printError': 'Print error',
     'printingTicket': 'Printing ticket...',
+    'reprintTicket': 'Reprint ticket',
     'saleCompletePrintError': 'Sale complete. Could not print ticket',
     'amountReceived': 'Amount received',
     'change': 'Change',
@@ -889,6 +1424,15 @@ class AppLocalizations {
     'card': 'Card',
     'transfer': 'Transfer',
     'verifyTransfer': 'Verify transfer in banking app before confirming.',
+    'singlePayment': 'Single',
+    'splitPayment': 'Split',
+    'addPaymentMethod': 'Add payment',
+    'splitPaymentRemaining': 'Remaining',
+    'splitPaymentComplete': 'Fully covered',
+    'splitPaymentOverpaid': 'Overpaid',
+    'amount': 'Amount',
+    'payment': 'Payment',
+    'remove': 'Remove',
     'debit': 'Debit',
     'credit': 'Credit',
     'errorLoading': 'Error loading',
@@ -902,6 +1446,15 @@ class AppLocalizations {
     'webAdminHomeSubtitle':
         'Manage catalog, inventory and sales via Supabase. Use the side menu for more options.',
     'webQuickAccess': 'Quick access',
+    'drawerSectionGeneral': 'General',
+    'drawerSectionDeviceCloud': 'Device & cloud',
+    'drawerSectionCloudData': 'Cloud & data',
+    'drawerSectionCatalog': 'Catalog & stock',
+    'drawerSectionSalesReports': 'Sales & reports',
+    'drawerSectionOrganization': 'Organization',
+    'drawerSectionSupport': 'Support & diagnostics',
+    'drawerSectionRegisterOps': 'Register & device',
+    'drawerSectionAdvanced': 'Advanced',
     'bundleManagement': 'Bundles',
     'closeShift': 'Close shift',
     'printer': 'Printer',
@@ -958,9 +1511,45 @@ class AppLocalizations {
     'reconcileSearchNoResults': 'No supplies match your search.',
     'salesHistory': 'Sales history',
     'cancelSale': 'Cancel sale',
+    'cancelMovement': 'Cancel movement',
+    'cancelMovementConfirmBody': 'This movement will no longer count toward the cash count. This cannot be undone.',
     'cancelSaleConfirmTitle': 'Cancel sale',
     'cancelSaleConfirmBody': 'This sale will be deleted on this device only. Inventory is not restored (for test sales, adjust stock manually if needed).',
     'saleCancelled': 'Sale cancelled',
+    'pendingCashierApprovalsTitle': 'Cashier approvals',
+    'pendingCashierApprovalsSubtitle':
+        'Movements, sale cancellations, and shift closes with large cash shortage',
+    'pendingApprovalKindMovement': 'Movement',
+    'pendingApprovalKindSaleCancel': 'Cancel sale',
+    'pendingApprovalKindShiftClose': 'Shift close',
+    'pendingApprovalApprove': 'Approve',
+    'pendingApprovalReject': 'Reject',
+    'pendingApprovalEmpty': 'No pending requests.',
+    'pendingApprovalQueued':
+        'Request sent. An administrator must approve it on this same device.',
+    'pendingApprovalDuplicateShiftClose':
+        'A shift close is already pending approval for this shift.',
+    'pendingApprovalRejectedSnack': 'Request rejected',
+    'pendingApprovalShiftIdLabel': 'Local shift',
+    'pendingApprovalExpectedCashLabel': 'Expected cash in drawer',
+    'pendingApprovalCashDifferenceLabel': 'Difference (declared − expected)',
+    'pendingApprovalDeviceLine': 'Device: {id}',
+    'pendingApprovalsDrawerSubtitle': '{count} pending',
+    'salesHistoryAllDays': 'All',
+    'salesHistoryPickDay': 'Choose day',
+    'salesHistorySalesOnDate': 'Sales on {date}',
+    'platformOrdersTitle': 'Platform orders',
+    'platformOrdersSubtitle': 'Uber Eats by day (from cloud)',
+    'platformOrdersUberEatsSection': 'Uber Eats',
+    'platformOrdersByDayHint':
+        'Orders whose time falls on the selected calendar day (device local time). Data comes from the platform_orders table in Supabase.',
+    'platformOrdersRequiresCloud': 'Configure Supabase to load platform orders.',
+    'platformOrdersLoadError': 'Could not load orders',
+    'platformOrdersEmptyUberEats': 'No Uber Eats orders on this day.',
+    'platformOrdersEmptyHint':
+        'When your integration inserts rows into platform_orders (store_id, platform = uber_eats), they will show up here.',
+    'platformOrdersNoSummary': 'No line-item summary.',
+    'platformOrdersDayTotal': '{count} orders · day total',
     'reports': 'Reports',
     'reportsSubtitle': 'Sales and inventory statistics',
     'temperatureHistory': 'Freezer temperature',
@@ -1003,9 +1592,76 @@ class AppLocalizations {
     'movements': 'Movements',
     'movementsCajaNetLabel': 'Movements (entries - exits)',
     'movementsSubtitle': 'Cash and bank entries and exits (not sales)',
+    'movementLinkShift': 'Shift (cash)',
+    'movementShiftNone': 'No shift',
+    'movementShiftLabel': 'Shift #{id}',
     'entry': 'Entry',
     'exit': 'Exit',
     'addMovement': 'New movement',
+    'staffTasksTitle': 'Tasks',
+    'staffTasksAdminTitle': 'Staff tasks',
+    'staffTasksMyTitle': 'My tasks',
+    'staffTasksSubtitle': 'Schedule and track team tasks',
+    'staffTaskNew': 'New task',
+    'staffTaskEdit': 'Edit task',
+    'staffTaskTitleLabel': 'Title',
+    'staffTaskDescriptionLabel': 'Description (optional)',
+    'staffTaskScheduledAt': 'Due date and time',
+    'staffTaskNotifyAt': 'Reminder (optional)',
+    'staffTaskNotifyNow': 'Send reminder now',
+    'staffTaskCancel': 'Cancel task',
+    'staffTaskCancelled': 'Cancelled',
+    'staffTaskMarkDone': 'Done',
+    'staffTaskMarkSkipped': 'Skipped',
+    'staffTaskComment': 'Comment',
+    'staffTaskCommentOptional': 'Comment (optional)',
+    'staffTaskStatusPending': 'Pending',
+    'staffTaskStatusDone': 'Done',
+    'staffTaskStatusSkipped': 'Skipped',
+    'staffTaskDue': 'Due',
+    'staffTaskResponses': 'Responses',
+    'staffTaskNoTasks': 'No tasks',
+    'staffTaskCloudRequired': 'Requires cloud connection',
+    'staffTaskSaved': 'Task saved',
+    'staffTaskSendDueReminders': 'Send scheduled reminders',
+    'staffTaskRemindersResult': 'Reminders: {tasks} task(s), {push} push sent',
+    'staffTaskDueAlert': 'You have {n} task(s) to complete.',
+    'staffTaskStatusInProgress': 'In progress',
+    'staffTaskStatusScheduled': 'Scheduled',
+    'staffTaskMarkInProgress': 'Start',
+    'staffTaskMarkOmitted': 'Omit',
+    'staffTaskCommentRequired': 'Reason (required)',
+    'staffTaskInvasiveTitle': 'Pending tasks',
+    'staffTaskInvasiveSubtitle': 'Complete {n} activity(ies) before continuing',
+    'staffTaskPendingAlertTooltip': '{n} pending task(s). Tap to view',
+    'voiceMicTooltip': 'Voice movement',
+    'voiceListening': 'Listening…',
+    'voiceListeningHint': 'Say e.g. entry 200 pesos for payroll',
+    'voiceContinue': 'Continue',
+    'voiceConfirmTitle': 'Confirm movement',
+    'voiceConfirmIncomplete': 'Fill in missing fields before registering.',
+    'voiceAmountLabel': 'Amount',
+    'voiceRegister': 'Register',
+    'voiceInvalidAmount': 'Invalid amount',
+    'voiceMissingReason': 'Enter a concept',
+    'voiceCommandNotUnderstood': 'Command not understood. Try again.',
+    'voiceMicPermissionDenied': 'Microphone permission required',
+    'voiceSttUnavailable': 'Speech recognition unavailable on this device',
+    'voiceTextFallbackTitle': 'Voice command (text)',
+    'voiceTextFallbackHint': 'E.g. entry 200 pesos for payroll',
+    'staffTaskInvasiveDismiss': 'Remind me in 15 minutes',
+    'staffTaskManageResponses': 'Team responses',
+    'staffTaskNoResponsesYet': 'No responses yet.',
+    'staffTaskAdminChangeStatus': 'Change status',
+    'staffTaskAdminStatusUpdated': 'Status updated',
+    'staffTaskEmployee': 'Employee',
+    'quickSalesSummaryTitle': 'Sales summary',
+    'quickSalesByShift': 'Sales by shift',
+    'quickCategoryDistribution': 'Sales by category',
+    'quickTopProductsToday': 'Top products (today)',
+    'quickTopProducts7d': 'Top products (7 days)',
+    'quickTopProducts30d': 'Top products (30 days)',
+    'quickNoData': 'No data in this period.',
     'concept': 'Concept',
     'accountCash': 'Cash',
     'accountBank': 'Bank',
@@ -1047,6 +1703,17 @@ class AppLocalizations {
     'codeApplied': 'Code applied',
     'invalidCode': 'Invalid code',
     'discountAppliedProduct': 'Discount applied to products containing',
+    'discountCatalogTitle': 'Discount catalog',
+    'discountPickFromList': 'Pick from catalog',
+    'discountDisplayNameHint': 'Receipt label (e.g. Students)',
+    'discountCatalogEmpty': 'No discounts in catalog. Add them in admin.',
+    'discountCatalogAppliedToast': 'Discount applied: {name}',
+    'discountInactiveLabel': 'Inactive (hidden at register)',
+    'discountShowAtRegister': 'Shown at register',
+    'discountSave': 'Save',
+    'discountDeleteConfirmTitle': 'Delete this discount?',
+    'discountDeleteAction': 'Delete',
+    'discountCatalogSaved': 'Discount saved',
     'clearLocalSalesConfirmTitle': 'Clear local sales',
     'clearLocalSalesConfirmBody': 'Delete all sales on this device? Local history will be empty. Cloud is not modified.',
     'clear': 'Clear',
@@ -1070,6 +1737,24 @@ class AppLocalizations {
     'submitCount': 'View summary',
     'next': 'Next',
     'closureSummary': 'Closure summary',
+    'closeShiftTurnIdLine': 'Local shift · shift_id {id}',
+    'closeShiftTurnIdsLocalCloud': 'Shift · SQLite id {l} · Supabase id {c}',
+    'supabaseIdShort': 'Supabase',
+    'closeShiftTurnIdHint':
+        'If another device closed a different shift in the cloud, this id may not match Supabase. Use “Register in cloud” while the shift is open to align.',
+    'closeShiftCloudLoading': 'Checking shift in the cloud…',
+    'closeShiftCloudSectionTitle': 'Cloud status (Supabase)',
+    'closeShiftCloudNoNetwork': 'Offline: could not verify the shift in Supabase.',
+    'closeShiftCloudQueryError': 'Cloud query failed: {msg}',
+    'closeShiftCloudRowMissing':
+        'There is no Supabase row for this shift_id. Tap “Register in cloud” in the menu while the shift is open.',
+    'closeShiftCloudAlreadyClosed':
+        'This shift is already marked closed in the cloud (ended: {at}). Closing again here may fail or duplicate the closure.',
+    'closeShiftCloudOpenMismatch':
+        'In the cloud this device has shift {open} open; on this device the local shift is {local}. Register in cloud or align before closing.',
+    'closeShiftCloudAligned': 'Cloud: open shift matches this shift_id for this device.',
+    'closeShiftCloudNoOpenForDevice':
+        'No open shift in the cloud for this device. Use “Register in cloud” to refresh the link.',
     'closeCut': 'Close cut',
     'goBack': 'Go back',
     'notesOptional': 'Notes (optional)',
@@ -1084,5 +1769,64 @@ class AppLocalizations {
     'closureIncorrectCardOnly': 'Closure incorrect: card mismatch',
     'closureIncorrectCashAndCard': 'Closure incorrect: cash difference {amount} and card mismatch',
     'differenceInCash': 'Cash difference: {amount}',
+    'closeShiftNoOpen': 'No shift is open',
+    'closeShiftNoOpenHint':
+        'Open a shift explicitly to sell or to run a close-out. A new shift is no longer opened automatically when you close the previous one.',
+    'openShiftButton': 'Open shift',
+    'openShiftStartingFundTitle': 'Open shift',
+    'openShiftStartingFundBody': 'Enter the starting cash in the drawer for this shift.',
+    'posRegisterTitle': 'Register / drawer',
+    'posRegisterSubtitle': 'This device operates on the selected drawer (shifts and closeout).',
+    'posRegisterChooseHint': 'Pick the physical checkout this tablet uses.',
+    'posRegisterSaved': 'Register saved. Use “Register in cloud” again if needed.',
+    'continueOpenShiftButton': 'Continue open shift from cloud',
+    'continueOpenShiftTitle': 'Open shifts on this register',
+    'continueOpenShiftEmpty': 'No open shifts in the cloud for this register.',
+    'continueOpenShiftLoading': 'Looking up shifts…',
+    'continueOpenShiftLine': '{label} · Shift #{shift} · Started {started}',
+    'posRequiresOpenShiftBanner':
+        'No shift is open. Open or continue a shift from Close shift before checking out.',
+    'posRequiresOpenShiftAction': 'Open shift',
+    'posTopSellersStrip': 'Top sellers',
+    'posTopSellersEmpty':
+        'Top sellers use Supabase sales (active store, recent days) and require internet. If cloud has sales but this is empty, apply migration 032 (pos_top_selling_product_ids) in Supabase.',
+    'closeShiftCloudCancelledApplied':
+        'Cloud adjustment applied: {count} cloud-cancelled sale(s) are excluded from this closeout.',
+    'retry': 'Retry',
+    'storesRegistersAdminTitle': 'Stores and registers',
+    'storesAdminAddStoreTitle': 'New store',
+    'storesAdminStoreNameLabel': 'Store name',
+    'storesAdminEmpty': 'No stores in the cloud.',
+    'storesAdminStoreIdLine': 'Store id {id}',
+    'storesAdminSaved': 'Saved to cloud.',
+    'storesAdminEditStoreTitle': 'Edit store',
+    'storesAdminRegistersSubtitle': 'Registers (pos_registers)',
+    'storesAdminAddRegisterTitle': 'New register',
+    'storesAdminRegisterLabelHint': 'Label (e.g. Register 1)',
+    'storesAdminEditRegisterTitle': 'Edit register',
+    'storesAdminDisplayOrderLabel': 'Display order',
+    'storesAdminNoRegisters': 'No registers for this store.',
+    'storesAdminRegisterIdLine': 'Register id {id}',
+    'storesAdminOrderLabel': 'Order',
+    'storesAdminActive': 'Active',
+    'storesAdminInactive': 'Inactive',
+    'storesAdminDeactivate': 'Deactivate register',
+    'storesAdminActivate': 'Activate register',
+    'adminLinkOpenShiftTitle': 'Link to open shift',
+    'adminLinkOpenShiftSubtitle':
+        'Align this device’s store/register with a shift already open on another register or store.',
+    'adminLinkOpenShiftLoading': 'Loading open shifts…',
+    'adminLinkOpenShiftEmpty': 'No open shifts in the cloud.',
+    'adminLinkOpenShiftRequiresLocalDb':
+        'This action is only available in the app with a local database (not web admin without POS).',
+    'adminLinkOpenShiftConfirmTitle': 'Link device to this shift',
+    'adminLinkOpenShiftConfirmBody':
+        'Use shift #{id} at {store} · {register}? Store, register, and device record in the cloud will be updated.',
+    'adminLinkOpenShiftUnlinkNote':
+        'This device will stop using the current shift locally only. That shift stays open in the cloud until it is closed properly at its register.',
+    'adminLinkOpenShiftLinking': 'Linking…',
+    'adminLinkOpenShiftLinkedOk': 'Device linked to the shift. Check POS or Close shift.',
+    'adminLinkOpenShiftLine': '{store} · {register} · Shift #{shift} · {started}',
+    'adminLinkOpenShiftDeviceLine': 'Device: {device}',
   };
 }

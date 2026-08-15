@@ -36,6 +36,8 @@ drop table if exists public.discounts cascade;
 drop table if exists public.shifts cascade;
 drop table if exists public.shift_close_events cascade;
 drop table if exists public.pos_devices cascade;
+drop table if exists public.platform_orders cascade;
+drop table if exists public.pos_registers cascade;
 drop table if exists public.stores cascade;
 drop table if exists public.app_releases cascade;
 
@@ -94,6 +96,24 @@ insert into public.stores (id, name) values (1, 'Tienda principal');
 select setval(
   pg_get_serial_sequence('public.stores', 'id'),
   (select max(id) from public.stores)
+);
+
+-- Cash drawers / registers per store (logical caja)
+create table public.pos_registers (
+  id serial primary key,
+  store_id int not null references public.stores(id) on delete cascade,
+  label text not null,
+  display_order int not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  constraint pos_registers_store_label_unique unique (store_id, label)
+);
+comment on table public.pos_registers is 'Cajón o estación de caja; enlaza turnos y terminales.';
+
+insert into public.pos_registers (id, store_id, label, display_order) values (1, 1, 'Caja 1', 0);
+select setval(
+  pg_get_serial_sequence('public.pos_registers', 'id'),
+  (select max(id) from public.pos_registers)
 );
 
 -- Sales
@@ -196,10 +216,16 @@ create table public.shifts (
   starting_fund real default 0,
   device_id text,
   device_name text,
-  store_id int not null default 1 references public.stores(id)
+  store_id int not null default 1 references public.stores(id),
+  register_id int references public.pos_registers(id) on delete set null
 );
 comment on column public.shifts.device_id is 'Dispositivo que abrió el turno (UUID estable de la app).';
 comment on column public.shifts.device_name is 'Nombre legible de la caja.';
+comment on column public.shifts.register_id is 'Cajón lógico; corte y ventas por turno aunque cambie el terminal.';
+
+alter table public.sales
+  add column shift_id int not null references public.shifts(id) on delete restrict;
+comment on column public.sales.shift_id is 'Turno en nube (shifts.id); obligatorio en cada venta.';
 
 -- Cash movements
 create table public.cash_movements (
@@ -259,13 +285,21 @@ create table public.pos_devices (
   last_seen_at timestamptz not null default now(),
   app_version text,
   platform text,
-  store_id int not null default 1 references public.stores(id)
+  store_id int not null default 1 references public.stores(id),
+  register_id int references public.pos_registers(id) on delete set null,
+  remote_update_requested_at timestamptz,
+  remote_update_message text
 );
 comment on table public.pos_devices is 'Registro explícito de cajas/dispositivos (botón en la app).';
+comment on column public.pos_devices.remote_update_requested_at is 'Admin: señal para que la caja compruebe actualización (pull).';
+comment on column public.pos_devices.remote_update_message is 'Mensaje opcional en el aviso en la caja.';
 
 create index idx_shifts_device_open on public.shifts (device_id) where end_time is null;
 create index idx_shifts_device_id on public.shifts (device_id);
 create index idx_shifts_store_id on public.shifts (store_id);
+create index idx_shifts_register_open on public.shifts (store_id, register_id) where end_time is null;
+create index idx_sales_shift_id on public.sales (shift_id);
+create index idx_pos_registers_store on public.pos_registers (store_id) where active = true;
 
 -- App releases (actualizaciones de la app)
 create table public.app_releases (
@@ -285,6 +319,43 @@ create table public.profiles (
 );
 comment on table public.profiles is 'Rol de cada usuario (admin/cajero). Fuente de verdad en nube.';
 
+-- Delivery platform orders (Uber Eats, etc.); populated by integration, read by app.
+create table public.platform_orders (
+  id bigserial primary key,
+  store_id int not null default 1 references public.stores(id),
+  platform text not null,
+  external_order_id text not null,
+  status text not null default 'UNKNOWN',
+  ordered_at timestamptz not null,
+  total_amount real not null default 0,
+  currency text,
+  display_summary text,
+  raw_json jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint platform_orders_platform_external_unique unique (platform, external_order_id)
+);
+comment on table public.platform_orders is 'Pedidos externos; ordered_at en UTC; app filtra por día local.';
+
+-- Cajero → admin: cola sincronizada con la app y aprobable desde web.
+create table public.pending_cashier_approvals (
+  id uuid primary key default gen_random_uuid(),
+  store_id int not null references public.stores (id),
+  device_id text not null,
+  kind text not null,
+  payload jsonb not null,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  constraint pending_cashier_approvals_status_ck
+    check (status in ('pending', 'approved', 'rejected')),
+  constraint pending_cashier_approvals_kind_ck
+    check (kind in ('movement', 'sale_cancel', 'shift_close'))
+);
+create index idx_pending_cashier_approvals_store_pending
+  on public.pending_cashier_approvals (store_id, created_at desc)
+  where status = 'pending';
+
 -- -----------------------------------------------------------------------------
 -- 3. INDEXES
 -- -----------------------------------------------------------------------------
@@ -292,6 +363,7 @@ create index idx_products_category on public.products(category_id);
 create index idx_sale_items_sale on public.sale_items(sale_id);
 create index idx_sales_date on public.sales(date desc);
 create index idx_sales_store_date on public.sales(store_id, date desc);
+create index idx_platform_orders_store_ordered on public.platform_orders(store_id, ordered_at desc);
 create index idx_recipes_product on public.recipes(product_id);
 create index idx_product_modifiers_product on public.product_modifiers(product_id);
 create index idx_modifier_options_group on public.modifier_options(modifier_group_id);
@@ -320,8 +392,11 @@ alter table public.shift_closures enable row level security;
 alter table public.movements enable row level security;
 alter table public.shift_close_events enable row level security;
 alter table public.pos_devices enable row level security;
+alter table public.pos_registers enable row level security;
 alter table public.app_releases enable row level security;
 alter table public.profiles enable row level security;
+alter table public.platform_orders enable row level security;
+alter table public.pending_cashier_approvals enable row level security;
 
 do $$
 declare
@@ -330,7 +405,8 @@ declare
     'stores','categories','supplies','products','recipes','sales','sale_items','inventory_logs',
     'modifier_groups','product_modifiers','modifier_options','parked_orders','discounts',
     'bundles','bundle_items','shifts','cash_movements','shift_closures','movements',
-    'shift_close_events','pos_devices','app_releases'
+    'shift_close_events','pos_devices','pos_registers','app_releases','platform_orders',
+    'pending_cashier_approvals'
   ];
 begin
   foreach t in array tables loop
@@ -367,6 +443,10 @@ set search_path = public
 as $$
 begin
   perform setval(pg_get_serial_sequence('stores', 'id'), coalesce((select max(id) from stores), 1));
+  perform setval(
+    pg_get_serial_sequence('pos_registers', 'id'),
+    coalesce((select max(id) from pos_registers), 1)
+  );
   perform setval(pg_get_serial_sequence('categories', 'id'), coalesce((select max(id) from categories), 1));
   perform setval(pg_get_serial_sequence('supplies', 'id'), coalesce((select max(id) from supplies), 1));
   perform setval(pg_get_serial_sequence('products', 'id'), coalesce((select max(id) from products), 1));
@@ -385,6 +465,10 @@ begin
   perform setval(pg_get_serial_sequence('cash_movements', 'id'), coalesce((select max(id) from cash_movements), 1));
   perform setval(pg_get_serial_sequence('shift_closures', 'id'), coalesce((select max(id) from shift_closures), 1));
   perform setval(pg_get_serial_sequence('movements', 'id'), coalesce((select max(id) from movements), 1));
+  perform setval(
+    pg_get_serial_sequence('platform_orders', 'id'),
+    coalesce((select max(id) from platform_orders), 1)
+  );
 end;
 $$;
 grant execute on function public.sync_sequences() to anon;
@@ -462,3 +546,5 @@ alter publication supabase_realtime add table public.product_modifiers;
 alter publication supabase_realtime add table public.modifier_options;
 alter publication supabase_realtime add table public.bundles;
 alter publication supabase_realtime add table public.bundle_items;
+alter publication supabase_realtime add table public.platform_orders;
+alter publication supabase_realtime add table public.pending_cashier_approvals;

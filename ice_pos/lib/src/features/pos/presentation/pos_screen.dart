@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,18 +10,24 @@ import 'package:ice_pos/src/features/pos/domain/cart_state.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_line.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_print_data.dart';
+import 'package:ice_pos/src/features/pos/domain/sale_payment.dart';
 import 'package:ice_pos/src/features/pos/presentation/controllers/cart_controller.dart';
 import 'package:ice_pos/src/features/pos/presentation/controllers/category_navigation_controller.dart';
 import 'package:ice_pos/src/features/pos/presentation/controllers/receipt_printer_controller.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/pos/presentation/checkout_dialog.dart';
+import 'package:ice_pos/src/features/pos/presentation/close_shift_screen.dart';
 import 'package:ice_pos/src/features/pos/presentation/product_modifier_dialog.dart';
 import 'package:ice_pos/src/features/pos/presentation/qr_scanner_screen.dart';
+import 'package:ice_pos/src/core/database/app_database_provider.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
+import 'package:ice_pos/src/core/services/catalog_remote_data_source.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/utils/error_logger.dart';
 import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
 import 'package:ice_pos/src/features/pos/presentation/pos_search_providers.dart';
+import 'package:ice_pos/src/features/tasks/presentation/staff_tasks_pending_alert_icon.dart';
 
 final _parkedOrdersStreamProvider = StreamProvider<List<ParkedOrder>>((ref) {
   return ref.watch(posRepositoryProvider)!.watchParkedOrders();
@@ -57,6 +65,14 @@ final _directCategoryProductsProvider = FutureProvider<List<Product>>((ref) asyn
   final nav = ref.watch(categoryNavigationControllerProvider);
   if (nav.currentCategoryId == null) return [];
   return ref.read(posRepositoryProvider)!.getProductsByCategory(nav.currentCategoryId!);
+});
+
+/// Top sellers from Supabase (RPC); local catalog only for product tiles. Refreshes on a timer + connectivity + catalog.
+final _topSellingProductsProvider = StreamProvider<List<Product>>((ref) {
+  ref.watch(posCategoriesRefreshProvider);
+  final repo = ref.watch(posRepositoryProvider);
+  if (repo == null) return Stream.value(<Product>[]);
+  return repo.watchPosTopSellingProducts();
 });
 
 /// Loads modifier groups for the **tapped** product first; only if none, falls back to
@@ -98,24 +114,75 @@ Future<void> _handlePosProductTap(
       ref.read(cartControllerProvider.notifier).addToCart(
             productToUse,
             selectedModifiers: result.modifiers,
+            modifierLabels: result.modifierLabels,
             quantity: result.quantity,
           );
     }
   }
 }
 
-class PosScreen extends ConsumerWidget {
+class PosScreen extends ConsumerStatefulWidget {
   const PosScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PosScreen> createState() => _PosScreenState();
+}
+
+class _PosScreenState extends ConsumerState<PosScreen> {
+  bool _posBootstrapDone = false;
+  bool _hasOpenShift = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrapPosSession());
+  }
+
+  Future<void> _bootstrapPosSession() async {
+    final pos = ref.read(posRepositoryProvider);
+    if (pos == null) {
+      if (mounted) {
+        setState(() {
+          _posBootstrapDone = true;
+          _hasOpenShift = true;
+        });
+      }
+      return;
+    }
+    final adoptErr = await pos.syncPosSessionWithCloud();
+    final db = ref.read(appDatabaseProvider);
+    if (db != null && CloudSyncService.isEnabled) {
+      unawaited(CatalogRemoteDataSource.refreshIfStale(db));
+    }
+    final shift = await pos.getCurrentShift();
+    if (!mounted) return;
+    if (adoptErr != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(adoptErr, maxLines: 4, overflow: TextOverflow.ellipsis),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    setState(() {
+      _posBootstrapDone = true;
+      _hasOpenShift = shift != null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final cartState = ref.watch(cartControllerProvider);
     final parkedOrdersAsync = ref.watch(_parkedOrdersStreamProvider);
     final navState = ref.watch(categoryNavigationControllerProvider);
     final l10n = ref.watch(appLocalizationsProvider);
 
     return Scaffold(
-      body: Column(
+      body: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Column(
         children: [
           _CategoryBreadcrumbsBar(
             breadcrumbs: navState.breadcrumbs,
@@ -142,6 +209,45 @@ class PosScreen extends ConsumerWidget {
             hintText: l10n.quickSearchHint,
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
           ),
+          if (_posBootstrapDone && !_hasOpenShift)
+            Material(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        l10n.posRequiresOpenShiftBanner,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        await Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const CloseShiftScreen(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        await _bootstrapPosSession();
+                      },
+                      child: Text(l10n.posRequiresOpenShiftAction),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -298,14 +404,15 @@ class PosScreen extends ConsumerWidget {
                           onRemoveDiscount: () => ref
                               .read(cartControllerProvider.notifier)
                               .removeDiscount(),
-                          onRemoveProductDiscountAt: (i) => ref
-                              .read(cartControllerProvider.notifier)
-                              .removeProductDiscountAt(i),
-                          scrollable: true,
-                        ),
+                        onRemoveProductDiscountAt: (i) => ref
+                            .read(cartControllerProvider.notifier)
+                            .removeProductDiscountAt(i),
+                        scrollable: true,
+                        checkoutEnabled: _posBootstrapDone && _hasOpenShift,
                       ),
-                    ],
-                  );
+                    ),
+                  ],
+                );
                 }
 
                 return Row(
@@ -454,6 +561,7 @@ class PosScreen extends ConsumerWidget {
                             .read(cartControllerProvider.notifier)
                             .removeProductDiscountAt(i),
                         scrollable: false,
+                        checkoutEnabled: _posBootstrapDone && _hasOpenShift,
                       ),
                     ),
                   ],
@@ -461,6 +569,9 @@ class PosScreen extends ConsumerWidget {
               },
             ),
           ),
+        ],
+      ),
+          const StaffTasksPendingFloatingAlert(),
         ],
       ),
     );
@@ -472,26 +583,46 @@ ReceiptPrintData _receiptPrintDataFromReceipt(
   ReceiptResult receipt,
   Map<String, dynamic> paymentData,
 ) {
+  final payments = SalePaymentLine.fromCheckoutPaymentData(
+    paymentData,
+    cartTotal: receipt.total,
+  );
+  final isSplit = paymentData['split'] == true && payments.length > 1;
+
+  if (isSplit) {
+    return ReceiptPrintData(
+      lines: receipt.lines
+          .map((l) => ReceiptPrintLine(
+                description: l.description,
+                quantity: l.quantity,
+                amount: l.amount,
+                modifierDetails: l.modifierDetails,
+              ))
+          .toList(),
+      total: receipt.total,
+      paymentMethod: 'SPLIT',
+      splitPayments: payments
+          .map(
+            (p) => SalePaymentPrintLine(
+              label: p.label,
+              amount: p.amount,
+              amountTendered: p.amountTendered,
+              changeGiven: p.changeGiven,
+            ),
+          )
+          .toList(),
+      storeName: 'Reyes Nieves',
+      storeTagline: 'Nieves · Baguettes · Bebidas',
+    );
+  }
+
   final method = paymentData['method'] as String? ?? 'cash';
   final amountTendered = (paymentData['amountTendered'] as num?)?.toDouble() ?? 0.0;
   final cardType = paymentData['cardType'] as String?;
-  String paymentMethod;
-  switch (method) {
-    case 'cash':
-      paymentMethod = 'CASH';
-      break;
-    case 'card':
-      paymentMethod = cardType == 'credit' ? 'CARD_CREDIT' : 'CARD_DEBIT';
-      break;
-    case 'transfer':
-      paymentMethod = 'TRANSFER';
-      break;
-    default:
-      paymentMethod = 'CASH';
-  }
-  final changeGiven = method == 'cash' && amountTendered > receipt.total
+  final paymentMethod = SalePaymentLine.methodFromCheckout(method, cardType);
+  final changeGiven = method == 'cash' && amountTendered >= receipt.total
       ? (amountTendered - receipt.total)
-      : 0.0;
+      : null;
 
   return ReceiptPrintData(
     lines: receipt.lines
@@ -499,12 +630,13 @@ ReceiptPrintData _receiptPrintDataFromReceipt(
               description: l.description,
               quantity: l.quantity,
               amount: l.amount,
+              modifierDetails: l.modifierDetails,
             ))
         .toList(),
     total: receipt.total,
     paymentMethod: paymentMethod,
-    amountTendered: amountTendered > 0 ? amountTendered : null,
-    changeGiven: changeGiven > 0 ? changeGiven : null,
+    amountTendered: method == 'cash' && amountTendered > 0 ? amountTendered : null,
+    changeGiven: changeGiven,
     storeName: 'Reyes Nieves',
     storeTagline: 'Nieves · Baguettes · Bebidas',
     // storeAddress: 'Tu dirección aquí',
@@ -578,6 +710,14 @@ void _scanAndApplyDiscount(BuildContext context, WidgetRef ref) async {
 }
 
 void _showDiscountDialog(BuildContext context, WidgetRef ref) async {
+  final l10n = ref.read(appLocalizationsProvider);
+  final repo = ref.read(posRepositoryProvider);
+  final catalogDiscounts = repo != null
+      ? await repo.getActiveDiscountsCatalog()
+      : await CloudSyncService.fetchActiveDiscountsFromCloud();
+
+  if (!context.mounted) return;
+
   final codeController = TextEditingController();
   final pctController = TextEditingController();
   final nameContainsController = TextEditingController();
@@ -586,12 +726,64 @@ void _showDiscountDialog(BuildContext context, WidgetRef ref) async {
   final result = await showDialog<Object>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Descuentos'),
+      title: Text(l10n.discounts),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (catalogDiscounts.isNotEmpty) ...[
+              Text(
+                l10n.discountPickFromList,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: catalogDiscounts.length,
+                  itemBuilder: (context, i) {
+                    final d = catalogDiscounts[i];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      leading: Icon(
+                        Icons.local_offer_outlined,
+                        color: Theme.of(ctx).colorScheme.primary,
+                      ),
+                      title: Text(
+                        d.description,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        '${(d.percentage * 100).toStringAsFixed(0)}% · ${d.code}',
+                        style: GoogleFonts.inter(fontSize: 13),
+                      ),
+                      onTap: () => Navigator.pop(ctx, _DiscountResultCatalog(d)),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+            ] else ...[
+              Text(
+                l10n.discountCatalogEmpty,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+            ],
             Text(
               'Por código',
               style: GoogleFonts.inter(
@@ -703,12 +895,24 @@ void _showDiscountDialog(BuildContext context, WidgetRef ref) async {
   if (!context.mounted) return;
   if (result == null) return;
 
+  if (result is _DiscountResultCatalog) {
+    ref.read(cartControllerProvider.notifier).applyCatalogDiscount(result.discount);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.discountCatalogAppliedToast(result.discount.description)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return;
+  }
   if (result is _DiscountResultCode) {
     final ok = await ref.read(cartControllerProvider.notifier).applyDiscount(result.code);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? 'Código aplicado' : 'Código inválido'),
+          content: Text(ok ? l10n.codeApplied : l10n.invalidCode),
           backgroundColor: ok ? null : Theme.of(context).colorScheme.error,
           behavior: SnackBarBehavior.floating,
         ),
@@ -731,6 +935,11 @@ void _showDiscountDialog(BuildContext context, WidgetRef ref) async {
       ),
     );
   }
+}
+
+class _DiscountResultCatalog {
+  const _DiscountResultCatalog(this.discount);
+  final Discount discount;
 }
 
 class _DiscountResultCode {
@@ -967,7 +1176,7 @@ class _CategoryOrProductsGrid extends ConsumerWidget {
     final productsAsync = ref.watch(_gridProductsProvider);
     final directProductsAsync = ref.watch(_directCategoryProductsProvider);
 
-    return childCategoriesAsync.when(
+    final gridContent = childCategoriesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (childCategories) {
@@ -1058,6 +1267,162 @@ class _CategoryOrProductsGrid extends ConsumerWidget {
           ),
         );
       },
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PosTopSellingStrip(onProductTap: onProductTap),
+        Expanded(child: gridContent),
+      ],
+    );
+  }
+}
+
+class _PosTopSellingStrip extends ConsumerWidget {
+  const _PosTopSellingStrip({required this.onProductTap});
+
+  final Future<void> Function(BuildContext context, Product product) onProductTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_topSellingProductsProvider);
+    final l10n = ref.watch(appLocalizationsProvider);
+    final scheme = Theme.of(context).colorScheme;
+    return async.when(
+      data: (products) {
+        return Material(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text(
+                  l10n.posTopSellersStrip,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              if (products.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Text(
+                    l10n.posTopSellersEmpty,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.9),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 92,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: products.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (ctx, i) {
+                      final p = products[i];
+                      return _PosTopSellerChip(
+                        product: p,
+                        onTap: () => onProductTap(ctx, p),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => Material(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+          child: Text(
+            l10n.posTopSellersEmpty,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              height: 1.35,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PosTopSellerChip extends StatelessWidget {
+  const _PosTopSellerChip({
+    required this.product,
+    required this.onTap,
+  });
+
+  final Product product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      elevation: 1,
+      shadowColor: Colors.black26,
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 108,
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                        ? Image.network(
+                            product.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _ImagePlaceholder(),
+                          )
+                        : _ImagePlaceholder(),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    height: 1.15,
+                  ),
+                ),
+                Text(
+                  '\$${product.price.toStringAsFixed(2)}',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1485,7 +1850,7 @@ class _TotalsRow extends StatelessWidget {
   }
 }
 
-class _CartSummaryPanel extends StatelessWidget {
+class _CartSummaryPanel extends ConsumerWidget {
   const _CartSummaryPanel({
     required this.l10n,
     required this.cartState,
@@ -1498,6 +1863,7 @@ class _CartSummaryPanel extends StatelessWidget {
     required this.onRemoveDiscount,
     required this.onRemoveProductDiscountAt,
     this.scrollable = false,
+    this.checkoutEnabled = true,
   });
 
   final AppLocalizations l10n;
@@ -1511,11 +1877,14 @@ class _CartSummaryPanel extends StatelessWidget {
   final VoidCallback onRemoveDiscount;
   final void Function(int index) onRemoveProductDiscountAt;
   final bool scrollable;
+  /// False when no open shift (checkout blocked until shift is opened).
+  final bool checkoutEnabled;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final receiptAsync = this.receiptAsync;
     final items = cartState.items;
+    final supplyNames = ref.watch(cartModifierSupplyNamesProvider).value ?? {};
     final receipt = receiptAsync.value;
     final total = receipt?.total ?? 0.0;
     final bundleTotal = receipt?.lines
@@ -1596,6 +1965,7 @@ class _CartSummaryPanel extends StatelessWidget {
                   itemBuilder: (context, index) => _buildCartItemTile(
                     context,
                     items[index],
+                    supplyIdToName: supplyNames,
                     onRemove: () => onRemoveItem(items[index]),
                   ),
                 ),
@@ -1638,6 +2008,7 @@ class _CartSummaryPanel extends StatelessWidget {
                   itemBuilder: (context, index) => _buildCartItemTile(
                     context,
                     items[index],
+                    supplyIdToName: supplyNames,
                     onRemove: () => onRemoveItem(items[index]),
                   ),
                 );
@@ -1660,7 +2031,7 @@ class _CartSummaryPanel extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '${l10n.discountPercent} (${(cartState.appliedDiscount!.percentage * 100).toStringAsFixed(0)}%)',
+                          '${cartState.appliedDiscount!.description.trim().isNotEmpty ? cartState.appliedDiscount!.description.trim() : l10n.discountPercent} (${(cartState.appliedDiscount!.percentage * 100).toStringAsFixed(0)}%)',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: Colors.green.shade700,
@@ -1769,7 +2140,7 @@ class _CartSummaryPanel extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
-                        onPressed: items.isEmpty ? null : onCheckout,
+                        onPressed: (items.isEmpty || !checkoutEnabled) ? null : onCheckout,
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
@@ -1806,17 +2177,23 @@ class _CartSummaryPanel extends StatelessWidget {
   Widget _buildCartItemTile(
     BuildContext context,
     CartItem item, {
+    Map<int, String> supplyIdToName = const {},
     required VoidCallback onRemove,
   }) {
     final qty = item.quantity;
     final subtotal = item.subtotal;
+    final modifierLines = cartItemModifierLabels(item, supplyIdToName: supplyIdToName);
+    final variant = Theme.of(context).colorScheme.onSurfaceVariant;
+
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      isThreeLine: modifierLines.length > 1,
       title: Row(
         children: [
           Expanded(
             child: Text(
               item.product.name,
-              style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1824,19 +2201,32 @@ class _CartSummaryPanel extends StatelessWidget {
           if (qty != 1)
             Text(
               '${qty.toStringAsFixed(qty == qty.truncateToDouble() ? 0 : 1)}x',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              style: GoogleFonts.inter(fontSize: 12, color: variant),
             ),
         ],
       ),
-      subtitle: item.selectedModifiers.isNotEmpty
-          ? Text(
-              'Con modificadores',
-                              style: GoogleFonts.inter(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            )
-          : null,
+      subtitle: modifierLines.isEmpty
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final label in modifierLines)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        '· $label',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          height: 1.2,
+                          color: variant,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

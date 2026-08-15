@@ -1,11 +1,11 @@
 {
-    "name": "ice_pos",
-    "short_name": "ice_pos",
+    "name": "ICE POS",
+    "short_name": "ICE POS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Punto de venta ICE POS",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -6,6 +6,7 @@ class ReceiptPrintData {
     this.paymentMethod,
     this.amountTendered,
     this.changeGiven,
+    this.splitPayments = const [],
     this.storeName = 'Reyes Nieves',
     this.storeTagline,
     this.storeAddress,
@@ -17,6 +18,7 @@ class ReceiptPrintData {
   final String? paymentMethod;
   final double? amountTendered;
   final double? changeGiven;
+  final List<SalePaymentPrintLine> splitPayments;
   final String storeName;
   /// Optional line under the name (e.g. "Nieves · Baguettes · Bebidas").
   final String? storeTagline;
@@ -34,10 +36,29 @@ class ReceiptPrintData {
         return 'Tarjeta crédito';
       case 'TRANSFER':
         return 'Transferencia';
+      case 'SPLIT':
+        return 'Pago dividido';
       default:
         return paymentMethod!;
     }
   }
+
+  bool get isSplitPayment =>
+      splitPayments.isNotEmpty || paymentMethod == 'SPLIT';
+}
+
+class SalePaymentPrintLine {
+  const SalePaymentPrintLine({
+    required this.label,
+    required this.amount,
+    this.amountTendered,
+    this.changeGiven,
+  });
+
+  final String label;
+  final double amount;
+  final double? amountTendered;
+  final double? changeGiven;
 }
 
 class ReceiptPrintLine {
@@ -45,9 +66,11 @@ class ReceiptPrintLine {
     required this.description,
     required this.quantity,
     required this.amount,
+    this.modifierDetails = const [],
   });
 
   final String description;
   final int quantity;
   final double amount;
+  final List<String> modifierDetails;
 }

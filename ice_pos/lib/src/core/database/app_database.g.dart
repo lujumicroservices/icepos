@@ -1659,6 +1659,432 @@ class RecipesCompanion extends UpdateCompanion<Recipe> {
   }
 }
 
+class $ShiftsTable extends Shifts with TableInfo<$ShiftsTable, Shift> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ShiftsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _cloudShiftIdMeta = const VerificationMeta(
+    'cloudShiftId',
+  );
+  @override
+  late final GeneratedColumn<int> cloudShiftId = GeneratedColumn<int>(
+    'cloud_shift_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cloudRegisterIdMeta = const VerificationMeta(
+    'cloudRegisterId',
+  );
+  @override
+  late final GeneratedColumn<int> cloudRegisterId = GeneratedColumn<int>(
+    'cloud_register_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startTimeMeta = const VerificationMeta(
+    'startTime',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startTime = GeneratedColumn<DateTime>(
+    'start_time',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _endTimeMeta = const VerificationMeta(
+    'endTime',
+  );
+  @override
+  late final GeneratedColumn<DateTime> endTime = GeneratedColumn<DateTime>(
+    'end_time',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startingFundMeta = const VerificationMeta(
+    'startingFund',
+  );
+  @override
+  late final GeneratedColumn<double> startingFund = GeneratedColumn<double>(
+    'starting_fund',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    cloudShiftId,
+    cloudRegisterId,
+    startTime,
+    endTime,
+    startingFund,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shifts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Shift> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('cloud_shift_id')) {
+      context.handle(
+        _cloudShiftIdMeta,
+        cloudShiftId.isAcceptableOrUnknown(
+          data['cloud_shift_id']!,
+          _cloudShiftIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cloud_register_id')) {
+      context.handle(
+        _cloudRegisterIdMeta,
+        cloudRegisterId.isAcceptableOrUnknown(
+          data['cloud_register_id']!,
+          _cloudRegisterIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('start_time')) {
+      context.handle(
+        _startTimeMeta,
+        startTime.isAcceptableOrUnknown(data['start_time']!, _startTimeMeta),
+      );
+    }
+    if (data.containsKey('end_time')) {
+      context.handle(
+        _endTimeMeta,
+        endTime.isAcceptableOrUnknown(data['end_time']!, _endTimeMeta),
+      );
+    }
+    if (data.containsKey('starting_fund')) {
+      context.handle(
+        _startingFundMeta,
+        startingFund.isAcceptableOrUnknown(
+          data['starting_fund']!,
+          _startingFundMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Shift map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Shift(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      cloudShiftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cloud_shift_id'],
+      ),
+      cloudRegisterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cloud_register_id'],
+      ),
+      startTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}start_time'],
+      )!,
+      endTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}end_time'],
+      ),
+      startingFund: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}starting_fund'],
+      )!,
+    );
+  }
+
+  @override
+  $ShiftsTable createAlias(String alias) {
+    return $ShiftsTable(attachedDatabase, alias);
+  }
+}
+
+class Shift extends DataClass implements Insertable<Shift> {
+  final int id;
+
+  /// Same as [id] in Supabase `shifts` (assigned at open; legacy rows backfilled to [id]).
+  final int? cloudShiftId;
+
+  /// `pos_registers.id` en Supabase (cajón lógico de esta tienda).
+  final int? cloudRegisterId;
+  final DateTime startTime;
+  final DateTime? endTime;
+  final double startingFund;
+  const Shift({
+    required this.id,
+    this.cloudShiftId,
+    this.cloudRegisterId,
+    required this.startTime,
+    this.endTime,
+    required this.startingFund,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || cloudShiftId != null) {
+      map['cloud_shift_id'] = Variable<int>(cloudShiftId);
+    }
+    if (!nullToAbsent || cloudRegisterId != null) {
+      map['cloud_register_id'] = Variable<int>(cloudRegisterId);
+    }
+    map['start_time'] = Variable<DateTime>(startTime);
+    if (!nullToAbsent || endTime != null) {
+      map['end_time'] = Variable<DateTime>(endTime);
+    }
+    map['starting_fund'] = Variable<double>(startingFund);
+    return map;
+  }
+
+  ShiftsCompanion toCompanion(bool nullToAbsent) {
+    return ShiftsCompanion(
+      id: Value(id),
+      cloudShiftId: cloudShiftId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cloudShiftId),
+      cloudRegisterId: cloudRegisterId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cloudRegisterId),
+      startTime: Value(startTime),
+      endTime: endTime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endTime),
+      startingFund: Value(startingFund),
+    );
+  }
+
+  factory Shift.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Shift(
+      id: serializer.fromJson<int>(json['id']),
+      cloudShiftId: serializer.fromJson<int?>(json['cloudShiftId']),
+      cloudRegisterId: serializer.fromJson<int?>(json['cloudRegisterId']),
+      startTime: serializer.fromJson<DateTime>(json['startTime']),
+      endTime: serializer.fromJson<DateTime?>(json['endTime']),
+      startingFund: serializer.fromJson<double>(json['startingFund']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'cloudShiftId': serializer.toJson<int?>(cloudShiftId),
+      'cloudRegisterId': serializer.toJson<int?>(cloudRegisterId),
+      'startTime': serializer.toJson<DateTime>(startTime),
+      'endTime': serializer.toJson<DateTime?>(endTime),
+      'startingFund': serializer.toJson<double>(startingFund),
+    };
+  }
+
+  Shift copyWith({
+    int? id,
+    Value<int?> cloudShiftId = const Value.absent(),
+    Value<int?> cloudRegisterId = const Value.absent(),
+    DateTime? startTime,
+    Value<DateTime?> endTime = const Value.absent(),
+    double? startingFund,
+  }) => Shift(
+    id: id ?? this.id,
+    cloudShiftId: cloudShiftId.present ? cloudShiftId.value : this.cloudShiftId,
+    cloudRegisterId: cloudRegisterId.present
+        ? cloudRegisterId.value
+        : this.cloudRegisterId,
+    startTime: startTime ?? this.startTime,
+    endTime: endTime.present ? endTime.value : this.endTime,
+    startingFund: startingFund ?? this.startingFund,
+  );
+  Shift copyWithCompanion(ShiftsCompanion data) {
+    return Shift(
+      id: data.id.present ? data.id.value : this.id,
+      cloudShiftId: data.cloudShiftId.present
+          ? data.cloudShiftId.value
+          : this.cloudShiftId,
+      cloudRegisterId: data.cloudRegisterId.present
+          ? data.cloudRegisterId.value
+          : this.cloudRegisterId,
+      startTime: data.startTime.present ? data.startTime.value : this.startTime,
+      endTime: data.endTime.present ? data.endTime.value : this.endTime,
+      startingFund: data.startingFund.present
+          ? data.startingFund.value
+          : this.startingFund,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Shift(')
+          ..write('id: $id, ')
+          ..write('cloudShiftId: $cloudShiftId, ')
+          ..write('cloudRegisterId: $cloudRegisterId, ')
+          ..write('startTime: $startTime, ')
+          ..write('endTime: $endTime, ')
+          ..write('startingFund: $startingFund')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    cloudShiftId,
+    cloudRegisterId,
+    startTime,
+    endTime,
+    startingFund,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Shift &&
+          other.id == this.id &&
+          other.cloudShiftId == this.cloudShiftId &&
+          other.cloudRegisterId == this.cloudRegisterId &&
+          other.startTime == this.startTime &&
+          other.endTime == this.endTime &&
+          other.startingFund == this.startingFund);
+}
+
+class ShiftsCompanion extends UpdateCompanion<Shift> {
+  final Value<int> id;
+  final Value<int?> cloudShiftId;
+  final Value<int?> cloudRegisterId;
+  final Value<DateTime> startTime;
+  final Value<DateTime?> endTime;
+  final Value<double> startingFund;
+  const ShiftsCompanion({
+    this.id = const Value.absent(),
+    this.cloudShiftId = const Value.absent(),
+    this.cloudRegisterId = const Value.absent(),
+    this.startTime = const Value.absent(),
+    this.endTime = const Value.absent(),
+    this.startingFund = const Value.absent(),
+  });
+  ShiftsCompanion.insert({
+    this.id = const Value.absent(),
+    this.cloudShiftId = const Value.absent(),
+    this.cloudRegisterId = const Value.absent(),
+    this.startTime = const Value.absent(),
+    this.endTime = const Value.absent(),
+    this.startingFund = const Value.absent(),
+  });
+  static Insertable<Shift> custom({
+    Expression<int>? id,
+    Expression<int>? cloudShiftId,
+    Expression<int>? cloudRegisterId,
+    Expression<DateTime>? startTime,
+    Expression<DateTime>? endTime,
+    Expression<double>? startingFund,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (cloudShiftId != null) 'cloud_shift_id': cloudShiftId,
+      if (cloudRegisterId != null) 'cloud_register_id': cloudRegisterId,
+      if (startTime != null) 'start_time': startTime,
+      if (endTime != null) 'end_time': endTime,
+      if (startingFund != null) 'starting_fund': startingFund,
+    });
+  }
+
+  ShiftsCompanion copyWith({
+    Value<int>? id,
+    Value<int?>? cloudShiftId,
+    Value<int?>? cloudRegisterId,
+    Value<DateTime>? startTime,
+    Value<DateTime?>? endTime,
+    Value<double>? startingFund,
+  }) {
+    return ShiftsCompanion(
+      id: id ?? this.id,
+      cloudShiftId: cloudShiftId ?? this.cloudShiftId,
+      cloudRegisterId: cloudRegisterId ?? this.cloudRegisterId,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      startingFund: startingFund ?? this.startingFund,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (cloudShiftId.present) {
+      map['cloud_shift_id'] = Variable<int>(cloudShiftId.value);
+    }
+    if (cloudRegisterId.present) {
+      map['cloud_register_id'] = Variable<int>(cloudRegisterId.value);
+    }
+    if (startTime.present) {
+      map['start_time'] = Variable<DateTime>(startTime.value);
+    }
+    if (endTime.present) {
+      map['end_time'] = Variable<DateTime>(endTime.value);
+    }
+    if (startingFund.present) {
+      map['starting_fund'] = Variable<double>(startingFund.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ShiftsCompanion(')
+          ..write('id: $id, ')
+          ..write('cloudShiftId: $cloudShiftId, ')
+          ..write('cloudRegisterId: $cloudRegisterId, ')
+          ..write('startTime: $startTime, ')
+          ..write('endTime: $endTime, ')
+          ..write('startingFund: $startingFund')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -1734,6 +2160,17 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0.0),
   );
+  static const VerificationMeta _paymentsJsonMeta = const VerificationMeta(
+    'paymentsJson',
+  );
+  @override
+  late final GeneratedColumn<String> paymentsJson = GeneratedColumn<String>(
+    'payments_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _cloudSaleIdMeta = const VerificationMeta(
     'cloudSaleId',
   );
@@ -1756,6 +2193,20 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _shiftIdMeta = const VerificationMeta(
+    'shiftId',
+  );
+  @override
+  late final GeneratedColumn<int> shiftId = GeneratedColumn<int>(
+    'shift_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES shifts (id)',
+    ),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1764,8 +2215,10 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     paymentMethod,
     amountTendered,
     changeGiven,
+    paymentsJson,
     cloudSaleId,
     cancelledAt,
+    shiftId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1826,6 +2279,15 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
         ),
       );
     }
+    if (data.containsKey('payments_json')) {
+      context.handle(
+        _paymentsJsonMeta,
+        paymentsJson.isAcceptableOrUnknown(
+          data['payments_json']!,
+          _paymentsJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('cloud_sale_id')) {
       context.handle(
         _cloudSaleIdMeta,
@@ -1843,6 +2305,14 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
           _cancelledAtMeta,
         ),
       );
+    }
+    if (data.containsKey('shift_id')) {
+      context.handle(
+        _shiftIdMeta,
+        shiftId.isAcceptableOrUnknown(data['shift_id']!, _shiftIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_shiftIdMeta);
     }
     return context;
   }
@@ -1877,6 +2347,10 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
         DriftSqlType.double,
         data['${effectivePrefix}change_given'],
       )!,
+      paymentsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payments_json'],
+      ),
       cloudSaleId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}cloud_sale_id'],
@@ -1885,6 +2359,10 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}cancelled_at'],
       ),
+      shiftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}shift_id'],
+      )!,
     );
   }
 
@@ -1899,16 +2377,22 @@ class Sale extends DataClass implements Insertable<Sale> {
   final DateTime date;
   final double totalAmount;
 
-  /// CASH, CARD_DEBIT, CARD_CREDIT, TRANSFER
+  /// CASH, CARD_DEBIT, CARD_CREDIT, TRANSFER, SPLIT (see [paymentsJson])
   final String paymentMethod;
   final double amountTendered;
   final double changeGiven;
+
+  /// JSON array of split payments when [paymentMethod] is SPLIT.
+  final String? paymentsJson;
 
   /// Id de la venta en Supabase (para poder cancelarla en la nube).
   final int? cloudSaleId;
 
   /// Borrado lógico: si no es null, la venta está cancelada (no se borra físicamente).
   final DateTime? cancelledAt;
+
+  /// Turno local ([Shifts.id]); al sincronizar se envía como `sales.shift_id` = id nube del turno.
+  final int shiftId;
   const Sale({
     required this.id,
     required this.date,
@@ -1916,8 +2400,10 @@ class Sale extends DataClass implements Insertable<Sale> {
     required this.paymentMethod,
     required this.amountTendered,
     required this.changeGiven,
+    this.paymentsJson,
     this.cloudSaleId,
     this.cancelledAt,
+    required this.shiftId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1928,12 +2414,16 @@ class Sale extends DataClass implements Insertable<Sale> {
     map['payment_method'] = Variable<String>(paymentMethod);
     map['amount_tendered'] = Variable<double>(amountTendered);
     map['change_given'] = Variable<double>(changeGiven);
+    if (!nullToAbsent || paymentsJson != null) {
+      map['payments_json'] = Variable<String>(paymentsJson);
+    }
     if (!nullToAbsent || cloudSaleId != null) {
       map['cloud_sale_id'] = Variable<int>(cloudSaleId);
     }
     if (!nullToAbsent || cancelledAt != null) {
       map['cancelled_at'] = Variable<DateTime>(cancelledAt);
     }
+    map['shift_id'] = Variable<int>(shiftId);
     return map;
   }
 
@@ -1945,12 +2435,16 @@ class Sale extends DataClass implements Insertable<Sale> {
       paymentMethod: Value(paymentMethod),
       amountTendered: Value(amountTendered),
       changeGiven: Value(changeGiven),
+      paymentsJson: paymentsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(paymentsJson),
       cloudSaleId: cloudSaleId == null && nullToAbsent
           ? const Value.absent()
           : Value(cloudSaleId),
       cancelledAt: cancelledAt == null && nullToAbsent
           ? const Value.absent()
           : Value(cancelledAt),
+      shiftId: Value(shiftId),
     );
   }
 
@@ -1966,8 +2460,10 @@ class Sale extends DataClass implements Insertable<Sale> {
       paymentMethod: serializer.fromJson<String>(json['paymentMethod']),
       amountTendered: serializer.fromJson<double>(json['amountTendered']),
       changeGiven: serializer.fromJson<double>(json['changeGiven']),
+      paymentsJson: serializer.fromJson<String?>(json['paymentsJson']),
       cloudSaleId: serializer.fromJson<int?>(json['cloudSaleId']),
       cancelledAt: serializer.fromJson<DateTime?>(json['cancelledAt']),
+      shiftId: serializer.fromJson<int>(json['shiftId']),
     );
   }
   @override
@@ -1980,8 +2476,10 @@ class Sale extends DataClass implements Insertable<Sale> {
       'paymentMethod': serializer.toJson<String>(paymentMethod),
       'amountTendered': serializer.toJson<double>(amountTendered),
       'changeGiven': serializer.toJson<double>(changeGiven),
+      'paymentsJson': serializer.toJson<String?>(paymentsJson),
       'cloudSaleId': serializer.toJson<int?>(cloudSaleId),
       'cancelledAt': serializer.toJson<DateTime?>(cancelledAt),
+      'shiftId': serializer.toJson<int>(shiftId),
     };
   }
 
@@ -1992,8 +2490,10 @@ class Sale extends DataClass implements Insertable<Sale> {
     String? paymentMethod,
     double? amountTendered,
     double? changeGiven,
+    Value<String?> paymentsJson = const Value.absent(),
     Value<int?> cloudSaleId = const Value.absent(),
     Value<DateTime?> cancelledAt = const Value.absent(),
+    int? shiftId,
   }) => Sale(
     id: id ?? this.id,
     date: date ?? this.date,
@@ -2001,8 +2501,10 @@ class Sale extends DataClass implements Insertable<Sale> {
     paymentMethod: paymentMethod ?? this.paymentMethod,
     amountTendered: amountTendered ?? this.amountTendered,
     changeGiven: changeGiven ?? this.changeGiven,
+    paymentsJson: paymentsJson.present ? paymentsJson.value : this.paymentsJson,
     cloudSaleId: cloudSaleId.present ? cloudSaleId.value : this.cloudSaleId,
     cancelledAt: cancelledAt.present ? cancelledAt.value : this.cancelledAt,
+    shiftId: shiftId ?? this.shiftId,
   );
   Sale copyWithCompanion(SalesCompanion data) {
     return Sale(
@@ -2020,12 +2522,16 @@ class Sale extends DataClass implements Insertable<Sale> {
       changeGiven: data.changeGiven.present
           ? data.changeGiven.value
           : this.changeGiven,
+      paymentsJson: data.paymentsJson.present
+          ? data.paymentsJson.value
+          : this.paymentsJson,
       cloudSaleId: data.cloudSaleId.present
           ? data.cloudSaleId.value
           : this.cloudSaleId,
       cancelledAt: data.cancelledAt.present
           ? data.cancelledAt.value
           : this.cancelledAt,
+      shiftId: data.shiftId.present ? data.shiftId.value : this.shiftId,
     );
   }
 
@@ -2038,8 +2544,10 @@ class Sale extends DataClass implements Insertable<Sale> {
           ..write('paymentMethod: $paymentMethod, ')
           ..write('amountTendered: $amountTendered, ')
           ..write('changeGiven: $changeGiven, ')
+          ..write('paymentsJson: $paymentsJson, ')
           ..write('cloudSaleId: $cloudSaleId, ')
-          ..write('cancelledAt: $cancelledAt')
+          ..write('cancelledAt: $cancelledAt, ')
+          ..write('shiftId: $shiftId')
           ..write(')'))
         .toString();
   }
@@ -2052,8 +2560,10 @@ class Sale extends DataClass implements Insertable<Sale> {
     paymentMethod,
     amountTendered,
     changeGiven,
+    paymentsJson,
     cloudSaleId,
     cancelledAt,
+    shiftId,
   );
   @override
   bool operator ==(Object other) =>
@@ -2065,8 +2575,10 @@ class Sale extends DataClass implements Insertable<Sale> {
           other.paymentMethod == this.paymentMethod &&
           other.amountTendered == this.amountTendered &&
           other.changeGiven == this.changeGiven &&
+          other.paymentsJson == this.paymentsJson &&
           other.cloudSaleId == this.cloudSaleId &&
-          other.cancelledAt == this.cancelledAt);
+          other.cancelledAt == this.cancelledAt &&
+          other.shiftId == this.shiftId);
 }
 
 class SalesCompanion extends UpdateCompanion<Sale> {
@@ -2076,8 +2588,10 @@ class SalesCompanion extends UpdateCompanion<Sale> {
   final Value<String> paymentMethod;
   final Value<double> amountTendered;
   final Value<double> changeGiven;
+  final Value<String?> paymentsJson;
   final Value<int?> cloudSaleId;
   final Value<DateTime?> cancelledAt;
+  final Value<int> shiftId;
   const SalesCompanion({
     this.id = const Value.absent(),
     this.date = const Value.absent(),
@@ -2085,8 +2599,10 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     this.paymentMethod = const Value.absent(),
     this.amountTendered = const Value.absent(),
     this.changeGiven = const Value.absent(),
+    this.paymentsJson = const Value.absent(),
     this.cloudSaleId = const Value.absent(),
     this.cancelledAt = const Value.absent(),
+    this.shiftId = const Value.absent(),
   });
   SalesCompanion.insert({
     this.id = const Value.absent(),
@@ -2095,9 +2611,12 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     this.paymentMethod = const Value.absent(),
     this.amountTendered = const Value.absent(),
     this.changeGiven = const Value.absent(),
+    this.paymentsJson = const Value.absent(),
     this.cloudSaleId = const Value.absent(),
     this.cancelledAt = const Value.absent(),
-  }) : totalAmount = Value(totalAmount);
+    required int shiftId,
+  }) : totalAmount = Value(totalAmount),
+       shiftId = Value(shiftId);
   static Insertable<Sale> custom({
     Expression<int>? id,
     Expression<DateTime>? date,
@@ -2105,8 +2624,10 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     Expression<String>? paymentMethod,
     Expression<double>? amountTendered,
     Expression<double>? changeGiven,
+    Expression<String>? paymentsJson,
     Expression<int>? cloudSaleId,
     Expression<DateTime>? cancelledAt,
+    Expression<int>? shiftId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2115,8 +2636,10 @@ class SalesCompanion extends UpdateCompanion<Sale> {
       if (paymentMethod != null) 'payment_method': paymentMethod,
       if (amountTendered != null) 'amount_tendered': amountTendered,
       if (changeGiven != null) 'change_given': changeGiven,
+      if (paymentsJson != null) 'payments_json': paymentsJson,
       if (cloudSaleId != null) 'cloud_sale_id': cloudSaleId,
       if (cancelledAt != null) 'cancelled_at': cancelledAt,
+      if (shiftId != null) 'shift_id': shiftId,
     });
   }
 
@@ -2127,8 +2650,10 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     Value<String>? paymentMethod,
     Value<double>? amountTendered,
     Value<double>? changeGiven,
+    Value<String?>? paymentsJson,
     Value<int?>? cloudSaleId,
     Value<DateTime?>? cancelledAt,
+    Value<int>? shiftId,
   }) {
     return SalesCompanion(
       id: id ?? this.id,
@@ -2137,8 +2662,10 @@ class SalesCompanion extends UpdateCompanion<Sale> {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       amountTendered: amountTendered ?? this.amountTendered,
       changeGiven: changeGiven ?? this.changeGiven,
+      paymentsJson: paymentsJson ?? this.paymentsJson,
       cloudSaleId: cloudSaleId ?? this.cloudSaleId,
       cancelledAt: cancelledAt ?? this.cancelledAt,
+      shiftId: shiftId ?? this.shiftId,
     );
   }
 
@@ -2163,11 +2690,17 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     if (changeGiven.present) {
       map['change_given'] = Variable<double>(changeGiven.value);
     }
+    if (paymentsJson.present) {
+      map['payments_json'] = Variable<String>(paymentsJson.value);
+    }
     if (cloudSaleId.present) {
       map['cloud_sale_id'] = Variable<int>(cloudSaleId.value);
     }
     if (cancelledAt.present) {
       map['cancelled_at'] = Variable<DateTime>(cancelledAt.value);
+    }
+    if (shiftId.present) {
+      map['shift_id'] = Variable<int>(shiftId.value);
     }
     return map;
   }
@@ -2181,8 +2714,10 @@ class SalesCompanion extends UpdateCompanion<Sale> {
           ..write('paymentMethod: $paymentMethod, ')
           ..write('amountTendered: $amountTendered, ')
           ..write('changeGiven: $changeGiven, ')
+          ..write('paymentsJson: $paymentsJson, ')
           ..write('cloudSaleId: $cloudSaleId, ')
-          ..write('cancelledAt: $cancelledAt')
+          ..write('cancelledAt: $cancelledAt, ')
+          ..write('shiftId: $shiftId')
           ..write(')'))
         .toString();
   }
@@ -2255,6 +2790,17 @@ class $SaleItemsTable extends SaleItems
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _modifiersJsonMeta = const VerificationMeta(
+    'modifiersJson',
+  );
+  @override
+  late final GeneratedColumn<String> modifiersJson = GeneratedColumn<String>(
+    'modifiers_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2262,6 +2808,7 @@ class $SaleItemsTable extends SaleItems
     productId,
     quantity,
     unitPrice,
+    modifiersJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2310,6 +2857,15 @@ class $SaleItemsTable extends SaleItems
     } else if (isInserting) {
       context.missing(_unitPriceMeta);
     }
+    if (data.containsKey('modifiers_json')) {
+      context.handle(
+        _modifiersJsonMeta,
+        modifiersJson.isAcceptableOrUnknown(
+          data['modifiers_json']!,
+          _modifiersJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2339,6 +2895,10 @@ class $SaleItemsTable extends SaleItems
         DriftSqlType.double,
         data['${effectivePrefix}unit_price'],
       )!,
+      modifiersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}modifiers_json'],
+      ),
     );
   }
 
@@ -2354,12 +2914,16 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
   final int productId;
   final double quantity;
   final double unitPrice;
+
+  /// JSON array of [ModifierOptionDto] for cloud replay when the sale was offline or sync failed.
+  final String? modifiersJson;
   const SaleItem({
     required this.id,
     required this.saleId,
     required this.productId,
     required this.quantity,
     required this.unitPrice,
+    this.modifiersJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2369,6 +2933,9 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
     map['product_id'] = Variable<int>(productId);
     map['quantity'] = Variable<double>(quantity);
     map['unit_price'] = Variable<double>(unitPrice);
+    if (!nullToAbsent || modifiersJson != null) {
+      map['modifiers_json'] = Variable<String>(modifiersJson);
+    }
     return map;
   }
 
@@ -2379,6 +2946,9 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       productId: Value(productId),
       quantity: Value(quantity),
       unitPrice: Value(unitPrice),
+      modifiersJson: modifiersJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(modifiersJson),
     );
   }
 
@@ -2393,6 +2963,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       productId: serializer.fromJson<int>(json['productId']),
       quantity: serializer.fromJson<double>(json['quantity']),
       unitPrice: serializer.fromJson<double>(json['unitPrice']),
+      modifiersJson: serializer.fromJson<String?>(json['modifiersJson']),
     );
   }
   @override
@@ -2404,6 +2975,7 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       'productId': serializer.toJson<int>(productId),
       'quantity': serializer.toJson<double>(quantity),
       'unitPrice': serializer.toJson<double>(unitPrice),
+      'modifiersJson': serializer.toJson<String?>(modifiersJson),
     };
   }
 
@@ -2413,12 +2985,16 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
     int? productId,
     double? quantity,
     double? unitPrice,
+    Value<String?> modifiersJson = const Value.absent(),
   }) => SaleItem(
     id: id ?? this.id,
     saleId: saleId ?? this.saleId,
     productId: productId ?? this.productId,
     quantity: quantity ?? this.quantity,
     unitPrice: unitPrice ?? this.unitPrice,
+    modifiersJson: modifiersJson.present
+        ? modifiersJson.value
+        : this.modifiersJson,
   );
   SaleItem copyWithCompanion(SaleItemsCompanion data) {
     return SaleItem(
@@ -2427,6 +3003,9 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
       productId: data.productId.present ? data.productId.value : this.productId,
       quantity: data.quantity.present ? data.quantity.value : this.quantity,
       unitPrice: data.unitPrice.present ? data.unitPrice.value : this.unitPrice,
+      modifiersJson: data.modifiersJson.present
+          ? data.modifiersJson.value
+          : this.modifiersJson,
     );
   }
 
@@ -2437,13 +3016,15 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
           ..write('saleId: $saleId, ')
           ..write('productId: $productId, ')
           ..write('quantity: $quantity, ')
-          ..write('unitPrice: $unitPrice')
+          ..write('unitPrice: $unitPrice, ')
+          ..write('modifiersJson: $modifiersJson')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, saleId, productId, quantity, unitPrice);
+  int get hashCode =>
+      Object.hash(id, saleId, productId, quantity, unitPrice, modifiersJson);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2452,7 +3033,8 @@ class SaleItem extends DataClass implements Insertable<SaleItem> {
           other.saleId == this.saleId &&
           other.productId == this.productId &&
           other.quantity == this.quantity &&
-          other.unitPrice == this.unitPrice);
+          other.unitPrice == this.unitPrice &&
+          other.modifiersJson == this.modifiersJson);
 }
 
 class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
@@ -2461,12 +3043,14 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
   final Value<int> productId;
   final Value<double> quantity;
   final Value<double> unitPrice;
+  final Value<String?> modifiersJson;
   const SaleItemsCompanion({
     this.id = const Value.absent(),
     this.saleId = const Value.absent(),
     this.productId = const Value.absent(),
     this.quantity = const Value.absent(),
     this.unitPrice = const Value.absent(),
+    this.modifiersJson = const Value.absent(),
   });
   SaleItemsCompanion.insert({
     this.id = const Value.absent(),
@@ -2474,6 +3058,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     required int productId,
     required double quantity,
     required double unitPrice,
+    this.modifiersJson = const Value.absent(),
   }) : saleId = Value(saleId),
        productId = Value(productId),
        quantity = Value(quantity),
@@ -2484,6 +3069,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     Expression<int>? productId,
     Expression<double>? quantity,
     Expression<double>? unitPrice,
+    Expression<String>? modifiersJson,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2491,6 +3077,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
       if (productId != null) 'product_id': productId,
       if (quantity != null) 'quantity': quantity,
       if (unitPrice != null) 'unit_price': unitPrice,
+      if (modifiersJson != null) 'modifiers_json': modifiersJson,
     });
   }
 
@@ -2500,6 +3087,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     Value<int>? productId,
     Value<double>? quantity,
     Value<double>? unitPrice,
+    Value<String?>? modifiersJson,
   }) {
     return SaleItemsCompanion(
       id: id ?? this.id,
@@ -2507,6 +3095,7 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
       productId: productId ?? this.productId,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
+      modifiersJson: modifiersJson ?? this.modifiersJson,
     );
   }
 
@@ -2528,6 +3117,9 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
     if (unitPrice.present) {
       map['unit_price'] = Variable<double>(unitPrice.value);
     }
+    if (modifiersJson.present) {
+      map['modifiers_json'] = Variable<String>(modifiersJson.value);
+    }
     return map;
   }
 
@@ -2538,7 +3130,8 @@ class SaleItemsCompanion extends UpdateCompanion<SaleItem> {
           ..write('saleId: $saleId, ')
           ..write('productId: $productId, ')
           ..write('quantity: $quantity, ')
-          ..write('unitPrice: $unitPrice')
+          ..write('unitPrice: $unitPrice, ')
+          ..write('modifiersJson: $modifiersJson')
           ..write(')'))
         .toString();
   }
@@ -5226,308 +5819,6 @@ class BundleItemsCompanion extends UpdateCompanion<BundleItem> {
   }
 }
 
-class $ShiftsTable extends Shifts with TableInfo<$ShiftsTable, Shift> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $ShiftsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
-    'id',
-    aliasedName,
-    false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
-  );
-  static const VerificationMeta _startTimeMeta = const VerificationMeta(
-    'startTime',
-  );
-  @override
-  late final GeneratedColumn<DateTime> startTime = GeneratedColumn<DateTime>(
-    'start_time',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  static const VerificationMeta _endTimeMeta = const VerificationMeta(
-    'endTime',
-  );
-  @override
-  late final GeneratedColumn<DateTime> endTime = GeneratedColumn<DateTime>(
-    'end_time',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _startingFundMeta = const VerificationMeta(
-    'startingFund',
-  );
-  @override
-  late final GeneratedColumn<double> startingFund = GeneratedColumn<double>(
-    'starting_fund',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0.0),
-  );
-  @override
-  List<GeneratedColumn> get $columns => [id, startTime, endTime, startingFund];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'shifts';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<Shift> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    }
-    if (data.containsKey('start_time')) {
-      context.handle(
-        _startTimeMeta,
-        startTime.isAcceptableOrUnknown(data['start_time']!, _startTimeMeta),
-      );
-    }
-    if (data.containsKey('end_time')) {
-      context.handle(
-        _endTimeMeta,
-        endTime.isAcceptableOrUnknown(data['end_time']!, _endTimeMeta),
-      );
-    }
-    if (data.containsKey('starting_fund')) {
-      context.handle(
-        _startingFundMeta,
-        startingFund.isAcceptableOrUnknown(
-          data['starting_fund']!,
-          _startingFundMeta,
-        ),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  Shift map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return Shift(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}id'],
-      )!,
-      startTime: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}start_time'],
-      )!,
-      endTime: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}end_time'],
-      ),
-      startingFund: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}starting_fund'],
-      )!,
-    );
-  }
-
-  @override
-  $ShiftsTable createAlias(String alias) {
-    return $ShiftsTable(attachedDatabase, alias);
-  }
-}
-
-class Shift extends DataClass implements Insertable<Shift> {
-  final int id;
-  final DateTime startTime;
-  final DateTime? endTime;
-  final double startingFund;
-  const Shift({
-    required this.id,
-    required this.startTime,
-    this.endTime,
-    required this.startingFund,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
-    map['start_time'] = Variable<DateTime>(startTime);
-    if (!nullToAbsent || endTime != null) {
-      map['end_time'] = Variable<DateTime>(endTime);
-    }
-    map['starting_fund'] = Variable<double>(startingFund);
-    return map;
-  }
-
-  ShiftsCompanion toCompanion(bool nullToAbsent) {
-    return ShiftsCompanion(
-      id: Value(id),
-      startTime: Value(startTime),
-      endTime: endTime == null && nullToAbsent
-          ? const Value.absent()
-          : Value(endTime),
-      startingFund: Value(startingFund),
-    );
-  }
-
-  factory Shift.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return Shift(
-      id: serializer.fromJson<int>(json['id']),
-      startTime: serializer.fromJson<DateTime>(json['startTime']),
-      endTime: serializer.fromJson<DateTime?>(json['endTime']),
-      startingFund: serializer.fromJson<double>(json['startingFund']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
-      'startTime': serializer.toJson<DateTime>(startTime),
-      'endTime': serializer.toJson<DateTime?>(endTime),
-      'startingFund': serializer.toJson<double>(startingFund),
-    };
-  }
-
-  Shift copyWith({
-    int? id,
-    DateTime? startTime,
-    Value<DateTime?> endTime = const Value.absent(),
-    double? startingFund,
-  }) => Shift(
-    id: id ?? this.id,
-    startTime: startTime ?? this.startTime,
-    endTime: endTime.present ? endTime.value : this.endTime,
-    startingFund: startingFund ?? this.startingFund,
-  );
-  Shift copyWithCompanion(ShiftsCompanion data) {
-    return Shift(
-      id: data.id.present ? data.id.value : this.id,
-      startTime: data.startTime.present ? data.startTime.value : this.startTime,
-      endTime: data.endTime.present ? data.endTime.value : this.endTime,
-      startingFund: data.startingFund.present
-          ? data.startingFund.value
-          : this.startingFund,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('Shift(')
-          ..write('id: $id, ')
-          ..write('startTime: $startTime, ')
-          ..write('endTime: $endTime, ')
-          ..write('startingFund: $startingFund')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(id, startTime, endTime, startingFund);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is Shift &&
-          other.id == this.id &&
-          other.startTime == this.startTime &&
-          other.endTime == this.endTime &&
-          other.startingFund == this.startingFund);
-}
-
-class ShiftsCompanion extends UpdateCompanion<Shift> {
-  final Value<int> id;
-  final Value<DateTime> startTime;
-  final Value<DateTime?> endTime;
-  final Value<double> startingFund;
-  const ShiftsCompanion({
-    this.id = const Value.absent(),
-    this.startTime = const Value.absent(),
-    this.endTime = const Value.absent(),
-    this.startingFund = const Value.absent(),
-  });
-  ShiftsCompanion.insert({
-    this.id = const Value.absent(),
-    this.startTime = const Value.absent(),
-    this.endTime = const Value.absent(),
-    this.startingFund = const Value.absent(),
-  });
-  static Insertable<Shift> custom({
-    Expression<int>? id,
-    Expression<DateTime>? startTime,
-    Expression<DateTime>? endTime,
-    Expression<double>? startingFund,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (startTime != null) 'start_time': startTime,
-      if (endTime != null) 'end_time': endTime,
-      if (startingFund != null) 'starting_fund': startingFund,
-    });
-  }
-
-  ShiftsCompanion copyWith({
-    Value<int>? id,
-    Value<DateTime>? startTime,
-    Value<DateTime?>? endTime,
-    Value<double>? startingFund,
-  }) {
-    return ShiftsCompanion(
-      id: id ?? this.id,
-      startTime: startTime ?? this.startTime,
-      endTime: endTime ?? this.endTime,
-      startingFund: startingFund ?? this.startingFund,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<int>(id.value);
-    }
-    if (startTime.present) {
-      map['start_time'] = Variable<DateTime>(startTime.value);
-    }
-    if (endTime.present) {
-      map['end_time'] = Variable<DateTime>(endTime.value);
-    }
-    if (startingFund.present) {
-      map['starting_fund'] = Variable<double>(startingFund.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('ShiftsCompanion(')
-          ..write('id: $id, ')
-          ..write('startTime: $startTime, ')
-          ..write('endTime: $endTime, ')
-          ..write('startingFund: $startingFund')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $CashMovementsTable extends CashMovements
     with TableInfo<$CashMovementsTable, CashMovement> {
   @override
@@ -6424,6 +6715,32 @@ class $MovementsTable extends Movements
       'REFERENCES shifts (id)',
     ),
   );
+  static const VerificationMeta _needsCloudSyncMeta = const VerificationMeta(
+    'needsCloudSync',
+  );
+  @override
+  late final GeneratedColumn<bool> needsCloudSync = GeneratedColumn<bool>(
+    'needs_cloud_sync',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("needs_cloud_sync" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _cancelledAtMeta = const VerificationMeta(
+    'cancelledAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> cancelledAt = GeneratedColumn<DateTime>(
+    'cancelled_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -6433,6 +6750,8 @@ class $MovementsTable extends Movements
     amount,
     reason,
     shiftId,
+    needsCloudSync,
+    cancelledAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -6493,6 +6812,24 @@ class $MovementsTable extends Movements
         shiftId.isAcceptableOrUnknown(data['shift_id']!, _shiftIdMeta),
       );
     }
+    if (data.containsKey('needs_cloud_sync')) {
+      context.handle(
+        _needsCloudSyncMeta,
+        needsCloudSync.isAcceptableOrUnknown(
+          data['needs_cloud_sync']!,
+          _needsCloudSyncMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cancelled_at')) {
+      context.handle(
+        _cancelledAtMeta,
+        cancelledAt.isAcceptableOrUnknown(
+          data['cancelled_at']!,
+          _cancelledAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -6530,6 +6867,14 @@ class $MovementsTable extends Movements
         DriftSqlType.int,
         data['${effectivePrefix}shift_id'],
       ),
+      needsCloudSync: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}needs_cloud_sync'],
+      )!,
+      cancelledAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}cancelled_at'],
+      ),
     );
   }
 
@@ -6547,6 +6892,12 @@ class Movement extends DataClass implements Insertable<Movement> {
   final double amount;
   final String reason;
   final int? shiftId;
+
+  /// True until [CloudSyncService.writeMovementToCloud] succeeds (offline insert or failed push).
+  final bool needsCloudSync;
+
+  /// Admin cancel: excluded from caja net and lists.
+  final DateTime? cancelledAt;
   const Movement({
     required this.id,
     required this.date,
@@ -6555,6 +6906,8 @@ class Movement extends DataClass implements Insertable<Movement> {
     required this.amount,
     required this.reason,
     this.shiftId,
+    required this.needsCloudSync,
+    this.cancelledAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -6567,6 +6920,10 @@ class Movement extends DataClass implements Insertable<Movement> {
     map['reason'] = Variable<String>(reason);
     if (!nullToAbsent || shiftId != null) {
       map['shift_id'] = Variable<int>(shiftId);
+    }
+    map['needs_cloud_sync'] = Variable<bool>(needsCloudSync);
+    if (!nullToAbsent || cancelledAt != null) {
+      map['cancelled_at'] = Variable<DateTime>(cancelledAt);
     }
     return map;
   }
@@ -6582,6 +6939,10 @@ class Movement extends DataClass implements Insertable<Movement> {
       shiftId: shiftId == null && nullToAbsent
           ? const Value.absent()
           : Value(shiftId),
+      needsCloudSync: Value(needsCloudSync),
+      cancelledAt: cancelledAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cancelledAt),
     );
   }
 
@@ -6598,6 +6959,8 @@ class Movement extends DataClass implements Insertable<Movement> {
       amount: serializer.fromJson<double>(json['amount']),
       reason: serializer.fromJson<String>(json['reason']),
       shiftId: serializer.fromJson<int?>(json['shiftId']),
+      needsCloudSync: serializer.fromJson<bool>(json['needsCloudSync']),
+      cancelledAt: serializer.fromJson<DateTime?>(json['cancelledAt']),
     );
   }
   @override
@@ -6611,6 +6974,8 @@ class Movement extends DataClass implements Insertable<Movement> {
       'amount': serializer.toJson<double>(amount),
       'reason': serializer.toJson<String>(reason),
       'shiftId': serializer.toJson<int?>(shiftId),
+      'needsCloudSync': serializer.toJson<bool>(needsCloudSync),
+      'cancelledAt': serializer.toJson<DateTime?>(cancelledAt),
     };
   }
 
@@ -6622,6 +6987,8 @@ class Movement extends DataClass implements Insertable<Movement> {
     double? amount,
     String? reason,
     Value<int?> shiftId = const Value.absent(),
+    bool? needsCloudSync,
+    Value<DateTime?> cancelledAt = const Value.absent(),
   }) => Movement(
     id: id ?? this.id,
     date: date ?? this.date,
@@ -6630,6 +6997,8 @@ class Movement extends DataClass implements Insertable<Movement> {
     amount: amount ?? this.amount,
     reason: reason ?? this.reason,
     shiftId: shiftId.present ? shiftId.value : this.shiftId,
+    needsCloudSync: needsCloudSync ?? this.needsCloudSync,
+    cancelledAt: cancelledAt.present ? cancelledAt.value : this.cancelledAt,
   );
   Movement copyWithCompanion(MovementsCompanion data) {
     return Movement(
@@ -6640,6 +7009,12 @@ class Movement extends DataClass implements Insertable<Movement> {
       amount: data.amount.present ? data.amount.value : this.amount,
       reason: data.reason.present ? data.reason.value : this.reason,
       shiftId: data.shiftId.present ? data.shiftId.value : this.shiftId,
+      needsCloudSync: data.needsCloudSync.present
+          ? data.needsCloudSync.value
+          : this.needsCloudSync,
+      cancelledAt: data.cancelledAt.present
+          ? data.cancelledAt.value
+          : this.cancelledAt,
     );
   }
 
@@ -6652,14 +7027,25 @@ class Movement extends DataClass implements Insertable<Movement> {
           ..write('account: $account, ')
           ..write('amount: $amount, ')
           ..write('reason: $reason, ')
-          ..write('shiftId: $shiftId')
+          ..write('shiftId: $shiftId, ')
+          ..write('needsCloudSync: $needsCloudSync, ')
+          ..write('cancelledAt: $cancelledAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, date, type, account, amount, reason, shiftId);
+  int get hashCode => Object.hash(
+    id,
+    date,
+    type,
+    account,
+    amount,
+    reason,
+    shiftId,
+    needsCloudSync,
+    cancelledAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -6670,7 +7056,9 @@ class Movement extends DataClass implements Insertable<Movement> {
           other.account == this.account &&
           other.amount == this.amount &&
           other.reason == this.reason &&
-          other.shiftId == this.shiftId);
+          other.shiftId == this.shiftId &&
+          other.needsCloudSync == this.needsCloudSync &&
+          other.cancelledAt == this.cancelledAt);
 }
 
 class MovementsCompanion extends UpdateCompanion<Movement> {
@@ -6681,6 +7069,8 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
   final Value<double> amount;
   final Value<String> reason;
   final Value<int?> shiftId;
+  final Value<bool> needsCloudSync;
+  final Value<DateTime?> cancelledAt;
   const MovementsCompanion({
     this.id = const Value.absent(),
     this.date = const Value.absent(),
@@ -6689,6 +7079,8 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
     this.amount = const Value.absent(),
     this.reason = const Value.absent(),
     this.shiftId = const Value.absent(),
+    this.needsCloudSync = const Value.absent(),
+    this.cancelledAt = const Value.absent(),
   });
   MovementsCompanion.insert({
     this.id = const Value.absent(),
@@ -6698,6 +7090,8 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
     required double amount,
     required String reason,
     this.shiftId = const Value.absent(),
+    this.needsCloudSync = const Value.absent(),
+    this.cancelledAt = const Value.absent(),
   }) : type = Value(type),
        account = Value(account),
        amount = Value(amount),
@@ -6710,6 +7104,8 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
     Expression<double>? amount,
     Expression<String>? reason,
     Expression<int>? shiftId,
+    Expression<bool>? needsCloudSync,
+    Expression<DateTime>? cancelledAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -6719,6 +7115,8 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
       if (amount != null) 'amount': amount,
       if (reason != null) 'reason': reason,
       if (shiftId != null) 'shift_id': shiftId,
+      if (needsCloudSync != null) 'needs_cloud_sync': needsCloudSync,
+      if (cancelledAt != null) 'cancelled_at': cancelledAt,
     });
   }
 
@@ -6730,6 +7128,8 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
     Value<double>? amount,
     Value<String>? reason,
     Value<int?>? shiftId,
+    Value<bool>? needsCloudSync,
+    Value<DateTime?>? cancelledAt,
   }) {
     return MovementsCompanion(
       id: id ?? this.id,
@@ -6739,6 +7139,8 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
       amount: amount ?? this.amount,
       reason: reason ?? this.reason,
       shiftId: shiftId ?? this.shiftId,
+      needsCloudSync: needsCloudSync ?? this.needsCloudSync,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
     );
   }
 
@@ -6766,6 +7168,12 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
     if (shiftId.present) {
       map['shift_id'] = Variable<int>(shiftId.value);
     }
+    if (needsCloudSync.present) {
+      map['needs_cloud_sync'] = Variable<bool>(needsCloudSync.value);
+    }
+    if (cancelledAt.present) {
+      map['cancelled_at'] = Variable<DateTime>(cancelledAt.value);
+    }
     return map;
   }
 
@@ -6778,7 +7186,9 @@ class MovementsCompanion extends UpdateCompanion<Movement> {
           ..write('account: $account, ')
           ..write('amount: $amount, ')
           ..write('reason: $reason, ')
-          ..write('shiftId: $shiftId')
+          ..write('shiftId: $shiftId, ')
+          ..write('needsCloudSync: $needsCloudSync, ')
+          ..write('cancelledAt: $cancelledAt')
           ..write(')'))
         .toString();
   }
@@ -7352,7 +7762,7 @@ class OperationLog extends DataClass implements Insertable<OperationLog> {
   final int id;
   final DateTime createdAt;
 
-  /// error | warning | info
+  /// critical | error | warning | info ([critical] = fallo de escritura local o nube)
   final String level;
 
   /// e.g. sale_transaction, sale_cloud_sync, sale_cart_complete
@@ -7613,6 +8023,374 @@ class OperationLogsCompanion extends UpdateCompanion<OperationLog> {
   }
 }
 
+class $PendingCashierApprovalsTable extends PendingCashierApprovals
+    with TableInfo<$PendingCashierApprovalsTable, PendingCashierApproval> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PendingCashierApprovalsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _cloudPendingIdMeta = const VerificationMeta(
+    'cloudPendingId',
+  );
+  @override
+  late final GeneratedColumn<String> cloudPendingId = GeneratedColumn<String>(
+    'cloud_pending_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    kind,
+    payloadJson,
+    createdAt,
+    cloudPendingId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pending_cashier_approvals';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PendingCashierApproval> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('cloud_pending_id')) {
+      context.handle(
+        _cloudPendingIdMeta,
+        cloudPendingId.isAcceptableOrUnknown(
+          data['cloud_pending_id']!,
+          _cloudPendingIdMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PendingCashierApproval map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PendingCashierApproval(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      cloudPendingId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cloud_pending_id'],
+      ),
+    );
+  }
+
+  @override
+  $PendingCashierApprovalsTable createAlias(String alias) {
+    return $PendingCashierApprovalsTable(attachedDatabase, alias);
+  }
+}
+
+class PendingCashierApproval extends DataClass
+    implements Insertable<PendingCashierApproval> {
+  final int id;
+  final String kind;
+  final String payloadJson;
+  final DateTime createdAt;
+
+  /// UUID en `public.pending_cashier_approvals` (admin web / sync).
+  final String? cloudPendingId;
+  const PendingCashierApproval({
+    required this.id,
+    required this.kind,
+    required this.payloadJson,
+    required this.createdAt,
+    this.cloudPendingId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['kind'] = Variable<String>(kind);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || cloudPendingId != null) {
+      map['cloud_pending_id'] = Variable<String>(cloudPendingId);
+    }
+    return map;
+  }
+
+  PendingCashierApprovalsCompanion toCompanion(bool nullToAbsent) {
+    return PendingCashierApprovalsCompanion(
+      id: Value(id),
+      kind: Value(kind),
+      payloadJson: Value(payloadJson),
+      createdAt: Value(createdAt),
+      cloudPendingId: cloudPendingId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cloudPendingId),
+    );
+  }
+
+  factory PendingCashierApproval.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PendingCashierApproval(
+      id: serializer.fromJson<int>(json['id']),
+      kind: serializer.fromJson<String>(json['kind']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      cloudPendingId: serializer.fromJson<String?>(json['cloudPendingId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'kind': serializer.toJson<String>(kind),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'cloudPendingId': serializer.toJson<String?>(cloudPendingId),
+    };
+  }
+
+  PendingCashierApproval copyWith({
+    int? id,
+    String? kind,
+    String? payloadJson,
+    DateTime? createdAt,
+    Value<String?> cloudPendingId = const Value.absent(),
+  }) => PendingCashierApproval(
+    id: id ?? this.id,
+    kind: kind ?? this.kind,
+    payloadJson: payloadJson ?? this.payloadJson,
+    createdAt: createdAt ?? this.createdAt,
+    cloudPendingId: cloudPendingId.present
+        ? cloudPendingId.value
+        : this.cloudPendingId,
+  );
+  PendingCashierApproval copyWithCompanion(
+    PendingCashierApprovalsCompanion data,
+  ) {
+    return PendingCashierApproval(
+      id: data.id.present ? data.id.value : this.id,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      cloudPendingId: data.cloudPendingId.present
+          ? data.cloudPendingId.value
+          : this.cloudPendingId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PendingCashierApproval(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('cloudPendingId: $cloudPendingId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, kind, payloadJson, createdAt, cloudPendingId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PendingCashierApproval &&
+          other.id == this.id &&
+          other.kind == this.kind &&
+          other.payloadJson == this.payloadJson &&
+          other.createdAt == this.createdAt &&
+          other.cloudPendingId == this.cloudPendingId);
+}
+
+class PendingCashierApprovalsCompanion
+    extends UpdateCompanion<PendingCashierApproval> {
+  final Value<int> id;
+  final Value<String> kind;
+  final Value<String> payloadJson;
+  final Value<DateTime> createdAt;
+  final Value<String?> cloudPendingId;
+  const PendingCashierApprovalsCompanion({
+    this.id = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.cloudPendingId = const Value.absent(),
+  });
+  PendingCashierApprovalsCompanion.insert({
+    this.id = const Value.absent(),
+    required String kind,
+    required String payloadJson,
+    this.createdAt = const Value.absent(),
+    this.cloudPendingId = const Value.absent(),
+  }) : kind = Value(kind),
+       payloadJson = Value(payloadJson);
+  static Insertable<PendingCashierApproval> custom({
+    Expression<int>? id,
+    Expression<String>? kind,
+    Expression<String>? payloadJson,
+    Expression<DateTime>? createdAt,
+    Expression<String>? cloudPendingId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (kind != null) 'kind': kind,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (createdAt != null) 'created_at': createdAt,
+      if (cloudPendingId != null) 'cloud_pending_id': cloudPendingId,
+    });
+  }
+
+  PendingCashierApprovalsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? kind,
+    Value<String>? payloadJson,
+    Value<DateTime>? createdAt,
+    Value<String?>? cloudPendingId,
+  }) {
+    return PendingCashierApprovalsCompanion(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      payloadJson: payloadJson ?? this.payloadJson,
+      createdAt: createdAt ?? this.createdAt,
+      cloudPendingId: cloudPendingId ?? this.cloudPendingId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (cloudPendingId.present) {
+      map['cloud_pending_id'] = Variable<String>(cloudPendingId.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PendingCashierApprovalsCompanion(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('cloudPendingId: $cloudPendingId')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -7620,6 +8398,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ProductsTable products = $ProductsTable(this);
   late final $SuppliesTable supplies = $SuppliesTable(this);
   late final $RecipesTable recipes = $RecipesTable(this);
+  late final $ShiftsTable shifts = $ShiftsTable(this);
   late final $SalesTable sales = $SalesTable(this);
   late final $SaleItemsTable saleItems = $SaleItemsTable(this);
   late final $InventoryLogsTable inventoryLogs = $InventoryLogsTable(this);
@@ -7634,12 +8413,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DiscountsTable discounts = $DiscountsTable(this);
   late final $BundlesTable bundles = $BundlesTable(this);
   late final $BundleItemsTable bundleItems = $BundleItemsTable(this);
-  late final $ShiftsTable shifts = $ShiftsTable(this);
   late final $CashMovementsTable cashMovements = $CashMovementsTable(this);
   late final $ShiftClosuresTable shiftClosures = $ShiftClosuresTable(this);
   late final $MovementsTable movements = $MovementsTable(this);
   late final $AppUsersTable appUsers = $AppUsersTable(this);
   late final $OperationLogsTable operationLogs = $OperationLogsTable(this);
+  late final $PendingCashierApprovalsTable pendingCashierApprovals =
+      $PendingCashierApprovalsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7649,6 +8429,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     products,
     supplies,
     recipes,
+    shifts,
     sales,
     saleItems,
     inventoryLogs,
@@ -7659,12 +8440,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     discounts,
     bundles,
     bundleItems,
-    shifts,
     cashMovements,
     shiftClosures,
     movements,
     appUsers,
     operationLogs,
+    pendingCashierApprovals,
   ];
 }
 
@@ -9858,6 +10639,607 @@ typedef $$RecipesTableProcessedTableManager =
       Recipe,
       PrefetchHooks Function({bool productId, bool supplyId})
     >;
+typedef $$ShiftsTableCreateCompanionBuilder =
+    ShiftsCompanion Function({
+      Value<int> id,
+      Value<int?> cloudShiftId,
+      Value<int?> cloudRegisterId,
+      Value<DateTime> startTime,
+      Value<DateTime?> endTime,
+      Value<double> startingFund,
+    });
+typedef $$ShiftsTableUpdateCompanionBuilder =
+    ShiftsCompanion Function({
+      Value<int> id,
+      Value<int?> cloudShiftId,
+      Value<int?> cloudRegisterId,
+      Value<DateTime> startTime,
+      Value<DateTime?> endTime,
+      Value<double> startingFund,
+    });
+
+final class $$ShiftsTableReferences
+    extends BaseReferences<_$AppDatabase, $ShiftsTable, Shift> {
+  $$ShiftsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$SalesTable, List<Sale>> _salesRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.sales,
+    aliasName: $_aliasNameGenerator(db.shifts.id, db.sales.shiftId),
+  );
+
+  $$SalesTableProcessedTableManager get salesRefs {
+    final manager = $$SalesTableTableManager(
+      $_db,
+      $_db.sales,
+    ).filter((f) => f.shiftId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_salesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CashMovementsTable, List<CashMovement>>
+  _cashMovementsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.cashMovements,
+    aliasName: $_aliasNameGenerator(db.shifts.id, db.cashMovements.shiftId),
+  );
+
+  $$CashMovementsTableProcessedTableManager get cashMovementsRefs {
+    final manager = $$CashMovementsTableTableManager(
+      $_db,
+      $_db.cashMovements,
+    ).filter((f) => f.shiftId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_cashMovementsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ShiftClosuresTable, List<ShiftClosure>>
+  _shiftClosuresRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.shiftClosures,
+    aliasName: $_aliasNameGenerator(db.shifts.id, db.shiftClosures.shiftId),
+  );
+
+  $$ShiftClosuresTableProcessedTableManager get shiftClosuresRefs {
+    final manager = $$ShiftClosuresTableTableManager(
+      $_db,
+      $_db.shiftClosures,
+    ).filter((f) => f.shiftId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_shiftClosuresRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$MovementsTable, List<Movement>>
+  _movementsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.movements,
+    aliasName: $_aliasNameGenerator(db.shifts.id, db.movements.shiftId),
+  );
+
+  $$MovementsTableProcessedTableManager get movementsRefs {
+    final manager = $$MovementsTableTableManager(
+      $_db,
+      $_db.movements,
+    ).filter((f) => f.shiftId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_movementsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$ShiftsTableFilterComposer
+    extends Composer<_$AppDatabase, $ShiftsTable> {
+  $$ShiftsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cloudShiftId => $composableBuilder(
+    column: $table.cloudShiftId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cloudRegisterId => $composableBuilder(
+    column: $table.cloudRegisterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startTime => $composableBuilder(
+    column: $table.startTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endTime => $composableBuilder(
+    column: $table.endTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get startingFund => $composableBuilder(
+    column: $table.startingFund,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> salesRefs(
+    Expression<bool> Function($$SalesTableFilterComposer f) f,
+  ) {
+    final $$SalesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sales,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SalesTableFilterComposer(
+            $db: $db,
+            $table: $db.sales,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> cashMovementsRefs(
+    Expression<bool> Function($$CashMovementsTableFilterComposer f) f,
+  ) {
+    final $$CashMovementsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cashMovements,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CashMovementsTableFilterComposer(
+            $db: $db,
+            $table: $db.cashMovements,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> shiftClosuresRefs(
+    Expression<bool> Function($$ShiftClosuresTableFilterComposer f) f,
+  ) {
+    final $$ShiftClosuresTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shiftClosures,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShiftClosuresTableFilterComposer(
+            $db: $db,
+            $table: $db.shiftClosures,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> movementsRefs(
+    Expression<bool> Function($$MovementsTableFilterComposer f) f,
+  ) {
+    final $$MovementsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.movements,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MovementsTableFilterComposer(
+            $db: $db,
+            $table: $db.movements,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ShiftsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ShiftsTable> {
+  $$ShiftsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cloudShiftId => $composableBuilder(
+    column: $table.cloudShiftId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cloudRegisterId => $composableBuilder(
+    column: $table.cloudRegisterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startTime => $composableBuilder(
+    column: $table.startTime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endTime => $composableBuilder(
+    column: $table.endTime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get startingFund => $composableBuilder(
+    column: $table.startingFund,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ShiftsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ShiftsTable> {
+  $$ShiftsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get cloudShiftId => $composableBuilder(
+    column: $table.cloudShiftId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get cloudRegisterId => $composableBuilder(
+    column: $table.cloudRegisterId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get startTime =>
+      $composableBuilder(column: $table.startTime, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endTime =>
+      $composableBuilder(column: $table.endTime, builder: (column) => column);
+
+  GeneratedColumn<double> get startingFund => $composableBuilder(
+    column: $table.startingFund,
+    builder: (column) => column,
+  );
+
+  Expression<T> salesRefs<T extends Object>(
+    Expression<T> Function($$SalesTableAnnotationComposer a) f,
+  ) {
+    final $$SalesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.sales,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SalesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.sales,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> cashMovementsRefs<T extends Object>(
+    Expression<T> Function($$CashMovementsTableAnnotationComposer a) f,
+  ) {
+    final $$CashMovementsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cashMovements,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CashMovementsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cashMovements,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> shiftClosuresRefs<T extends Object>(
+    Expression<T> Function($$ShiftClosuresTableAnnotationComposer a) f,
+  ) {
+    final $$ShiftClosuresTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.shiftClosures,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShiftClosuresTableAnnotationComposer(
+            $db: $db,
+            $table: $db.shiftClosures,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> movementsRefs<T extends Object>(
+    Expression<T> Function($$MovementsTableAnnotationComposer a) f,
+  ) {
+    final $$MovementsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.movements,
+      getReferencedColumn: (t) => t.shiftId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MovementsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.movements,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ShiftsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ShiftsTable,
+          Shift,
+          $$ShiftsTableFilterComposer,
+          $$ShiftsTableOrderingComposer,
+          $$ShiftsTableAnnotationComposer,
+          $$ShiftsTableCreateCompanionBuilder,
+          $$ShiftsTableUpdateCompanionBuilder,
+          (Shift, $$ShiftsTableReferences),
+          Shift,
+          PrefetchHooks Function({
+            bool salesRefs,
+            bool cashMovementsRefs,
+            bool shiftClosuresRefs,
+            bool movementsRefs,
+          })
+        > {
+  $$ShiftsTableTableManager(_$AppDatabase db, $ShiftsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ShiftsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ShiftsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ShiftsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int?> cloudShiftId = const Value.absent(),
+                Value<int?> cloudRegisterId = const Value.absent(),
+                Value<DateTime> startTime = const Value.absent(),
+                Value<DateTime?> endTime = const Value.absent(),
+                Value<double> startingFund = const Value.absent(),
+              }) => ShiftsCompanion(
+                id: id,
+                cloudShiftId: cloudShiftId,
+                cloudRegisterId: cloudRegisterId,
+                startTime: startTime,
+                endTime: endTime,
+                startingFund: startingFund,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int?> cloudShiftId = const Value.absent(),
+                Value<int?> cloudRegisterId = const Value.absent(),
+                Value<DateTime> startTime = const Value.absent(),
+                Value<DateTime?> endTime = const Value.absent(),
+                Value<double> startingFund = const Value.absent(),
+              }) => ShiftsCompanion.insert(
+                id: id,
+                cloudShiftId: cloudShiftId,
+                cloudRegisterId: cloudRegisterId,
+                startTime: startTime,
+                endTime: endTime,
+                startingFund: startingFund,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) =>
+                    (e.readTable(table), $$ShiftsTableReferences(db, table, e)),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({
+                salesRefs = false,
+                cashMovementsRefs = false,
+                shiftClosuresRefs = false,
+                movementsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (salesRefs) db.sales,
+                    if (cashMovementsRefs) db.cashMovements,
+                    if (shiftClosuresRefs) db.shiftClosures,
+                    if (movementsRefs) db.movements,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (salesRefs)
+                        await $_getPrefetchedData<Shift, $ShiftsTable, Sale>(
+                          currentTable: table,
+                          referencedTable: $$ShiftsTableReferences
+                              ._salesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ShiftsTableReferences(db, table, p0).salesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.shiftId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (cashMovementsRefs)
+                        await $_getPrefetchedData<
+                          Shift,
+                          $ShiftsTable,
+                          CashMovement
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ShiftsTableReferences
+                              ._cashMovementsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ShiftsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).cashMovementsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.shiftId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (shiftClosuresRefs)
+                        await $_getPrefetchedData<
+                          Shift,
+                          $ShiftsTable,
+                          ShiftClosure
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ShiftsTableReferences
+                              ._shiftClosuresRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ShiftsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).shiftClosuresRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.shiftId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (movementsRefs)
+                        await $_getPrefetchedData<
+                          Shift,
+                          $ShiftsTable,
+                          Movement
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ShiftsTableReferences
+                              ._movementsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ShiftsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).movementsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.shiftId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$ShiftsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ShiftsTable,
+      Shift,
+      $$ShiftsTableFilterComposer,
+      $$ShiftsTableOrderingComposer,
+      $$ShiftsTableAnnotationComposer,
+      $$ShiftsTableCreateCompanionBuilder,
+      $$ShiftsTableUpdateCompanionBuilder,
+      (Shift, $$ShiftsTableReferences),
+      Shift,
+      PrefetchHooks Function({
+        bool salesRefs,
+        bool cashMovementsRefs,
+        bool shiftClosuresRefs,
+        bool movementsRefs,
+      })
+    >;
 typedef $$SalesTableCreateCompanionBuilder =
     SalesCompanion Function({
       Value<int> id,
@@ -9866,8 +11248,10 @@ typedef $$SalesTableCreateCompanionBuilder =
       Value<String> paymentMethod,
       Value<double> amountTendered,
       Value<double> changeGiven,
+      Value<String?> paymentsJson,
       Value<int?> cloudSaleId,
       Value<DateTime?> cancelledAt,
+      required int shiftId,
     });
 typedef $$SalesTableUpdateCompanionBuilder =
     SalesCompanion Function({
@@ -9877,13 +11261,33 @@ typedef $$SalesTableUpdateCompanionBuilder =
       Value<String> paymentMethod,
       Value<double> amountTendered,
       Value<double> changeGiven,
+      Value<String?> paymentsJson,
       Value<int?> cloudSaleId,
       Value<DateTime?> cancelledAt,
+      Value<int> shiftId,
     });
 
 final class $$SalesTableReferences
     extends BaseReferences<_$AppDatabase, $SalesTable, Sale> {
   $$SalesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ShiftsTable _shiftIdTable(_$AppDatabase db) => db.shifts.createAlias(
+    $_aliasNameGenerator(db.sales.shiftId, db.shifts.id),
+  );
+
+  $$ShiftsTableProcessedTableManager get shiftId {
+    final $_column = $_itemColumn<int>('shift_id')!;
+
+    final manager = $$ShiftsTableTableManager(
+      $_db,
+      $_db.shifts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_shiftIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 
   static MultiTypedResultKey<$SaleItemsTable, List<SaleItem>>
   _saleItemsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -9942,6 +11346,11 @@ class $$SalesTableFilterComposer extends Composer<_$AppDatabase, $SalesTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get paymentsJson => $composableBuilder(
+    column: $table.paymentsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get cloudSaleId => $composableBuilder(
     column: $table.cloudSaleId,
     builder: (column) => ColumnFilters(column),
@@ -9951,6 +11360,29 @@ class $$SalesTableFilterComposer extends Composer<_$AppDatabase, $SalesTable> {
     column: $table.cancelledAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$ShiftsTableFilterComposer get shiftId {
+    final $$ShiftsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.shiftId,
+      referencedTable: $db.shifts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShiftsTableFilterComposer(
+            $db: $db,
+            $table: $db.shifts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<bool> saleItemsRefs(
     Expression<bool> Function($$SaleItemsTableFilterComposer f) f,
@@ -10017,6 +11449,11 @@ class $$SalesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get paymentsJson => $composableBuilder(
+    column: $table.paymentsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get cloudSaleId => $composableBuilder(
     column: $table.cloudSaleId,
     builder: (column) => ColumnOrderings(column),
@@ -10026,6 +11463,29 @@ class $$SalesTableOrderingComposer
     column: $table.cancelledAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$ShiftsTableOrderingComposer get shiftId {
+    final $$ShiftsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.shiftId,
+      referencedTable: $db.shifts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShiftsTableOrderingComposer(
+            $db: $db,
+            $table: $db.shifts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$SalesTableAnnotationComposer
@@ -10063,6 +11523,11 @@ class $$SalesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get paymentsJson => $composableBuilder(
+    column: $table.paymentsJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get cloudSaleId => $composableBuilder(
     column: $table.cloudSaleId,
     builder: (column) => column,
@@ -10072,6 +11537,29 @@ class $$SalesTableAnnotationComposer
     column: $table.cancelledAt,
     builder: (column) => column,
   );
+
+  $$ShiftsTableAnnotationComposer get shiftId {
+    final $$ShiftsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.shiftId,
+      referencedTable: $db.shifts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ShiftsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.shifts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<T> saleItemsRefs<T extends Object>(
     Expression<T> Function($$SaleItemsTableAnnotationComposer a) f,
@@ -10112,7 +11600,7 @@ class $$SalesTableTableManager
           $$SalesTableUpdateCompanionBuilder,
           (Sale, $$SalesTableReferences),
           Sale,
-          PrefetchHooks Function({bool saleItemsRefs})
+          PrefetchHooks Function({bool shiftId, bool saleItemsRefs})
         > {
   $$SalesTableTableManager(_$AppDatabase db, $SalesTable table)
     : super(
@@ -10133,8 +11621,10 @@ class $$SalesTableTableManager
                 Value<String> paymentMethod = const Value.absent(),
                 Value<double> amountTendered = const Value.absent(),
                 Value<double> changeGiven = const Value.absent(),
+                Value<String?> paymentsJson = const Value.absent(),
                 Value<int?> cloudSaleId = const Value.absent(),
                 Value<DateTime?> cancelledAt = const Value.absent(),
+                Value<int> shiftId = const Value.absent(),
               }) => SalesCompanion(
                 id: id,
                 date: date,
@@ -10142,8 +11632,10 @@ class $$SalesTableTableManager
                 paymentMethod: paymentMethod,
                 amountTendered: amountTendered,
                 changeGiven: changeGiven,
+                paymentsJson: paymentsJson,
                 cloudSaleId: cloudSaleId,
                 cancelledAt: cancelledAt,
+                shiftId: shiftId,
               ),
           createCompanionCallback:
               ({
@@ -10153,8 +11645,10 @@ class $$SalesTableTableManager
                 Value<String> paymentMethod = const Value.absent(),
                 Value<double> amountTendered = const Value.absent(),
                 Value<double> changeGiven = const Value.absent(),
+                Value<String?> paymentsJson = const Value.absent(),
                 Value<int?> cloudSaleId = const Value.absent(),
                 Value<DateTime?> cancelledAt = const Value.absent(),
+                required int shiftId,
               }) => SalesCompanion.insert(
                 id: id,
                 date: date,
@@ -10162,8 +11656,10 @@ class $$SalesTableTableManager
                 paymentMethod: paymentMethod,
                 amountTendered: amountTendered,
                 changeGiven: changeGiven,
+                paymentsJson: paymentsJson,
                 cloudSaleId: cloudSaleId,
                 cancelledAt: cancelledAt,
+                shiftId: shiftId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -10171,11 +11667,42 @@ class $$SalesTableTableManager
                     (e.readTable(table), $$SalesTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({saleItemsRefs = false}) {
+          prefetchHooksCallback: ({shiftId = false, saleItemsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [if (saleItemsRefs) db.saleItems],
-              addJoins: null,
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (shiftId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.shiftId,
+                                referencedTable: $$SalesTableReferences
+                                    ._shiftIdTable(db),
+                                referencedColumn: $$SalesTableReferences
+                                    ._shiftIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (saleItemsRefs)
@@ -10209,7 +11736,7 @@ typedef $$SalesTableProcessedTableManager =
       $$SalesTableUpdateCompanionBuilder,
       (Sale, $$SalesTableReferences),
       Sale,
-      PrefetchHooks Function({bool saleItemsRefs})
+      PrefetchHooks Function({bool shiftId, bool saleItemsRefs})
     >;
 typedef $$SaleItemsTableCreateCompanionBuilder =
     SaleItemsCompanion Function({
@@ -10218,6 +11745,7 @@ typedef $$SaleItemsTableCreateCompanionBuilder =
       required int productId,
       required double quantity,
       required double unitPrice,
+      Value<String?> modifiersJson,
     });
 typedef $$SaleItemsTableUpdateCompanionBuilder =
     SaleItemsCompanion Function({
@@ -10226,6 +11754,7 @@ typedef $$SaleItemsTableUpdateCompanionBuilder =
       Value<int> productId,
       Value<double> quantity,
       Value<double> unitPrice,
+      Value<String?> modifiersJson,
     });
 
 final class $$SaleItemsTableReferences
@@ -10291,6 +11820,11 @@ class $$SaleItemsTableFilterComposer
 
   ColumnFilters<double> get unitPrice => $composableBuilder(
     column: $table.unitPrice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get modifiersJson => $composableBuilder(
+    column: $table.modifiersJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10365,6 +11899,11 @@ class $$SaleItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get modifiersJson => $composableBuilder(
+    column: $table.modifiersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SalesTableOrderingComposer get saleId {
     final $$SalesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -10429,6 +11968,11 @@ class $$SaleItemsTableAnnotationComposer
 
   GeneratedColumn<double> get unitPrice =>
       $composableBuilder(column: $table.unitPrice, builder: (column) => column);
+
+  GeneratedColumn<String> get modifiersJson => $composableBuilder(
+    column: $table.modifiersJson,
+    builder: (column) => column,
+  );
 
   $$SalesTableAnnotationComposer get saleId {
     final $$SalesTableAnnotationComposer composer = $composerBuilder(
@@ -10510,12 +12054,14 @@ class $$SaleItemsTableTableManager
                 Value<int> productId = const Value.absent(),
                 Value<double> quantity = const Value.absent(),
                 Value<double> unitPrice = const Value.absent(),
+                Value<String?> modifiersJson = const Value.absent(),
               }) => SaleItemsCompanion(
                 id: id,
                 saleId: saleId,
                 productId: productId,
                 quantity: quantity,
                 unitPrice: unitPrice,
+                modifiersJson: modifiersJson,
               ),
           createCompanionCallback:
               ({
@@ -10524,12 +12070,14 @@ class $$SaleItemsTableTableManager
                 required int productId,
                 required double quantity,
                 required double unitPrice,
+                Value<String?> modifiersJson = const Value.absent(),
               }) => SaleItemsCompanion.insert(
                 id: id,
                 saleId: saleId,
                 productId: productId,
                 quantity: quantity,
                 unitPrice: unitPrice,
+                modifiersJson: modifiersJson,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -13304,479 +14852,6 @@ typedef $$BundleItemsTableProcessedTableManager =
       BundleItem,
       PrefetchHooks Function({bool bundleId, bool productId})
     >;
-typedef $$ShiftsTableCreateCompanionBuilder =
-    ShiftsCompanion Function({
-      Value<int> id,
-      Value<DateTime> startTime,
-      Value<DateTime?> endTime,
-      Value<double> startingFund,
-    });
-typedef $$ShiftsTableUpdateCompanionBuilder =
-    ShiftsCompanion Function({
-      Value<int> id,
-      Value<DateTime> startTime,
-      Value<DateTime?> endTime,
-      Value<double> startingFund,
-    });
-
-final class $$ShiftsTableReferences
-    extends BaseReferences<_$AppDatabase, $ShiftsTable, Shift> {
-  $$ShiftsTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static MultiTypedResultKey<$CashMovementsTable, List<CashMovement>>
-  _cashMovementsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.cashMovements,
-    aliasName: $_aliasNameGenerator(db.shifts.id, db.cashMovements.shiftId),
-  );
-
-  $$CashMovementsTableProcessedTableManager get cashMovementsRefs {
-    final manager = $$CashMovementsTableTableManager(
-      $_db,
-      $_db.cashMovements,
-    ).filter((f) => f.shiftId.id.sqlEquals($_itemColumn<int>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_cashMovementsRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-
-  static MultiTypedResultKey<$ShiftClosuresTable, List<ShiftClosure>>
-  _shiftClosuresRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.shiftClosures,
-    aliasName: $_aliasNameGenerator(db.shifts.id, db.shiftClosures.shiftId),
-  );
-
-  $$ShiftClosuresTableProcessedTableManager get shiftClosuresRefs {
-    final manager = $$ShiftClosuresTableTableManager(
-      $_db,
-      $_db.shiftClosures,
-    ).filter((f) => f.shiftId.id.sqlEquals($_itemColumn<int>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_shiftClosuresRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-
-  static MultiTypedResultKey<$MovementsTable, List<Movement>>
-  _movementsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.movements,
-    aliasName: $_aliasNameGenerator(db.shifts.id, db.movements.shiftId),
-  );
-
-  $$MovementsTableProcessedTableManager get movementsRefs {
-    final manager = $$MovementsTableTableManager(
-      $_db,
-      $_db.movements,
-    ).filter((f) => f.shiftId.id.sqlEquals($_itemColumn<int>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_movementsRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-}
-
-class $$ShiftsTableFilterComposer
-    extends Composer<_$AppDatabase, $ShiftsTable> {
-  $$ShiftsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<int> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get startTime => $composableBuilder(
-    column: $table.startTime,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get endTime => $composableBuilder(
-    column: $table.endTime,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get startingFund => $composableBuilder(
-    column: $table.startingFund,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  Expression<bool> cashMovementsRefs(
-    Expression<bool> Function($$CashMovementsTableFilterComposer f) f,
-  ) {
-    final $$CashMovementsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.cashMovements,
-      getReferencedColumn: (t) => t.shiftId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CashMovementsTableFilterComposer(
-            $db: $db,
-            $table: $db.cashMovements,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> shiftClosuresRefs(
-    Expression<bool> Function($$ShiftClosuresTableFilterComposer f) f,
-  ) {
-    final $$ShiftClosuresTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.shiftClosures,
-      getReferencedColumn: (t) => t.shiftId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$ShiftClosuresTableFilterComposer(
-            $db: $db,
-            $table: $db.shiftClosures,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> movementsRefs(
-    Expression<bool> Function($$MovementsTableFilterComposer f) f,
-  ) {
-    final $$MovementsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.movements,
-      getReferencedColumn: (t) => t.shiftId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$MovementsTableFilterComposer(
-            $db: $db,
-            $table: $db.movements,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$ShiftsTableOrderingComposer
-    extends Composer<_$AppDatabase, $ShiftsTable> {
-  $$ShiftsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<int> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get startTime => $composableBuilder(
-    column: $table.startTime,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get endTime => $composableBuilder(
-    column: $table.endTime,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get startingFund => $composableBuilder(
-    column: $table.startingFund,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$ShiftsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ShiftsTable> {
-  $$ShiftsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<int> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get startTime =>
-      $composableBuilder(column: $table.startTime, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get endTime =>
-      $composableBuilder(column: $table.endTime, builder: (column) => column);
-
-  GeneratedColumn<double> get startingFund => $composableBuilder(
-    column: $table.startingFund,
-    builder: (column) => column,
-  );
-
-  Expression<T> cashMovementsRefs<T extends Object>(
-    Expression<T> Function($$CashMovementsTableAnnotationComposer a) f,
-  ) {
-    final $$CashMovementsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.cashMovements,
-      getReferencedColumn: (t) => t.shiftId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$CashMovementsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.cashMovements,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<T> shiftClosuresRefs<T extends Object>(
-    Expression<T> Function($$ShiftClosuresTableAnnotationComposer a) f,
-  ) {
-    final $$ShiftClosuresTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.shiftClosures,
-      getReferencedColumn: (t) => t.shiftId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$ShiftClosuresTableAnnotationComposer(
-            $db: $db,
-            $table: $db.shiftClosures,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<T> movementsRefs<T extends Object>(
-    Expression<T> Function($$MovementsTableAnnotationComposer a) f,
-  ) {
-    final $$MovementsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.movements,
-      getReferencedColumn: (t) => t.shiftId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$MovementsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.movements,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$ShiftsTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $ShiftsTable,
-          Shift,
-          $$ShiftsTableFilterComposer,
-          $$ShiftsTableOrderingComposer,
-          $$ShiftsTableAnnotationComposer,
-          $$ShiftsTableCreateCompanionBuilder,
-          $$ShiftsTableUpdateCompanionBuilder,
-          (Shift, $$ShiftsTableReferences),
-          Shift,
-          PrefetchHooks Function({
-            bool cashMovementsRefs,
-            bool shiftClosuresRefs,
-            bool movementsRefs,
-          })
-        > {
-  $$ShiftsTableTableManager(_$AppDatabase db, $ShiftsTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$ShiftsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$ShiftsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$ShiftsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<int> id = const Value.absent(),
-                Value<DateTime> startTime = const Value.absent(),
-                Value<DateTime?> endTime = const Value.absent(),
-                Value<double> startingFund = const Value.absent(),
-              }) => ShiftsCompanion(
-                id: id,
-                startTime: startTime,
-                endTime: endTime,
-                startingFund: startingFund,
-              ),
-          createCompanionCallback:
-              ({
-                Value<int> id = const Value.absent(),
-                Value<DateTime> startTime = const Value.absent(),
-                Value<DateTime?> endTime = const Value.absent(),
-                Value<double> startingFund = const Value.absent(),
-              }) => ShiftsCompanion.insert(
-                id: id,
-                startTime: startTime,
-                endTime: endTime,
-                startingFund: startingFund,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) =>
-                    (e.readTable(table), $$ShiftsTableReferences(db, table, e)),
-              )
-              .toList(),
-          prefetchHooksCallback:
-              ({
-                cashMovementsRefs = false,
-                shiftClosuresRefs = false,
-                movementsRefs = false,
-              }) {
-                return PrefetchHooks(
-                  db: db,
-                  explicitlyWatchedTables: [
-                    if (cashMovementsRefs) db.cashMovements,
-                    if (shiftClosuresRefs) db.shiftClosures,
-                    if (movementsRefs) db.movements,
-                  ],
-                  addJoins: null,
-                  getPrefetchedDataCallback: (items) async {
-                    return [
-                      if (cashMovementsRefs)
-                        await $_getPrefetchedData<
-                          Shift,
-                          $ShiftsTable,
-                          CashMovement
-                        >(
-                          currentTable: table,
-                          referencedTable: $$ShiftsTableReferences
-                              ._cashMovementsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ShiftsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).cashMovementsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.shiftId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                      if (shiftClosuresRefs)
-                        await $_getPrefetchedData<
-                          Shift,
-                          $ShiftsTable,
-                          ShiftClosure
-                        >(
-                          currentTable: table,
-                          referencedTable: $$ShiftsTableReferences
-                              ._shiftClosuresRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ShiftsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).shiftClosuresRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.shiftId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                      if (movementsRefs)
-                        await $_getPrefetchedData<
-                          Shift,
-                          $ShiftsTable,
-                          Movement
-                        >(
-                          currentTable: table,
-                          referencedTable: $$ShiftsTableReferences
-                              ._movementsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$ShiftsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).movementsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.shiftId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                    ];
-                  },
-                );
-              },
-        ),
-      );
-}
-
-typedef $$ShiftsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $ShiftsTable,
-      Shift,
-      $$ShiftsTableFilterComposer,
-      $$ShiftsTableOrderingComposer,
-      $$ShiftsTableAnnotationComposer,
-      $$ShiftsTableCreateCompanionBuilder,
-      $$ShiftsTableUpdateCompanionBuilder,
-      (Shift, $$ShiftsTableReferences),
-      Shift,
-      PrefetchHooks Function({
-        bool cashMovementsRefs,
-        bool shiftClosuresRefs,
-        bool movementsRefs,
-      })
-    >;
 typedef $$CashMovementsTableCreateCompanionBuilder =
     CashMovementsCompanion Function({
       Value<int> id,
@@ -14464,6 +15539,8 @@ typedef $$MovementsTableCreateCompanionBuilder =
       required double amount,
       required String reason,
       Value<int?> shiftId,
+      Value<bool> needsCloudSync,
+      Value<DateTime?> cancelledAt,
     });
 typedef $$MovementsTableUpdateCompanionBuilder =
     MovementsCompanion Function({
@@ -14474,6 +15551,8 @@ typedef $$MovementsTableUpdateCompanionBuilder =
       Value<double> amount,
       Value<String> reason,
       Value<int?> shiftId,
+      Value<bool> needsCloudSync,
+      Value<DateTime?> cancelledAt,
     });
 
 final class $$MovementsTableReferences
@@ -14535,6 +15614,16 @@ class $$MovementsTableFilterComposer
 
   ColumnFilters<String> get reason => $composableBuilder(
     column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get needsCloudSync => $composableBuilder(
+    column: $table.needsCloudSync,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get cancelledAt => $composableBuilder(
+    column: $table.cancelledAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14601,6 +15690,16 @@ class $$MovementsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get needsCloudSync => $composableBuilder(
+    column: $table.needsCloudSync,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get cancelledAt => $composableBuilder(
+    column: $table.cancelledAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ShiftsTableOrderingComposer get shiftId {
     final $$ShiftsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -14651,6 +15750,16 @@ class $$MovementsTableAnnotationComposer
 
   GeneratedColumn<String> get reason =>
       $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<bool> get needsCloudSync => $composableBuilder(
+    column: $table.needsCloudSync,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get cancelledAt => $composableBuilder(
+    column: $table.cancelledAt,
+    builder: (column) => column,
+  );
 
   $$ShiftsTableAnnotationComposer get shiftId {
     final $$ShiftsTableAnnotationComposer composer = $composerBuilder(
@@ -14711,6 +15820,8 @@ class $$MovementsTableTableManager
                 Value<double> amount = const Value.absent(),
                 Value<String> reason = const Value.absent(),
                 Value<int?> shiftId = const Value.absent(),
+                Value<bool> needsCloudSync = const Value.absent(),
+                Value<DateTime?> cancelledAt = const Value.absent(),
               }) => MovementsCompanion(
                 id: id,
                 date: date,
@@ -14719,6 +15830,8 @@ class $$MovementsTableTableManager
                 amount: amount,
                 reason: reason,
                 shiftId: shiftId,
+                needsCloudSync: needsCloudSync,
+                cancelledAt: cancelledAt,
               ),
           createCompanionCallback:
               ({
@@ -14729,6 +15842,8 @@ class $$MovementsTableTableManager
                 required double amount,
                 required String reason,
                 Value<int?> shiftId = const Value.absent(),
+                Value<bool> needsCloudSync = const Value.absent(),
+                Value<DateTime?> cancelledAt = const Value.absent(),
               }) => MovementsCompanion.insert(
                 id: id,
                 date: date,
@@ -14737,6 +15852,8 @@ class $$MovementsTableTableManager
                 amount: amount,
                 reason: reason,
                 shiftId: shiftId,
+                needsCloudSync: needsCloudSync,
+                cancelledAt: cancelledAt,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -15231,6 +16348,223 @@ typedef $$OperationLogsTableProcessedTableManager =
       OperationLog,
       PrefetchHooks Function()
     >;
+typedef $$PendingCashierApprovalsTableCreateCompanionBuilder =
+    PendingCashierApprovalsCompanion Function({
+      Value<int> id,
+      required String kind,
+      required String payloadJson,
+      Value<DateTime> createdAt,
+      Value<String?> cloudPendingId,
+    });
+typedef $$PendingCashierApprovalsTableUpdateCompanionBuilder =
+    PendingCashierApprovalsCompanion Function({
+      Value<int> id,
+      Value<String> kind,
+      Value<String> payloadJson,
+      Value<DateTime> createdAt,
+      Value<String?> cloudPendingId,
+    });
+
+class $$PendingCashierApprovalsTableFilterComposer
+    extends Composer<_$AppDatabase, $PendingCashierApprovalsTable> {
+  $$PendingCashierApprovalsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cloudPendingId => $composableBuilder(
+    column: $table.cloudPendingId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PendingCashierApprovalsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PendingCashierApprovalsTable> {
+  $$PendingCashierApprovalsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cloudPendingId => $composableBuilder(
+    column: $table.cloudPendingId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PendingCashierApprovalsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PendingCashierApprovalsTable> {
+  $$PendingCashierApprovalsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get cloudPendingId => $composableBuilder(
+    column: $table.cloudPendingId,
+    builder: (column) => column,
+  );
+}
+
+class $$PendingCashierApprovalsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PendingCashierApprovalsTable,
+          PendingCashierApproval,
+          $$PendingCashierApprovalsTableFilterComposer,
+          $$PendingCashierApprovalsTableOrderingComposer,
+          $$PendingCashierApprovalsTableAnnotationComposer,
+          $$PendingCashierApprovalsTableCreateCompanionBuilder,
+          $$PendingCashierApprovalsTableUpdateCompanionBuilder,
+          (
+            PendingCashierApproval,
+            BaseReferences<
+              _$AppDatabase,
+              $PendingCashierApprovalsTable,
+              PendingCashierApproval
+            >,
+          ),
+          PendingCashierApproval,
+          PrefetchHooks Function()
+        > {
+  $$PendingCashierApprovalsTableTableManager(
+    _$AppDatabase db,
+    $PendingCashierApprovalsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PendingCashierApprovalsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$PendingCashierApprovalsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$PendingCashierApprovalsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> cloudPendingId = const Value.absent(),
+              }) => PendingCashierApprovalsCompanion(
+                id: id,
+                kind: kind,
+                payloadJson: payloadJson,
+                createdAt: createdAt,
+                cloudPendingId: cloudPendingId,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String kind,
+                required String payloadJson,
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> cloudPendingId = const Value.absent(),
+              }) => PendingCashierApprovalsCompanion.insert(
+                id: id,
+                kind: kind,
+                payloadJson: payloadJson,
+                createdAt: createdAt,
+                cloudPendingId: cloudPendingId,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PendingCashierApprovalsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PendingCashierApprovalsTable,
+      PendingCashierApproval,
+      $$PendingCashierApprovalsTableFilterComposer,
+      $$PendingCashierApprovalsTableOrderingComposer,
+      $$PendingCashierApprovalsTableAnnotationComposer,
+      $$PendingCashierApprovalsTableCreateCompanionBuilder,
+      $$PendingCashierApprovalsTableUpdateCompanionBuilder,
+      (
+        PendingCashierApproval,
+        BaseReferences<
+          _$AppDatabase,
+          $PendingCashierApprovalsTable,
+          PendingCashierApproval
+        >,
+      ),
+      PendingCashierApproval,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -15243,6 +16577,8 @@ class $AppDatabaseManager {
       $$SuppliesTableTableManager(_db, _db.supplies);
   $$RecipesTableTableManager get recipes =>
       $$RecipesTableTableManager(_db, _db.recipes);
+  $$ShiftsTableTableManager get shifts =>
+      $$ShiftsTableTableManager(_db, _db.shifts);
   $$SalesTableTableManager get sales =>
       $$SalesTableTableManager(_db, _db.sales);
   $$SaleItemsTableTableManager get saleItems =>
@@ -15263,8 +16599,6 @@ class $AppDatabaseManager {
       $$BundlesTableTableManager(_db, _db.bundles);
   $$BundleItemsTableTableManager get bundleItems =>
       $$BundleItemsTableTableManager(_db, _db.bundleItems);
-  $$ShiftsTableTableManager get shifts =>
-      $$ShiftsTableTableManager(_db, _db.shifts);
   $$CashMovementsTableTableManager get cashMovements =>
       $$CashMovementsTableTableManager(_db, _db.cashMovements);
   $$ShiftClosuresTableTableManager get shiftClosures =>
@@ -15275,4 +16609,9 @@ class $AppDatabaseManager {
       $$AppUsersTableTableManager(_db, _db.appUsers);
   $$OperationLogsTableTableManager get operationLogs =>
       $$OperationLogsTableTableManager(_db, _db.operationLogs);
+  $$PendingCashierApprovalsTableTableManager get pendingCashierApprovals =>
+      $$PendingCashierApprovalsTableTableManager(
+        _db,
+        _db.pendingCashierApprovals,
+      );
 }
