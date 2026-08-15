@@ -4133,6 +4133,17 @@ class $ModifierOptionsTable extends ModifierOptions
     requiredDuringInsert: false,
     defaultValue: const Constant(0.0),
   );
+  static const VerificationMeta _imageUrlMeta = const VerificationMeta(
+    'imageUrl',
+  );
+  @override
+  late final GeneratedColumn<String> imageUrl = GeneratedColumn<String>(
+    'image_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4140,6 +4151,7 @@ class $ModifierOptionsTable extends ModifierOptions
     supplyId,
     quantityDeducted,
     priceExtra,
+    imageUrl,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4192,6 +4204,12 @@ class $ModifierOptionsTable extends ModifierOptions
         priceExtra.isAcceptableOrUnknown(data['price_extra']!, _priceExtraMeta),
       );
     }
+    if (data.containsKey('image_url')) {
+      context.handle(
+        _imageUrlMeta,
+        imageUrl.isAcceptableOrUnknown(data['image_url']!, _imageUrlMeta),
+      );
+    }
     return context;
   }
 
@@ -4221,6 +4239,10 @@ class $ModifierOptionsTable extends ModifierOptions
         DriftSqlType.double,
         data['${effectivePrefix}price_extra'],
       )!,
+      imageUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_url'],
+      ),
     );
   }
 
@@ -4236,12 +4258,14 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
   final int supplyId;
   final double quantityDeducted;
   final double priceExtra;
+  final String? imageUrl;
   const ModifierOption({
     required this.id,
     required this.modifierGroupId,
     required this.supplyId,
     required this.quantityDeducted,
     required this.priceExtra,
+    this.imageUrl,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4251,6 +4275,9 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
     map['supply_id'] = Variable<int>(supplyId);
     map['quantity_deducted'] = Variable<double>(quantityDeducted);
     map['price_extra'] = Variable<double>(priceExtra);
+    if (!nullToAbsent || imageUrl != null) {
+      map['image_url'] = Variable<String>(imageUrl);
+    }
     return map;
   }
 
@@ -4261,6 +4288,9 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
       supplyId: Value(supplyId),
       quantityDeducted: Value(quantityDeducted),
       priceExtra: Value(priceExtra),
+      imageUrl: imageUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imageUrl),
     );
   }
 
@@ -4275,6 +4305,7 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
       supplyId: serializer.fromJson<int>(json['supplyId']),
       quantityDeducted: serializer.fromJson<double>(json['quantityDeducted']),
       priceExtra: serializer.fromJson<double>(json['priceExtra']),
+      imageUrl: serializer.fromJson<String?>(json['imageUrl']),
     );
   }
   @override
@@ -4286,6 +4317,7 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
       'supplyId': serializer.toJson<int>(supplyId),
       'quantityDeducted': serializer.toJson<double>(quantityDeducted),
       'priceExtra': serializer.toJson<double>(priceExtra),
+      'imageUrl': serializer.toJson<String?>(imageUrl),
     };
   }
 
@@ -4295,12 +4327,14 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
     int? supplyId,
     double? quantityDeducted,
     double? priceExtra,
+    Value<String?> imageUrl = const Value.absent(),
   }) => ModifierOption(
     id: id ?? this.id,
     modifierGroupId: modifierGroupId ?? this.modifierGroupId,
     supplyId: supplyId ?? this.supplyId,
     quantityDeducted: quantityDeducted ?? this.quantityDeducted,
     priceExtra: priceExtra ?? this.priceExtra,
+    imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
   );
   ModifierOption copyWithCompanion(ModifierOptionsCompanion data) {
     return ModifierOption(
@@ -4315,6 +4349,7 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
       priceExtra: data.priceExtra.present
           ? data.priceExtra.value
           : this.priceExtra,
+      imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
     );
   }
 
@@ -4325,14 +4360,21 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
           ..write('modifierGroupId: $modifierGroupId, ')
           ..write('supplyId: $supplyId, ')
           ..write('quantityDeducted: $quantityDeducted, ')
-          ..write('priceExtra: $priceExtra')
+          ..write('priceExtra: $priceExtra, ')
+          ..write('imageUrl: $imageUrl')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, modifierGroupId, supplyId, quantityDeducted, priceExtra);
+  int get hashCode => Object.hash(
+    id,
+    modifierGroupId,
+    supplyId,
+    quantityDeducted,
+    priceExtra,
+    imageUrl,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4341,7 +4383,8 @@ class ModifierOption extends DataClass implements Insertable<ModifierOption> {
           other.modifierGroupId == this.modifierGroupId &&
           other.supplyId == this.supplyId &&
           other.quantityDeducted == this.quantityDeducted &&
-          other.priceExtra == this.priceExtra);
+          other.priceExtra == this.priceExtra &&
+          other.imageUrl == this.imageUrl);
 }
 
 class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
@@ -4350,12 +4393,14 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
   final Value<int> supplyId;
   final Value<double> quantityDeducted;
   final Value<double> priceExtra;
+  final Value<String?> imageUrl;
   const ModifierOptionsCompanion({
     this.id = const Value.absent(),
     this.modifierGroupId = const Value.absent(),
     this.supplyId = const Value.absent(),
     this.quantityDeducted = const Value.absent(),
     this.priceExtra = const Value.absent(),
+    this.imageUrl = const Value.absent(),
   });
   ModifierOptionsCompanion.insert({
     this.id = const Value.absent(),
@@ -4363,6 +4408,7 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
     required int supplyId,
     required double quantityDeducted,
     this.priceExtra = const Value.absent(),
+    this.imageUrl = const Value.absent(),
   }) : modifierGroupId = Value(modifierGroupId),
        supplyId = Value(supplyId),
        quantityDeducted = Value(quantityDeducted);
@@ -4372,6 +4418,7 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
     Expression<int>? supplyId,
     Expression<double>? quantityDeducted,
     Expression<double>? priceExtra,
+    Expression<String>? imageUrl,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -4379,6 +4426,7 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
       if (supplyId != null) 'supply_id': supplyId,
       if (quantityDeducted != null) 'quantity_deducted': quantityDeducted,
       if (priceExtra != null) 'price_extra': priceExtra,
+      if (imageUrl != null) 'image_url': imageUrl,
     });
   }
 
@@ -4388,6 +4436,7 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
     Value<int>? supplyId,
     Value<double>? quantityDeducted,
     Value<double>? priceExtra,
+    Value<String?>? imageUrl,
   }) {
     return ModifierOptionsCompanion(
       id: id ?? this.id,
@@ -4395,6 +4444,7 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
       supplyId: supplyId ?? this.supplyId,
       quantityDeducted: quantityDeducted ?? this.quantityDeducted,
       priceExtra: priceExtra ?? this.priceExtra,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 
@@ -4416,6 +4466,9 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
     if (priceExtra.present) {
       map['price_extra'] = Variable<double>(priceExtra.value);
     }
+    if (imageUrl.present) {
+      map['image_url'] = Variable<String>(imageUrl.value);
+    }
     return map;
   }
 
@@ -4426,7 +4479,8 @@ class ModifierOptionsCompanion extends UpdateCompanion<ModifierOption> {
           ..write('modifierGroupId: $modifierGroupId, ')
           ..write('supplyId: $supplyId, ')
           ..write('quantityDeducted: $quantityDeducted, ')
-          ..write('priceExtra: $priceExtra')
+          ..write('priceExtra: $priceExtra, ')
+          ..write('imageUrl: $imageUrl')
           ..write(')'))
         .toString();
   }
@@ -13260,6 +13314,7 @@ typedef $$ModifierOptionsTableCreateCompanionBuilder =
       required int supplyId,
       required double quantityDeducted,
       Value<double> priceExtra,
+      Value<String?> imageUrl,
     });
 typedef $$ModifierOptionsTableUpdateCompanionBuilder =
     ModifierOptionsCompanion Function({
@@ -13268,6 +13323,7 @@ typedef $$ModifierOptionsTableUpdateCompanionBuilder =
       Value<int> supplyId,
       Value<double> quantityDeducted,
       Value<double> priceExtra,
+      Value<String?> imageUrl,
     });
 
 final class $$ModifierOptionsTableReferences
@@ -13345,6 +13401,11 @@ class $$ModifierOptionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get imageUrl => $composableBuilder(
+    column: $table.imageUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ModifierGroupsTableFilterComposer get modifierGroupId {
     final $$ModifierGroupsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -13416,6 +13477,11 @@ class $$ModifierOptionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get imageUrl => $composableBuilder(
+    column: $table.imageUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ModifierGroupsTableOrderingComposer get modifierGroupId {
     final $$ModifierGroupsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -13484,6 +13550,9 @@ class $$ModifierOptionsTableAnnotationComposer
     column: $table.priceExtra,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get imageUrl =>
+      $composableBuilder(column: $table.imageUrl, builder: (column) => column);
 
   $$ModifierGroupsTableAnnotationComposer get modifierGroupId {
     final $$ModifierGroupsTableAnnotationComposer composer = $composerBuilder(
@@ -13567,12 +13636,14 @@ class $$ModifierOptionsTableTableManager
                 Value<int> supplyId = const Value.absent(),
                 Value<double> quantityDeducted = const Value.absent(),
                 Value<double> priceExtra = const Value.absent(),
+                Value<String?> imageUrl = const Value.absent(),
               }) => ModifierOptionsCompanion(
                 id: id,
                 modifierGroupId: modifierGroupId,
                 supplyId: supplyId,
                 quantityDeducted: quantityDeducted,
                 priceExtra: priceExtra,
+                imageUrl: imageUrl,
               ),
           createCompanionCallback:
               ({
@@ -13581,12 +13652,14 @@ class $$ModifierOptionsTableTableManager
                 required int supplyId,
                 required double quantityDeducted,
                 Value<double> priceExtra = const Value.absent(),
+                Value<String?> imageUrl = const Value.absent(),
               }) => ModifierOptionsCompanion.insert(
                 id: id,
                 modifierGroupId: modifierGroupId,
                 supplyId: supplyId,
                 quantityDeducted: quantityDeducted,
                 priceExtra: priceExtra,
+                imageUrl: imageUrl,
               ),
           withReferenceMapper: (p0) => p0
               .map(

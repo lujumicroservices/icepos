@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
+import 'package:ice_pos/src/core/services/modifier_option_image_service.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/features/admin/data/catalog_repository.dart';
 import 'package:ice_pos/src/features/admin/data/product_editor_repository.dart';
@@ -46,6 +47,9 @@ class _ModifierOptionItem {
     this.priceExtra = 0,
     this.supplyName,
     this.supplyUnit,
+    this.imageUrl,
+    this.newImageBytes,
+    this.newImageMimeType,
   });
 
   int supplyId;
@@ -53,6 +57,9 @@ class _ModifierOptionItem {
   double priceExtra;
   String? supplyName;
   String? supplyUnit;
+  String? imageUrl;
+  Uint8List? newImageBytes;
+  String? newImageMimeType;
 }
 
 /// Modifier group for editing.
@@ -156,6 +163,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
                     priceExtra: o.option.priceExtra,
                     supplyName: o.supplyName,
                     supplyUnit: o.supplyUnit,
+                    imageUrl: o.option.imageUrl,
                   ),
                 )
                 .toList(),
@@ -262,6 +270,11 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
                             supplyId: o.supplyId,
                             quantityDeducted: o.quantityDeducted,
                             priceExtra: o.priceExtra,
+                            imageUrl: o.newImageBytes != null
+                                ? null
+                                : o.imageUrl,
+                            newImageBytes: o.newImageBytes?.toList(),
+                            newImageMimeType: o.newImageMimeType,
                           ),
                         )
                         .toList(),
@@ -379,6 +392,12 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
                 setState(() => _modifierGroups.removeAt(index)),
             onAddOption: (groupIndex) =>
                 _showAddModifierOptionDialog(context, groupIndex),
+            onEditOption: (groupIndex, optionIndex) =>
+                _showEditModifierOptionImageDialog(
+                  context,
+                  groupIndex,
+                  optionIndex,
+                ),
             onRemoveOption: (groupIndex, optionIndex) => setState(() {
                   _modifierGroups[groupIndex].options.removeAt(optionIndex);
                 }),
@@ -552,23 +571,66 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
     if (!mounted || supplies.isEmpty) return;
     if (!context.mounted) return;
 
-    final result = await showDialog<(Supply, double, double)>(
+    final result = await showDialog<_ModifierOptionDraft>(
       context: context,
       builder: (ctx) => _AddModifierOptionIngredientDialog(supplies: supplies),
     );
 
     if (result == null || !mounted) return;
-    final (selectedSupply, qty, price) = result;
     setState(() {
       _modifierGroups[groupIndex].options.add(_ModifierOptionItem(
-        supplyId: selectedSupply.id,
-        quantityDeducted: qty,
-        priceExtra: price,
-        supplyName: selectedSupply.name,
-        supplyUnit: selectedSupply.unit,
+        supplyId: result.supply.id,
+        quantityDeducted: result.quantityDeducted,
+        priceExtra: result.priceExtra,
+        supplyName: result.supply.name,
+        supplyUnit: result.supply.unit,
+        imageUrl: result.imageUrl,
+        newImageBytes: result.newImageBytes,
+        newImageMimeType: result.newImageMimeType,
       ));
     });
   }
+
+  void _showEditModifierOptionImageDialog(
+    BuildContext context,
+    int groupIndex,
+    int optionIndex,
+  ) async {
+    final opt = _modifierGroups[groupIndex].options[optionIndex];
+    final result = await showDialog<({
+      String? imageUrl,
+      Uint8List? newImageBytes,
+      String? newImageMimeType,
+    })>(
+      context: context,
+      builder: (ctx) => _EditModifierOptionImageDialog(option: opt),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      opt.imageUrl = result.imageUrl;
+      opt.newImageBytes = result.newImageBytes;
+      opt.newImageMimeType = result.newImageMimeType;
+    });
+  }
+}
+
+/// Draft returned by add/edit modifier-option dialogs.
+class _ModifierOptionDraft {
+  const _ModifierOptionDraft({
+    required this.supply,
+    required this.quantityDeducted,
+    required this.priceExtra,
+    this.imageUrl,
+    this.newImageBytes,
+    this.newImageMimeType,
+  });
+
+  final Supply supply;
+  final double quantityDeducted;
+  final double priceExtra;
+  final String? imageUrl;
+  final Uint8List? newImageBytes;
+  final String? newImageMimeType;
 }
 
 /// Filtra insumos por nombre o categoría (búsqueda en editor de producto).
@@ -709,26 +771,63 @@ class _AddModifierOptionIngredientDialogState
   final _search = TextEditingController();
   final _qty = TextEditingController(text: '0.050');
   final _price = TextEditingController(text: '0');
+  final _imageUrl = TextEditingController();
   Supply? _selected;
+  Uint8List? _pickedBytes;
+  String? _pickedMime;
 
   @override
   void dispose() {
     _search.dispose();
     _qty.dispose();
     _price.dispose();
+    _imageUrl.dispose();
     super.dispose();
+  }
+
+  String _mimeFromPath(String path) {
+    final p = path.toLowerCase();
+    if (p.endsWith('.png')) return 'image/png';
+    if (p.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return;
+      setState(() {
+        _pickedBytes = bytes;
+        _pickedMime = _mimeFromPath(file.path);
+        _imageUrl.clear();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo obtener la imagen: $e')),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final filtered = _filterSuppliesForEditor(widget.supplies, _search.text);
     final h = MediaQuery.of(context).size.height;
+    final scheme = Theme.of(context).colorScheme;
 
     return AlertDialog(
       title: const Text('Add Modifier Option'),
       content: SizedBox(
         width: double.maxFinite,
-        height: min(460.0, h * 0.68),
+        height: min(560.0, h * 0.78),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -749,7 +848,7 @@ class _AddModifierOptionIngredientDialogState
                       child: Text(
                         'No matches',
                         style: GoogleFonts.inter(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     )
@@ -798,6 +897,91 @@ class _AddModifierOptionIngredientDialogState
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
               ),
+              const SizedBox(height: 12),
+              Text(
+                'Imagen del sabor (opcional)',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      color: scheme.surfaceContainerHighest,
+                      child: _pickedBytes != null
+                          ? Image.memory(_pickedBytes!, fit: BoxFit.cover)
+                          : (_imageUrl.text.trim().isNotEmpty
+                              ? Image.network(
+                                  _imageUrl.text.trim(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      Icon(Icons.icecream, color: scheme.outline),
+                                )
+                              : Icon(Icons.icecream, color: scheme.outline)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: () => _pickImage(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_outlined, size: 18),
+                          label: const Text('Galería'),
+                        ),
+                        if (!kIsWeb)
+                          FilledButton.tonalIcon(
+                            onPressed: () => _pickImage(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                            label: const Text('Cámara'),
+                          ),
+                        OutlinedButton(
+                          onPressed: () => setState(() {
+                            _pickedBytes = null;
+                            _pickedMime = null;
+                            _imageUrl.clear();
+                          }),
+                          child: const Text('Quitar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _imageUrl,
+                onChanged: (_) {
+                  if (_pickedBytes != null) {
+                    setState(() {
+                      _pickedBytes = null;
+                      _pickedMime = null;
+                    });
+                  } else {
+                    setState(() {});
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: 'URL de imagen (opcional)',
+                  hintText: 'https://...',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+              ),
+              if (!ModifierOptionImageService.canUpload) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Sin Supabase: usa una URL pública.',
+                  style: GoogleFonts.inter(fontSize: 11, color: scheme.tertiary),
+                ),
+              ],
             ],
           ],
         ),
@@ -813,9 +997,187 @@ class _AddModifierOptionIngredientDialogState
             final qty = double.tryParse(_qty.text);
             if (qty == null || qty <= 0) return;
             final price = double.tryParse(_price.text) ?? 0;
-            Navigator.pop(context, (_selected!, qty, price));
+            final url = _imageUrl.text.trim();
+            Navigator.pop(
+              context,
+              _ModifierOptionDraft(
+                supply: _selected!,
+                quantityDeducted: qty,
+                priceExtra: price,
+                imageUrl: _pickedBytes != null
+                    ? null
+                    : (url.isEmpty ? null : url),
+                newImageBytes: _pickedBytes,
+                newImageMimeType: _pickedMime,
+              ),
+            );
           },
           child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditModifierOptionImageDialog extends StatefulWidget {
+  const _EditModifierOptionImageDialog({required this.option});
+
+  final _ModifierOptionItem option;
+
+  @override
+  State<_EditModifierOptionImageDialog> createState() =>
+      _EditModifierOptionImageDialogState();
+}
+
+class _EditModifierOptionImageDialogState
+    extends State<_EditModifierOptionImageDialog> {
+  late final TextEditingController _imageUrl;
+  Uint8List? _pickedBytes;
+  String? _pickedMime;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageUrl = TextEditingController(text: widget.option.imageUrl ?? '');
+    _pickedBytes = widget.option.newImageBytes;
+    _pickedMime = widget.option.newImageMimeType;
+  }
+
+  @override
+  void dispose() {
+    _imageUrl.dispose();
+    super.dispose();
+  }
+
+  String _mimeFromPath(String path) {
+    final p = path.toLowerCase();
+    if (p.endsWith('.png')) return 'image/png';
+    if (p.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return;
+      setState(() {
+        _pickedBytes = bytes;
+        _pickedMime = _mimeFromPath(file.path);
+        _imageUrl.clear();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo obtener la imagen: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final name = widget.option.supplyName ?? 'Supply #${widget.option.supplyId}';
+    return AlertDialog(
+      title: Text('Imagen: $name'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 140,
+              height: 140,
+              color: scheme.surfaceContainerHighest,
+              child: _pickedBytes != null
+                  ? Image.memory(_pickedBytes!, fit: BoxFit.cover)
+                  : (_imageUrl.text.trim().isNotEmpty
+                      ? Image.network(
+                          _imageUrl.text.trim(),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              Icon(Icons.icecream, size: 48, color: scheme.outline),
+                        )
+                      : Icon(Icons.icecream, size: 48, color: scheme.outline)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () => _pickImage(ImageSource.gallery),
+                icon: const Icon(Icons.photo_library_outlined, size: 18),
+                label: const Text('Galería'),
+              ),
+              if (!kIsWeb)
+                FilledButton.tonalIcon(
+                  onPressed: () => _pickImage(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                  label: const Text('Cámara'),
+                ),
+              OutlinedButton(
+                onPressed: () => setState(() {
+                  _pickedBytes = null;
+                  _pickedMime = null;
+                  _imageUrl.clear();
+                }),
+                child: const Text('Quitar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _imageUrl,
+            onChanged: (_) {
+              if (_pickedBytes != null) {
+                setState(() {
+                  _pickedBytes = null;
+                  _pickedMime = null;
+                });
+              } else {
+                setState(() {});
+              }
+            },
+            decoration: const InputDecoration(
+              labelText: 'URL de imagen (opcional)',
+              hintText: 'https://...',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final url = _imageUrl.text.trim();
+            Navigator.pop(
+              context,
+              (
+                imageUrl: _pickedBytes != null
+                    ? null
+                    : (url.isEmpty ? null : url),
+                newImageBytes: _pickedBytes,
+                newImageMimeType: _pickedMime,
+              ),
+            );
+          },
+          child: const Text('Guardar'),
         ),
       ],
     );
@@ -1118,6 +1480,7 @@ class _ModifiersTab extends StatelessWidget {
     required this.onEditGroup,
     required this.onRemoveGroup,
     required this.onAddOption,
+    required this.onEditOption,
     required this.onRemoveOption,
   });
 
@@ -1127,10 +1490,41 @@ class _ModifiersTab extends StatelessWidget {
   final void Function(int index) onEditGroup;
   final void Function(int index) onRemoveGroup;
   final void Function(int groupIndex) onAddOption;
+  final void Function(int groupIndex, int optionIndex) onEditOption;
   final void Function(int groupIndex, int optionIndex) onRemoveOption;
+
+  Widget _optionLeading(_ModifierOptionItem opt, ColorScheme scheme) {
+    final bytes = opt.newImageBytes;
+    final url = opt.imageUrl?.trim();
+    Widget child;
+    if (bytes != null) {
+      child = Image.memory(bytes, fit: BoxFit.cover, width: 40, height: 40);
+    } else if (url != null && url.isNotEmpty) {
+      child = Image.network(
+        url,
+        fit: BoxFit.cover,
+        width: 40,
+        height: 40,
+        errorBuilder: (_, __, ___) =>
+            Icon(Icons.icecream, size: 22, color: scheme.outline),
+      );
+    } else {
+      child = Icon(Icons.icecream, size: 22, color: scheme.outline);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 40,
+        height: 40,
+        color: scheme.surfaceContainerHighest,
+        child: child,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -1144,6 +1538,14 @@ class _ModifiersTab extends StatelessWidget {
                   style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'En cada opción (sabor) puedes asignar una imagen para el POS.',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1208,12 +1610,14 @@ class _ModifiersTab extends StatelessWidget {
                               final opt = e.value;
                               return ListTile(
                                 dense: true,
+                                leading: _optionLeading(opt, scheme),
+                                onTap: () => onEditOption(groupIndex, e.key),
                                 title: Text(
                                   opt.supplyName ?? 'Supply #${opt.supplyId}',
                                   style: GoogleFonts.inter(fontSize: 14),
                                 ),
                                 subtitle: Text(
-                                  '${opt.quantityDeducted} ${opt.supplyUnit ?? 'units'}${opt.priceExtra > 0 ? ' / +\$${opt.priceExtra.toStringAsFixed(2)}' : ''}',
+                                  '${opt.quantityDeducted} ${opt.supplyUnit ?? 'units'}${opt.priceExtra > 0 ? ' / +\$${opt.priceExtra.toStringAsFixed(2)}' : ''} · tocar para imagen',
                                   style: GoogleFonts.inter(fontSize: 12),
                                 ),
                                 trailing: IconButton(

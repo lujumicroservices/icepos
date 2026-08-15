@@ -420,6 +420,7 @@ class CloudSyncService {
             supplyId: _int(row['supply_id'])!,
             quantityDeducted: _double(row['quantity_deducted']),
             priceExtra: Value(_double(row['price_extra'])),
+            imageUrl: Value(row['image_url'] as String?),
           ));
         }
         report(8, 'syncStepSavingBundles', '${bundleRows.length} bundles · ${discRows.length} descuentos');
@@ -2601,6 +2602,7 @@ class CloudSyncService {
     required int supplyId,
     required double quantityDeducted,
     double priceExtra = 0,
+    String? imageUrl,
   }) async {
     if (!SupabaseService.isInitialized) return null;
     try {
@@ -2609,6 +2611,7 @@ class CloudSyncService {
         'supply_id': supplyId,
         'quantity_deducted': quantityDeducted,
         'price_extra': priceExtra,
+        'image_url': imageUrl,
       });
       return null;
     } catch (e) {
@@ -2658,6 +2661,7 @@ class CloudSyncService {
             supplyId: o.supplyId,
             quantityDeducted: o.quantityDeducted,
             priceExtra: o.priceExtra,
+            imageUrl: o.imageUrl,
           );
           if (err != null) return err;
         }
@@ -2771,6 +2775,7 @@ class CloudSyncService {
           'supply_id': o.supplyId,
           'quantity_deducted': o.quantityDeducted,
           'price_extra': o.priceExtra,
+          'image_url': o.imageUrl,
         }).toList();
         await client.from('modifier_options').insert(moRows);
       }

@@ -92,7 +92,8 @@ create table if not exists public.modifier_options (
   modifier_group_id int not null references public.modifier_groups(id) on delete cascade,
   supply_id int not null references public.supplies(id),
   quantity_deducted real not null,
-  price_extra real default 0
+  price_extra real default 0,
+  image_url text
 );
 
 -- 11. Parked orders

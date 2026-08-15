@@ -279,10 +279,22 @@ class _SupplyManagementScreenState extends ConsumerState<SupplyManagementScreen>
                 ),
               );
             }
-            return;
+            rethrow;
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error al guardar: $e'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+              );
+            }
+            rethrow;
           }
           ref.invalidate(_suppliesGroupedProvider);
           ref.invalidate(_supplyCategoryNamesProvider);
+          ref.read(posCategoriesRefreshProvider.notifier).update((v) => v + 1);
           if (ctx.mounted) Navigator.of(ctx).pop();
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -557,16 +569,29 @@ class _SupplyFormDialogState extends State<_SupplyFormDialog> {
     final qual = _stockMode == StockCountMode.qualitative ? _qualitativeLevel : null;
 
     setState(() => _isSaving = true);
-    await widget.onSave(
-      name,
-      _selectedUnit,
-      cost,
-      reorder,
-      categoryOrNull,
-      _stockMode,
-      qual,
-    );
-    if (mounted) setState(() => _isSaving = false);
+    try {
+      await widget.onSave(
+        name,
+        _selectedUnit,
+        cost,
+        reorder,
+        categoryOrNull,
+        _stockMode,
+        qual,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo guardar el insumo: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override

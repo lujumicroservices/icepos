@@ -162,22 +162,7 @@ class SupabaseSupplyAdminRepository implements SupplyAdminRepository {
         insert['current_stock'] = 0.0;
       }
       final row = await _client.from('supplies').insert(insert).select('id').single();
-      final newId = row['id'] is int ? row['id'] as int : (row['id'] as num).toInt();
-      final err = await CloudSyncService.upsertSupplyToCloud(
-        id: newId,
-        name: name,
-        unit: unit,
-        currentStock: (insert['current_stock'] as num).toDouble(),
-        costPerUnit: costPerUnit,
-        reorderPoint: reorderPoint,
-        category: cat,
-        stockCountMode: mode,
-        qualitativeLevel: qLevel,
-      );
-      if (err != null) {
-        throw StateError(err);
-      }
-      return newId;
+      return row['id'] is int ? row['id'] as int : (row['id'] as num).toInt();
     }
 
     await _client.from('supplies').update({
@@ -191,22 +176,6 @@ class SupabaseSupplyAdminRepository implements SupplyAdminRepository {
       if (mode == StockCountMode.qualitative && qualStock != null) 'current_stock': qualStock,
     }).eq('id', id);
 
-    final s = await _client.from('supplies').select().eq('id', id).single();
-    final m = Map<String, dynamic>.from(s as Map);
-    final err = await CloudSyncService.upsertSupplyToCloud(
-      id: id,
-      name: m['name'] as String,
-      unit: m['unit'] as String,
-      currentStock: (m['current_stock'] as num).toDouble(),
-      costPerUnit: (m['cost_per_unit'] as num?)?.toDouble() ?? 0,
-      reorderPoint: (m['reorder_point'] as num?)?.toDouble() ?? 0,
-      category: m['category'] as String?,
-      stockCountMode: (m['stock_count_mode'] as String?) ?? StockCountMode.quantity,
-      qualitativeLevel: m['qualitative_level'] as String?,
-    );
-    if (err != null) {
-      throw StateError(err);
-    }
     return id;
   }
 

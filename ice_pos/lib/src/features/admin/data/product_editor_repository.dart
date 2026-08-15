@@ -4,11 +4,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ice_pos/src/core/platform/data_backend.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
+import 'package:ice_pos/src/core/services/modifier_option_image_service.dart';
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
 import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+typedef ModifierOptionSaveInput = ({
+  int supplyId,
+  double quantityDeducted,
+  double priceExtra,
+  String? imageUrl,
+  List<int>? newImageBytes,
+  String? newImageMimeType,
+});
+
+typedef ModifierGroupSaveInput = ({
+  String name,
+  int minSelection,
+  int maxSelection,
+  List<ModifierOptionSaveInput> options,
+});
 
 /// Product editor: recipes, modifiers, image — Drift on device, Supabase on web.
 abstract class ProductEditorRepository {
@@ -31,12 +48,7 @@ abstract class ProductEditorRepository {
     List<int>? newImageBytes,
     String? newImageMimeType,
     required List<({int supplyId, double quantityRequired})> recipeItems,
-    required List<({
-      String name,
-      int minSelection,
-      int maxSelection,
-      List<({int supplyId, double quantityDeducted, double priceExtra})> options,
-    })> modifierGroups,
+    required List<ModifierGroupSaveInput> modifierGroups,
   });
 }
 
@@ -72,12 +84,7 @@ class DriftProductEditorRepository implements ProductEditorRepository {
     List<int>? newImageBytes,
     String? newImageMimeType,
     required List<({int supplyId, double quantityRequired})> recipeItems,
-    required List<({
-      String name,
-      int minSelection,
-      int maxSelection,
-      List<({int supplyId, double quantityDeducted, double priceExtra})> options,
-    })> modifierGroups,
+    required List<ModifierGroupSaveInput> modifierGroups,
   }) =>
       _pos.saveProduct(
         productId: productId,
@@ -204,6 +211,7 @@ class SupabaseProductEditorRepository implements ProductEditorRepository {
           supplyId: sid,
           quantityDeducted: (om['quantity_deducted'] as num).toDouble(),
           priceExtra: (om['price_extra'] as num?)?.toDouble() ?? 0,
+          imageUrl: om['image_url'] as String?,
         );
         options.add(
           ModifierOptionWithSupply(
@@ -228,12 +236,7 @@ class SupabaseProductEditorRepository implements ProductEditorRepository {
     List<int>? newImageBytes,
     String? newImageMimeType,
     required List<({int supplyId, double quantityRequired})> recipeItems,
-    required List<({
-      String name,
-      int minSelection,
-      int maxSelection,
-      List<({int supplyId, double quantityDeducted, double priceExtra})> options,
-    })> modifierGroups,
+    required List<ModifierGroupSaveInput> modifierGroups,
   }) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
 
@@ -308,14 +311,29 @@ class SupabaseProductEditorRepository implements ProductEditorRepository {
         throw StateError(err);
       }
       for (final opt in group.options) {
-        err = await CloudSyncService.insertModifierOptionToCloud(
-          modifierGroupId: groupId,
-          supplyId: opt.supplyId,
-          quantityDeducted: opt.quantityDeducted,
-          priceExtra: opt.priceExtra,
-        );
-        if (err != null) {
-          throw StateError(err);
+        final hasNewBytes =
+            opt.newImageBytes != null && opt.newImageBytes!.isNotEmpty;
+        final insert = <String, dynamic>{
+          'modifier_group_id': groupId,
+          'supply_id': opt.supplyId,
+          'quantity_deducted': opt.quantityDeducted,
+          'price_extra': opt.priceExtra,
+          if (!hasNewBytes) 'image_url': opt.imageUrl,
+        };
+        final oRow =
+            await _client.from('modifier_options').insert(insert).select('id').single();
+        final optionId = _asInt(oRow['id'])!;
+        if (hasNewBytes) {
+          final url = await ModifierOptionImageService.uploadModifierOptionImage(
+            optionId: optionId,
+            bytes: Uint8List.fromList(opt.newImageBytes!),
+            mimeType: opt.newImageMimeType ?? 'image/jpeg',
+          );
+          if (url != null) {
+            await _client
+                .from('modifier_options')
+                .update({'image_url': url}).eq('id', optionId);
+          }
         }
       }
     }

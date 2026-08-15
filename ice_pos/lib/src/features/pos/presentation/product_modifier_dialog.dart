@@ -161,6 +161,7 @@ class _ProductModifierDialogState extends State<ProductModifierDialog> {
           priceExtra: opt.option.priceExtra,
           count: _count(groupIndex, opt.option.id),
           maxCount: maxSelection - currentTotal + _count(groupIndex, opt.option.id),
+          networkImageUrl: opt.option.imageUrl,
           onIncrement: () => _increment(groupIndex, opt),
           onDecrement: () => _decrement(groupIndex, opt),
         ),
@@ -540,6 +541,7 @@ class _FlavorOptionsGrid extends StatelessWidget {
                 priceExtra: opt.option.priceExtra,
                 count: count,
                 maxCount: maxCount,
+                networkImageUrl: opt.option.imageUrl,
                 assetPath: _assetPathForFlavor(parsed.displayName),
                 icon: _iconForFlavor(normalized),
                 color: _colorForFlavor(context, normalized),
@@ -561,6 +563,7 @@ class _FlavorGridTile extends StatelessWidget {
     required this.priceExtra,
     required this.count,
     required this.maxCount,
+    this.networkImageUrl,
     required this.assetPath,
     required this.icon,
     required this.color,
@@ -572,16 +575,28 @@ class _FlavorGridTile extends StatelessWidget {
   final double priceExtra;
   final int count;
   final int maxCount;
+  final String? networkImageUrl;
   final String assetPath;
   final IconData icon;
   final Color color;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
 
+  Widget _imageFallback() {
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Center(
+        child: Icon(icon, color: color, size: 34),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final canAdd = maxCount > 0;
+    final net = networkImageUrl?.trim();
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -606,13 +621,13 @@ class _FlavorGridTile extends StatelessWidget {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
-                            assetPath,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Center(
-                              child: Icon(icon, color: color, size: 34),
-                            ),
-                          ),
+                          child: (net != null && net.isNotEmpty)
+                              ? Image.network(
+                                  net,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => _imageFallback(),
+                                )
+                              : _imageFallback(),
                         ),
                       ),
                       if (count > 0)
@@ -689,6 +704,7 @@ class _OptionRow extends StatelessWidget {
     required this.priceExtra,
     required this.count,
     required this.maxCount,
+    this.networkImageUrl,
     required this.onIncrement,
     required this.onDecrement,
   });
@@ -697,15 +713,35 @@ class _OptionRow extends StatelessWidget {
   final double priceExtra;
   final int count;
   final int maxCount;
+  final String? networkImageUrl;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final net = networkImageUrl?.trim();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 40,
+              height: 40,
+              color: scheme.surfaceContainerHighest,
+              child: (net != null && net.isNotEmpty)
+                  ? Image.network(
+                      net,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          Icon(Icons.icecream, size: 22, color: scheme.outline),
+                    )
+                  : Icon(Icons.icecream, size: 22, color: scheme.outline),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

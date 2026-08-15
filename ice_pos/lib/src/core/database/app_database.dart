@@ -35,11 +35,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 28;
+  int get schemaVersion => 29;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (migrator, from, to) async {
+          if (from < 29) {
+            await migrator.addColumn(modifierOptions, modifierOptions.imageUrl);
+          }
           if (from < 28) {
             await migrator.addColumn(sales, sales.paymentsJson);
           }

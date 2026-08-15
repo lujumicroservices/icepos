@@ -111,6 +111,7 @@ class ModifierOptions extends Table {
   IntColumn get supplyId => integer().references(Supplies, #id)();
   RealColumn get quantityDeducted => real()(); // e.g., 0.150 kg per scoop
   RealColumn get priceExtra => real().withDefault(const Constant(0.0))();
+  TextColumn get imageUrl => text().nullable()();
 }
 
 // 10. PARKED ORDERS (Orders saved for later - Park Order)

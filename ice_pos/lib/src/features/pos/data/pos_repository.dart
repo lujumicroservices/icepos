@@ -15,7 +15,9 @@ import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/core/services/category_image_service.dart';
 import 'package:ice_pos/src/core/services/pending_cashier_approvals_cloud_service.dart';
 import 'package:ice_pos/src/core/services/product_image_service.dart';
+import 'package:ice_pos/src/core/services/modifier_option_image_service.dart';
 import 'package:ice_pos/src/core/services/sales_sync_service.dart';
+import 'package:ice_pos/src/core/services/sync_coordinator.dart';
 import 'package:ice_pos/src/core/shift/shift_linkage.dart';
 import 'package:ice_pos/src/features/inventory/domain/inventory_qualitative.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart' as domain;
@@ -670,10 +672,19 @@ class PosRepository {
       String name,
       int minSelection,
       int maxSelection,
-      List<({int supplyId, double quantityDeducted, double priceExtra})> options,
+      List<({
+        int supplyId,
+        double quantityDeducted,
+        double priceExtra,
+        String? imageUrl,
+        List<int>? newImageBytes,
+        String? newImageMimeType,
+      })> options,
     })> modifierGroups,
   }) async {
     OfflineWritePolicy.requireOnlineForMasterWrite();
+    final optionImageUploads =
+        <({int optionId, List<int> bytes, String mime})>[];
     final savedProductId = await _db.transaction(() async {
       int id;
       if (productId == null) {
@@ -750,14 +761,26 @@ class PosRepository {
               ),
             );
         for (final opt in group.options) {
-          await _db.into(_db.modifierOptions).insert(
+          final hasNewBytes =
+              opt.newImageBytes != null && opt.newImageBytes!.isNotEmpty;
+          final optionId = await _db.into(_db.modifierOptions).insert(
                 ModifierOptionsCompanion.insert(
                   modifierGroupId: groupId,
                   supplyId: opt.supplyId,
                   quantityDeducted: opt.quantityDeducted,
                   priceExtra: Value(opt.priceExtra),
+                  imageUrl: hasNewBytes
+                      ? const Value.absent()
+                      : Value(opt.imageUrl),
                 ),
               );
+          if (hasNewBytes) {
+            optionImageUploads.add((
+              optionId: optionId,
+              bytes: opt.newImageBytes!,
+              mime: opt.newImageMimeType ?? 'image/jpeg',
+            ));
+          }
         }
       }
       return id;
@@ -772,6 +795,19 @@ class PosRepository {
       if (url != null) {
         await (_db.update(_db.products)..where((p) => p.id.equals(savedProductId)))
             .write(ProductsCompanion(imageUrl: Value(url)));
+      }
+    }
+
+    for (final upload in optionImageUploads) {
+      final url = await ModifierOptionImageService.uploadModifierOptionImage(
+        optionId: upload.optionId,
+        bytes: Uint8List.fromList(upload.bytes),
+        mimeType: upload.mime,
+      );
+      if (url != null) {
+        await (_db.update(_db.modifierOptions)
+              ..where((o) => o.id.equals(upload.optionId)))
+            .write(ModifierOptionsCompanion(imageUrl: Value(url)));
       }
     }
 
@@ -1078,36 +1114,39 @@ class PosRepository {
         final initialStock = mode == StockCountMode.qualitative && qualStock != null
             ? qualStock!
             : 0.0;
-        final (cerr, cloudId) = await CloudSyncService.insertSupplyRowInCloud(
-          name: name,
-          unit: unit,
-          currentStock: initialStock,
-          costPerUnit: costPerUnit,
-          reorderPoint: reorderPoint,
-          category: cat,
-          stockCountMode: mode,
-          qualitativeLevel: qLevel,
-        );
-        if (cerr != null) {
-          throw StateError(cerr);
-        }
-        final sid = cloudId!;
-        await _db.into(_db.supplies).insert(
-              SuppliesCompanion.insert(
-                id: Value(sid),
-                name: name,
-                unit: unit,
-                costPerUnit: Value(costPerUnit),
-                reorderPoint: Value(reorderPoint),
-                category: Value(cat),
-                stockCountMode: Value(mode),
-                qualitativeLevel: Value(qLevel),
-                currentStock: mode == StockCountMode.qualitative && qualStock != null
-                    ? Value(qualStock)
-                    : const Value.absent(),
-              ),
-            );
-        return sid;
+        // Serialize with catalog sync so SQLite isn't locked mid-replace.
+        return SyncCoordinator.synchronized(() async {
+          final (cerr, cloudId) = await CloudSyncService.insertSupplyRowInCloud(
+            name: name,
+            unit: unit,
+            currentStock: initialStock,
+            costPerUnit: costPerUnit,
+            reorderPoint: reorderPoint,
+            category: cat,
+            stockCountMode: mode,
+            qualitativeLevel: qLevel,
+          );
+          if (cerr != null) {
+            throw StateError(cerr);
+          }
+          final sid = cloudId!;
+          await _db.into(_db.supplies).insert(
+                SuppliesCompanion.insert(
+                  id: Value(sid),
+                  name: name,
+                  unit: unit,
+                  costPerUnit: Value(costPerUnit),
+                  reorderPoint: Value(reorderPoint),
+                  category: Value(cat),
+                  stockCountMode: Value(mode),
+                  qualitativeLevel: Value(qLevel),
+                  currentStock: mode == StockCountMode.qualitative && qualStock != null
+                      ? Value(qualStock)
+                      : const Value.absent(),
+                ),
+              );
+          return sid;
+        });
       }
       final newId = await _db.into(_db.supplies).insert(
         SuppliesCompanion.insert(
