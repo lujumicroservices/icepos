@@ -2923,17 +2923,20 @@ class CloudSyncService {
     required double percentage,
     required String description,
     required bool isActive,
+    String type = 'percentage',
   }) async {
     if (!isEnabled) return ('Supabase no configurado', null);
     final trimmed = code.trim().toUpperCase();
     if (trimmed.isEmpty) return ('Código vacío', null);
+    final normalizedType = type.trim().isEmpty ? 'percentage' : type;
+    final pct = normalizedType == 'employee' ? 0.0 : percentage;
     try {
       final row = await SupabaseService.instance.client
           .from('discounts')
           .insert({
             'code': trimmed,
-            'type': 'percentage',
-            'percentage': percentage,
+            'type': normalizedType,
+            'percentage': pct,
             'description': description.trim().isEmpty ? null : description.trim(),
             'is_active': isActive,
           })

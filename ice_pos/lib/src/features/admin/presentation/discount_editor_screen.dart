@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/discount_type.dart';
 
@@ -82,14 +83,38 @@ class _DiscountEditorScreenState extends ConsumerState<DiscountEditorScreen> {
 
     setState(() => _isSaving = true);
     try {
-      await ref.read(posRepositoryProvider).saveDiscount(
-            id: widget.discountId,
-            code: code,
-            type: _type,
-            percentage: percentage,
-            description: _descriptionController.text.trim(),
-            isActive: _isActive,
-          );
+      final pos = ref.read(posRepositoryProvider);
+      if (pos != null) {
+        await pos.saveDiscount(
+          id: widget.discountId,
+          code: code,
+          type: _type,
+          percentage: percentage,
+          description: _descriptionController.text.trim(),
+          isActive: _isActive,
+        );
+      } else if (widget.discountId == null) {
+        final (err, _) = await CloudSyncService.insertDiscountToCloud(
+          code: code,
+          type: _type,
+          percentage: percentage,
+          description: _descriptionController.text.trim(),
+          isActive: _isActive,
+        );
+        if (err != null) throw StateError(err);
+      } else {
+        final err = await CloudSyncService.upsertDiscountToCloud(
+          id: widget.discountId!,
+          code: code.trim().toUpperCase(),
+          type: _type,
+          percentage: percentage,
+          description: _descriptionController.text.trim().isEmpty
+              ? (_type == DiscountType.employee ? 'Precio empleado' : 'Discount')
+              : _descriptionController.text.trim(),
+          isActive: _isActive,
+        );
+        if (err != null) throw StateError(err);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.discountSaved)),

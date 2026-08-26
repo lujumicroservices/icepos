@@ -4,12 +4,19 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
+import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/features/admin/presentation/discount_editor_screen.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart';
 import 'package:ice_pos/src/features/pos/domain/discount_type.dart';
+import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 
-final _discountsProvider = StreamProvider<List<Discount>>((ref) {
-  return ref.watch(posRepositoryProvider).watchDiscounts();
+final _discountsProvider = FutureProvider<List<Discount>>((ref) async {
+  ref.watch(posCategoriesRefreshProvider);
+  final pos = ref.watch(posRepositoryProvider);
+  if (pos != null) {
+    return pos.getDiscounts();
+  }
+  return CloudSyncService.fetchDiscountsFromCloud();
 });
 
 class DiscountManagementScreen extends ConsumerWidget {
@@ -109,6 +116,7 @@ class DiscountManagementScreen extends ConsumerWidget {
                       ),
                     ),
                   );
+                  ref.invalidate(_discountsProvider);
                 },
               );
             },
@@ -123,6 +131,7 @@ class DiscountManagementScreen extends ConsumerWidget {
               builder: (_) => const DiscountEditorScreen(),
             ),
           );
+          ref.invalidate(_discountsProvider);
         },
         child: const Icon(Icons.add),
       ),
@@ -134,6 +143,17 @@ class DiscountManagementScreen extends ConsumerWidget {
     WidgetRef ref,
     AppLocalizations l10n,
   ) async {
+    final pos = ref.read(posRepositoryProvider);
+    if (pos == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La importación de precios empleado requiere la app local (Android). En web edita el precio empleado en cada producto.',
+          ),
+        ),
+      );
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -153,8 +173,7 @@ class DiscountManagementScreen extends ConsumerWidget {
     );
     if (confirmed != true || !context.mounted) return;
     try {
-      final n =
-          await ref.read(posRepositoryProvider).applyEmployeePricesFromAsset();
+      final n = await pos.applyEmployeePricesFromAsset();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.importEmployeePricesDone(n))),
@@ -194,6 +213,12 @@ class DiscountManagementScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
-    await ref.read(posRepositoryProvider).deleteDiscount(discount.id);
+    final pos = ref.read(posRepositoryProvider);
+    if (pos != null) {
+      await pos.deleteDiscount(discount.id);
+    } else {
+      await CloudSyncService.deleteDiscountFromCloud(discount.id);
+    }
+    ref.invalidate(_discountsProvider);
   }
 }
