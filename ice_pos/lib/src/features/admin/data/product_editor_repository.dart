@@ -43,6 +43,7 @@ abstract class ProductEditorRepository {
     required int? productId,
     required String name,
     required double price,
+    double? employeePrice,
     int? categoryId,
     String? imageUrl,
     List<int>? newImageBytes,
@@ -79,6 +80,7 @@ class DriftProductEditorRepository implements ProductEditorRepository {
     required int? productId,
     required String name,
     required double price,
+    double? employeePrice,
     int? categoryId,
     String? imageUrl,
     List<int>? newImageBytes,
@@ -90,6 +92,7 @@ class DriftProductEditorRepository implements ProductEditorRepository {
         productId: productId,
         name: name,
         price: price,
+        employeePrice: employeePrice,
         categoryId: categoryId,
         imageUrl: imageUrl,
         newImageBytes: newImageBytes,
@@ -150,6 +153,9 @@ class SupabaseProductEditorRepository implements ProductEditorRepository {
       id: _asInt(m['id'])!,
       name: m['name'] as String,
       price: (m['price'] as num).toDouble(),
+      employeePrice: m['employee_price'] == null
+          ? null
+          : (m['employee_price'] as num).toDouble(),
       imageUrl: m['image_url'] as String?,
       isActive: m['is_active'] as bool? ?? true,
       categoryId: m['category_id'] == null ? null : _asInt(m['category_id']),
@@ -231,6 +237,7 @@ class SupabaseProductEditorRepository implements ProductEditorRepository {
     required int? productId,
     required String name,
     required double price,
+    double? employeePrice,
     int? categoryId,
     String? imageUrl,
     List<int>? newImageBytes,
@@ -245,6 +252,7 @@ class SupabaseProductEditorRepository implements ProductEditorRepository {
       final insert = <String, dynamic>{
         'name': name,
         'price': price,
+        'employee_price': employeePrice,
         'is_active': true,
         'category_id': categoryId,
         if (newImageBytes == null) 'image_url': imageUrl,
@@ -256,6 +264,7 @@ class SupabaseProductEditorRepository implements ProductEditorRepository {
       final upd = <String, dynamic>{
         'name': name,
         'price': price,
+        'employee_price': employeePrice,
         'category_id': categoryId,
       };
       if (newImageBytes == null) {

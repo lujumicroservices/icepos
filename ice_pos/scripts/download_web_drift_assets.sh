@@ -12,8 +12,8 @@ WEB_DIR="$PROJECT_DIR/web"
 DRIFT_VERSION="${DRIFT_VERSION:-2.31.0}"
 SQLITE3_VERSION="${SQLITE3_VERSION:-2.9.4}"
 
-DRIFT_RELEASE="https://github.com/simolus3/drift/releases/download/v${DRIFT_VERSION}"
-SQLITE3_RELEASE="https://github.com/simolus3/sqlite3.dart/releases/download/v${SQLITE3_VERSION}"
+DRIFT_RELEASE="https://github.com/simolus3/drift/releases/download/drift-${DRIFT_VERSION}"
+SQLITE3_RELEASE="https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-${SQLITE3_VERSION}"
 
 mkdir -p "$WEB_DIR"
 
@@ -30,9 +30,9 @@ download() {
   fi
 }
 
-# Drift worker (nombre puede variar por versión; en 2.31 suele ser drift_worker.dart.js)
+# Drift worker asset is named drift_worker.js in GitHub releases.
 echo "Descargando drift_worker.dart.js (drift v$DRIFT_VERSION)..."
-if download "${DRIFT_RELEASE}/drift_worker.dart.js" "$WEB_DIR/drift_worker.dart.js"; then
+if download "${DRIFT_RELEASE}/drift_worker.js" "$WEB_DIR/drift_worker.dart.js"; then
   echo "  -> $WEB_DIR/drift_worker.dart.js"
 else
   echo "  Fallo. Descárgalo manualmente de $DRIFT_RELEASE y colócalo en web/"
