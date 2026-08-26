@@ -386,6 +386,7 @@ class CloudSyncService {
             id: Value(cloudId),
             name: Value(row['name'] as String),
             price: Value(_double(row['price'])),
+            employeePrice: Value(_doubleOrNull(row['employee_price'])),
             imageUrl: Value(row['image_url'] as String?),
             isActive: Value(_bool(row['is_active'])),
             categoryId: Value(cloudCatId),
@@ -447,9 +448,14 @@ class CloudSyncService {
             final cloudId = _int(row['id'])!;
             final rawDesc = row['description'];
             final desc = rawDesc is String ? rawDesc.trim() : '';
+            final typeRaw = row['type'];
+            final type = typeRaw is String && typeRaw.isNotEmpty
+                ? typeRaw
+                : 'percentage';
             await db.into(db.discounts).insert(DiscountsCompanion(
               id: Value(cloudId),
               code: Value(row['code'] as String),
+              type: Value(type),
               percentage: Value(_double(row['percentage'])),
               description: Value(desc.isEmpty ? 'Discount' : desc),
               isActive: Value(_bool(row['is_active'])),
@@ -457,6 +463,7 @@ class CloudSyncService {
           }
         }
       });
+
 
       report(9, 'syncStepFinishing');
       final allProducts = await (db.select(db.products)..orderBy([(p) => OrderingTerm.asc(p.id)])).get();
@@ -2021,6 +2028,12 @@ class CloudSyncService {
     return double.tryParse(v.toString()) ?? 0;
   }
 
+  static double? _doubleOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString());
+  }
+
   static bool _bool(dynamic v) {
     if (v == null) return false;
     if (v is bool) return v;
@@ -2329,6 +2342,7 @@ class CloudSyncService {
     required int id,
     required String name,
     required double price,
+    double? employeePrice,
     int? categoryId,
     bool isActive = true,
     String? imageUrl,
@@ -2339,6 +2353,7 @@ class CloudSyncService {
         'id': id,
         'name': name,
         'price': price,
+        'employee_price': employeePrice,
         'category_id': categoryId,
         'is_active': isActive,
         'image_url': imageUrl,
@@ -2346,6 +2361,42 @@ class CloudSyncService {
       return null;
     } catch (e) {
       debugPrint('CloudSyncService.upsertProductToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> upsertDiscountToCloud({
+    required int id,
+    required String code,
+    required double percentage,
+    required String description,
+    required bool isActive,
+    String type = 'percentage',
+  }) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('discounts').upsert({
+        'id': id,
+        'code': code,
+        'type': type,
+        'percentage': percentage,
+        'description': description,
+        'is_active': isActive,
+      }, onConflict: 'id');
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.upsertDiscountToCloud: $e');
+      return e.toString();
+    }
+  }
+
+  static Future<String?> deleteDiscountFromCloud(int id) async {
+    if (!SupabaseService.isInitialized) return null;
+    try {
+      await SupabaseService.instance.client.from('discounts').delete().match({'id': id});
+      return null;
+    } catch (e) {
+      debugPrint('CloudSyncService.deleteDiscountFromCloud: $e');
       return e.toString();
     }
   }
@@ -2630,6 +2681,7 @@ class CloudSyncService {
         id: product.id,
         name: product.name,
         price: product.price,
+        employeePrice: product.employeePrice,
         categoryId: product.categoryId,
         isActive: product.isActive,
         imageUrl: product.imageUrl,
@@ -2729,6 +2781,7 @@ class CloudSyncService {
         'id': p.id,
         'name': p.name,
         'price': p.price,
+        'employee_price': p.employeePrice,
         'image_url': p.imageUrl,
         'is_active': p.isActive,
         'category_id': p.categoryId,
@@ -2804,6 +2857,7 @@ class CloudSyncService {
         await client.from('discounts').insert({
           'id': d.id,
           'code': d.code,
+          'type': d.type,
           'percentage': d.percentage,
           'description': d.description,
           'is_active': d.isActive,
@@ -2828,9 +2882,12 @@ class CloudSyncService {
   static Discount discountFromSupabaseRow(Map<String, dynamic> row) {
     final rawDesc = row['description'];
     final desc = rawDesc is String ? rawDesc.trim() : '';
+    final typeRaw = row['type'];
+    final type = typeRaw is String && typeRaw.isNotEmpty ? typeRaw : 'percentage';
     return Discount(
       id: _int(row['id'])!,
       code: row['code'] as String,
+      type: type,
       percentage: _double(row['percentage']),
       description: desc.isEmpty ? 'Discount' : desc,
       isActive: _bool(row['is_active']),
@@ -2875,6 +2932,7 @@ class CloudSyncService {
           .from('discounts')
           .insert({
             'code': trimmed,
+            'type': 'percentage',
             'percentage': percentage,
             'description': description.trim().isEmpty ? null : description.trim(),
             'is_active': isActive,
@@ -2884,41 +2942,6 @@ class CloudSyncService {
       return (null, discountFromSupabaseRow(_map(row)));
     } catch (e) {
       return (e.toString(), null);
-    }
-  }
-
-  /// Upserts a discount with explicit [id] (matches local Drift id after insert).
-  static Future<String?> upsertDiscountToCloud({
-    required int id,
-    required String code,
-    required double percentage,
-    required String description,
-    required bool isActive,
-  }) async {
-    if (!isEnabled) return 'Supabase no configurado';
-    final trimmed = code.trim().toUpperCase();
-    if (trimmed.isEmpty) return 'Código vacío';
-    try {
-      await SupabaseService.instance.client.from('discounts').upsert({
-        'id': id,
-        'code': trimmed,
-        'percentage': percentage,
-        'description': description.trim().isEmpty ? null : description.trim(),
-        'is_active': isActive,
-      }, onConflict: 'id');
-      return null;
-    } catch (e) {
-      return e.toString();
-    }
-  }
-
-  static Future<String?> deleteDiscountFromCloud(int id) async {
-    if (!isEnabled) return 'Supabase no configurado';
-    try {
-      await SupabaseService.instance.client.from('discounts').delete().eq('id', id);
-      return null;
-    } catch (e) {
-      return e.toString();
     }
   }
 

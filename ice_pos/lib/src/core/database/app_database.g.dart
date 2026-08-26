@@ -395,6 +395,17 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _employeePriceMeta = const VerificationMeta(
+    'employeePrice',
+  );
+  @override
+  late final GeneratedColumn<double> employeePrice = GeneratedColumn<double>(
+    'employee_price',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _imageUrlMeta = const VerificationMeta(
     'imageUrl',
   );
@@ -440,6 +451,7 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
     id,
     name,
     price,
+    employeePrice,
     imageUrl,
     isActive,
     categoryId,
@@ -474,6 +486,15 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
       );
     } else if (isInserting) {
       context.missing(_priceMeta);
+    }
+    if (data.containsKey('employee_price')) {
+      context.handle(
+        _employeePriceMeta,
+        employeePrice.isAcceptableOrUnknown(
+          data['employee_price']!,
+          _employeePriceMeta,
+        ),
+      );
     }
     if (data.containsKey('image_url')) {
       context.handle(
@@ -514,6 +535,10 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
         DriftSqlType.double,
         data['${effectivePrefix}price'],
       )!,
+      employeePrice: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}employee_price'],
+      ),
       imageUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}image_url'],
@@ -539,6 +564,9 @@ class Product extends DataClass implements Insertable<Product> {
   final int id;
   final String name;
   final double price;
+
+  /// Precio especial para códigos de descuento tipo empleado.
+  final double? employeePrice;
   final String? imageUrl;
   final bool isActive;
   final int? categoryId;
@@ -546,6 +574,7 @@ class Product extends DataClass implements Insertable<Product> {
     required this.id,
     required this.name,
     required this.price,
+    this.employeePrice,
     this.imageUrl,
     required this.isActive,
     this.categoryId,
@@ -556,6 +585,9 @@ class Product extends DataClass implements Insertable<Product> {
     map['id'] = Variable<int>(id);
     map['name'] = Variable<String>(name);
     map['price'] = Variable<double>(price);
+    if (!nullToAbsent || employeePrice != null) {
+      map['employee_price'] = Variable<double>(employeePrice);
+    }
     if (!nullToAbsent || imageUrl != null) {
       map['image_url'] = Variable<String>(imageUrl);
     }
@@ -571,6 +603,9 @@ class Product extends DataClass implements Insertable<Product> {
       id: Value(id),
       name: Value(name),
       price: Value(price),
+      employeePrice: employeePrice == null && nullToAbsent
+          ? const Value.absent()
+          : Value(employeePrice),
       imageUrl: imageUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(imageUrl),
@@ -590,6 +625,7 @@ class Product extends DataClass implements Insertable<Product> {
       id: serializer.fromJson<int>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       price: serializer.fromJson<double>(json['price']),
+      employeePrice: serializer.fromJson<double?>(json['employeePrice']),
       imageUrl: serializer.fromJson<String?>(json['imageUrl']),
       isActive: serializer.fromJson<bool>(json['isActive']),
       categoryId: serializer.fromJson<int?>(json['categoryId']),
@@ -602,6 +638,7 @@ class Product extends DataClass implements Insertable<Product> {
       'id': serializer.toJson<int>(id),
       'name': serializer.toJson<String>(name),
       'price': serializer.toJson<double>(price),
+      'employeePrice': serializer.toJson<double?>(employeePrice),
       'imageUrl': serializer.toJson<String?>(imageUrl),
       'isActive': serializer.toJson<bool>(isActive),
       'categoryId': serializer.toJson<int?>(categoryId),
@@ -612,6 +649,7 @@ class Product extends DataClass implements Insertable<Product> {
     int? id,
     String? name,
     double? price,
+    Value<double?> employeePrice = const Value.absent(),
     Value<String?> imageUrl = const Value.absent(),
     bool? isActive,
     Value<int?> categoryId = const Value.absent(),
@@ -619,6 +657,9 @@ class Product extends DataClass implements Insertable<Product> {
     id: id ?? this.id,
     name: name ?? this.name,
     price: price ?? this.price,
+    employeePrice: employeePrice.present
+        ? employeePrice.value
+        : this.employeePrice,
     imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
     isActive: isActive ?? this.isActive,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
@@ -628,6 +669,9 @@ class Product extends DataClass implements Insertable<Product> {
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       price: data.price.present ? data.price.value : this.price,
+      employeePrice: data.employeePrice.present
+          ? data.employeePrice.value
+          : this.employeePrice,
       imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
       isActive: data.isActive.present ? data.isActive.value : this.isActive,
       categoryId: data.categoryId.present
@@ -642,6 +686,7 @@ class Product extends DataClass implements Insertable<Product> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('price: $price, ')
+          ..write('employeePrice: $employeePrice, ')
           ..write('imageUrl: $imageUrl, ')
           ..write('isActive: $isActive, ')
           ..write('categoryId: $categoryId')
@@ -650,8 +695,15 @@ class Product extends DataClass implements Insertable<Product> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, price, imageUrl, isActive, categoryId);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    price,
+    employeePrice,
+    imageUrl,
+    isActive,
+    categoryId,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -659,6 +711,7 @@ class Product extends DataClass implements Insertable<Product> {
           other.id == this.id &&
           other.name == this.name &&
           other.price == this.price &&
+          other.employeePrice == this.employeePrice &&
           other.imageUrl == this.imageUrl &&
           other.isActive == this.isActive &&
           other.categoryId == this.categoryId);
@@ -668,6 +721,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   final Value<int> id;
   final Value<String> name;
   final Value<double> price;
+  final Value<double?> employeePrice;
   final Value<String?> imageUrl;
   final Value<bool> isActive;
   final Value<int?> categoryId;
@@ -675,6 +729,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.price = const Value.absent(),
+    this.employeePrice = const Value.absent(),
     this.imageUrl = const Value.absent(),
     this.isActive = const Value.absent(),
     this.categoryId = const Value.absent(),
@@ -683,6 +738,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     this.id = const Value.absent(),
     required String name,
     required double price,
+    this.employeePrice = const Value.absent(),
     this.imageUrl = const Value.absent(),
     this.isActive = const Value.absent(),
     this.categoryId = const Value.absent(),
@@ -692,6 +748,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     Expression<int>? id,
     Expression<String>? name,
     Expression<double>? price,
+    Expression<double>? employeePrice,
     Expression<String>? imageUrl,
     Expression<bool>? isActive,
     Expression<int>? categoryId,
@@ -700,6 +757,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (price != null) 'price': price,
+      if (employeePrice != null) 'employee_price': employeePrice,
       if (imageUrl != null) 'image_url': imageUrl,
       if (isActive != null) 'is_active': isActive,
       if (categoryId != null) 'category_id': categoryId,
@@ -710,6 +768,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     Value<int>? id,
     Value<String>? name,
     Value<double>? price,
+    Value<double?>? employeePrice,
     Value<String?>? imageUrl,
     Value<bool>? isActive,
     Value<int?>? categoryId,
@@ -718,6 +777,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
       id: id ?? this.id,
       name: name ?? this.name,
       price: price ?? this.price,
+      employeePrice: employeePrice ?? this.employeePrice,
       imageUrl: imageUrl ?? this.imageUrl,
       isActive: isActive ?? this.isActive,
       categoryId: categoryId ?? this.categoryId,
@@ -735,6 +795,9 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     }
     if (price.present) {
       map['price'] = Variable<double>(price.value);
+    }
+    if (employeePrice.present) {
+      map['employee_price'] = Variable<double>(employeePrice.value);
     }
     if (imageUrl.present) {
       map['image_url'] = Variable<String>(imageUrl.value);
@@ -754,6 +817,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('price: $price, ')
+          ..write('employeePrice: $employeePrice, ')
           ..write('imageUrl: $imageUrl, ')
           ..write('isActive: $isActive, ')
           ..write('categoryId: $categoryId')
@@ -4877,6 +4941,16 @@ class $DiscountsTable extends Discounts
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('percentage'),
+  );
   static const VerificationMeta _percentageMeta = const VerificationMeta(
     'percentage',
   );
@@ -4918,6 +4992,7 @@ class $DiscountsTable extends Discounts
   List<GeneratedColumn> get $columns => [
     id,
     code,
+    type,
     percentage,
     description,
     isActive,
@@ -4944,6 +5019,12 @@ class $DiscountsTable extends Discounts
       );
     } else if (isInserting) {
       context.missing(_codeMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
     }
     if (data.containsKey('percentage')) {
       context.handle(
@@ -4987,6 +5068,10 @@ class $DiscountsTable extends Discounts
         DriftSqlType.string,
         data['${effectivePrefix}code'],
       )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
       percentage: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}percentage'],
@@ -5011,12 +5096,16 @@ class $DiscountsTable extends Discounts
 class Discount extends DataClass implements Insertable<Discount> {
   final int id;
   final String code;
+
+  /// `percentage` | `employee` (extensible para más tipos).
+  final String type;
   final double percentage;
   final String description;
   final bool isActive;
   const Discount({
     required this.id,
     required this.code,
+    required this.type,
     required this.percentage,
     required this.description,
     required this.isActive,
@@ -5026,6 +5115,7 @@ class Discount extends DataClass implements Insertable<Discount> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['code'] = Variable<String>(code);
+    map['type'] = Variable<String>(type);
     map['percentage'] = Variable<double>(percentage);
     map['description'] = Variable<String>(description);
     map['is_active'] = Variable<bool>(isActive);
@@ -5036,6 +5126,7 @@ class Discount extends DataClass implements Insertable<Discount> {
     return DiscountsCompanion(
       id: Value(id),
       code: Value(code),
+      type: Value(type),
       percentage: Value(percentage),
       description: Value(description),
       isActive: Value(isActive),
@@ -5050,6 +5141,7 @@ class Discount extends DataClass implements Insertable<Discount> {
     return Discount(
       id: serializer.fromJson<int>(json['id']),
       code: serializer.fromJson<String>(json['code']),
+      type: serializer.fromJson<String>(json['type']),
       percentage: serializer.fromJson<double>(json['percentage']),
       description: serializer.fromJson<String>(json['description']),
       isActive: serializer.fromJson<bool>(json['isActive']),
@@ -5061,6 +5153,7 @@ class Discount extends DataClass implements Insertable<Discount> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'code': serializer.toJson<String>(code),
+      'type': serializer.toJson<String>(type),
       'percentage': serializer.toJson<double>(percentage),
       'description': serializer.toJson<String>(description),
       'isActive': serializer.toJson<bool>(isActive),
@@ -5070,12 +5163,14 @@ class Discount extends DataClass implements Insertable<Discount> {
   Discount copyWith({
     int? id,
     String? code,
+    String? type,
     double? percentage,
     String? description,
     bool? isActive,
   }) => Discount(
     id: id ?? this.id,
     code: code ?? this.code,
+    type: type ?? this.type,
     percentage: percentage ?? this.percentage,
     description: description ?? this.description,
     isActive: isActive ?? this.isActive,
@@ -5084,6 +5179,7 @@ class Discount extends DataClass implements Insertable<Discount> {
     return Discount(
       id: data.id.present ? data.id.value : this.id,
       code: data.code.present ? data.code.value : this.code,
+      type: data.type.present ? data.type.value : this.type,
       percentage: data.percentage.present
           ? data.percentage.value
           : this.percentage,
@@ -5099,6 +5195,7 @@ class Discount extends DataClass implements Insertable<Discount> {
     return (StringBuffer('Discount(')
           ..write('id: $id, ')
           ..write('code: $code, ')
+          ..write('type: $type, ')
           ..write('percentage: $percentage, ')
           ..write('description: $description, ')
           ..write('isActive: $isActive')
@@ -5107,13 +5204,15 @@ class Discount extends DataClass implements Insertable<Discount> {
   }
 
   @override
-  int get hashCode => Object.hash(id, code, percentage, description, isActive);
+  int get hashCode =>
+      Object.hash(id, code, type, percentage, description, isActive);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Discount &&
           other.id == this.id &&
           other.code == this.code &&
+          other.type == this.type &&
           other.percentage == this.percentage &&
           other.description == this.description &&
           other.isActive == this.isActive);
@@ -5122,12 +5221,14 @@ class Discount extends DataClass implements Insertable<Discount> {
 class DiscountsCompanion extends UpdateCompanion<Discount> {
   final Value<int> id;
   final Value<String> code;
+  final Value<String> type;
   final Value<double> percentage;
   final Value<String> description;
   final Value<bool> isActive;
   const DiscountsCompanion({
     this.id = const Value.absent(),
     this.code = const Value.absent(),
+    this.type = const Value.absent(),
     this.percentage = const Value.absent(),
     this.description = const Value.absent(),
     this.isActive = const Value.absent(),
@@ -5135,6 +5236,7 @@ class DiscountsCompanion extends UpdateCompanion<Discount> {
   DiscountsCompanion.insert({
     this.id = const Value.absent(),
     required String code,
+    this.type = const Value.absent(),
     required double percentage,
     required String description,
     this.isActive = const Value.absent(),
@@ -5144,6 +5246,7 @@ class DiscountsCompanion extends UpdateCompanion<Discount> {
   static Insertable<Discount> custom({
     Expression<int>? id,
     Expression<String>? code,
+    Expression<String>? type,
     Expression<double>? percentage,
     Expression<String>? description,
     Expression<bool>? isActive,
@@ -5151,6 +5254,7 @@ class DiscountsCompanion extends UpdateCompanion<Discount> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (code != null) 'code': code,
+      if (type != null) 'type': type,
       if (percentage != null) 'percentage': percentage,
       if (description != null) 'description': description,
       if (isActive != null) 'is_active': isActive,
@@ -5160,6 +5264,7 @@ class DiscountsCompanion extends UpdateCompanion<Discount> {
   DiscountsCompanion copyWith({
     Value<int>? id,
     Value<String>? code,
+    Value<String>? type,
     Value<double>? percentage,
     Value<String>? description,
     Value<bool>? isActive,
@@ -5167,6 +5272,7 @@ class DiscountsCompanion extends UpdateCompanion<Discount> {
     return DiscountsCompanion(
       id: id ?? this.id,
       code: code ?? this.code,
+      type: type ?? this.type,
       percentage: percentage ?? this.percentage,
       description: description ?? this.description,
       isActive: isActive ?? this.isActive,
@@ -5181,6 +5287,9 @@ class DiscountsCompanion extends UpdateCompanion<Discount> {
     }
     if (code.present) {
       map['code'] = Variable<String>(code.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
     }
     if (percentage.present) {
       map['percentage'] = Variable<double>(percentage.value);
@@ -5199,6 +5308,7 @@ class DiscountsCompanion extends UpdateCompanion<Discount> {
     return (StringBuffer('DiscountsCompanion(')
           ..write('id: $id, ')
           ..write('code: $code, ')
+          ..write('type: $type, ')
           ..write('percentage: $percentage, ')
           ..write('description: $description, ')
           ..write('isActive: $isActive')
@@ -9015,6 +9125,7 @@ typedef $$ProductsTableCreateCompanionBuilder =
       Value<int> id,
       required String name,
       required double price,
+      Value<double?> employeePrice,
       Value<String?> imageUrl,
       Value<bool> isActive,
       Value<int?> categoryId,
@@ -9024,6 +9135,7 @@ typedef $$ProductsTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> name,
       Value<double> price,
+      Value<double?> employeePrice,
       Value<String?> imageUrl,
       Value<bool> isActive,
       Value<int?> categoryId,
@@ -9152,6 +9264,11 @@ class $$ProductsTableFilterComposer
 
   ColumnFilters<double> get price => $composableBuilder(
     column: $table.price,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get employeePrice => $composableBuilder(
+    column: $table.employeePrice,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9313,6 +9430,11 @@ class $$ProductsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get employeePrice => $composableBuilder(
+    column: $table.employeePrice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get imageUrl => $composableBuilder(
     column: $table.imageUrl,
     builder: (column) => ColumnOrderings(column),
@@ -9364,6 +9486,11 @@ class $$ProductsTableAnnotationComposer
 
   GeneratedColumn<double> get price =>
       $composableBuilder(column: $table.price, builder: (column) => column);
+
+  GeneratedColumn<double> get employeePrice => $composableBuilder(
+    column: $table.employeePrice,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get imageUrl =>
       $composableBuilder(column: $table.imageUrl, builder: (column) => column);
@@ -9532,6 +9659,7 @@ class $$ProductsTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<double> price = const Value.absent(),
+                Value<double?> employeePrice = const Value.absent(),
                 Value<String?> imageUrl = const Value.absent(),
                 Value<bool> isActive = const Value.absent(),
                 Value<int?> categoryId = const Value.absent(),
@@ -9539,6 +9667,7 @@ class $$ProductsTableTableManager
                 id: id,
                 name: name,
                 price: price,
+                employeePrice: employeePrice,
                 imageUrl: imageUrl,
                 isActive: isActive,
                 categoryId: categoryId,
@@ -9548,6 +9677,7 @@ class $$ProductsTableTableManager
                 Value<int> id = const Value.absent(),
                 required String name,
                 required double price,
+                Value<double?> employeePrice = const Value.absent(),
                 Value<String?> imageUrl = const Value.absent(),
                 Value<bool> isActive = const Value.absent(),
                 Value<int?> categoryId = const Value.absent(),
@@ -9555,6 +9685,7 @@ class $$ProductsTableTableManager
                 id: id,
                 name: name,
                 price: price,
+                employeePrice: employeePrice,
                 imageUrl: imageUrl,
                 isActive: isActive,
                 categoryId: categoryId,
@@ -13947,6 +14078,7 @@ typedef $$DiscountsTableCreateCompanionBuilder =
     DiscountsCompanion Function({
       Value<int> id,
       required String code,
+      Value<String> type,
       required double percentage,
       required String description,
       Value<bool> isActive,
@@ -13955,6 +14087,7 @@ typedef $$DiscountsTableUpdateCompanionBuilder =
     DiscountsCompanion Function({
       Value<int> id,
       Value<String> code,
+      Value<String> type,
       Value<double> percentage,
       Value<String> description,
       Value<bool> isActive,
@@ -13976,6 +14109,11 @@ class $$DiscountsTableFilterComposer
 
   ColumnFilters<String> get code => $composableBuilder(
     column: $table.code,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14014,6 +14152,11 @@ class $$DiscountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get percentage => $composableBuilder(
     column: $table.percentage,
     builder: (column) => ColumnOrderings(column),
@@ -14044,6 +14187,9 @@ class $$DiscountsTableAnnotationComposer
 
   GeneratedColumn<String> get code =>
       $composableBuilder(column: $table.code, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
 
   GeneratedColumn<double> get percentage => $composableBuilder(
     column: $table.percentage,
@@ -14089,12 +14235,14 @@ class $$DiscountsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> code = const Value.absent(),
+                Value<String> type = const Value.absent(),
                 Value<double> percentage = const Value.absent(),
                 Value<String> description = const Value.absent(),
                 Value<bool> isActive = const Value.absent(),
               }) => DiscountsCompanion(
                 id: id,
                 code: code,
+                type: type,
                 percentage: percentage,
                 description: description,
                 isActive: isActive,
@@ -14103,12 +14251,14 @@ class $$DiscountsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String code,
+                Value<String> type = const Value.absent(),
                 required double percentage,
                 required String description,
                 Value<bool> isActive = const Value.absent(),
               }) => DiscountsCompanion.insert(
                 id: id,
                 code: code,
+                type: type,
                 percentage: percentage,
                 description: description,
                 isActive: isActive,

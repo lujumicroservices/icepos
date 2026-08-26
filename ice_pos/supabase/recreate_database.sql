@@ -71,6 +71,7 @@ create table public.products (
   id serial primary key,
   name text not null,
   price real not null,
+  employee_price real,
   image_url text,
   is_active boolean not null default true,
   category_id int references public.categories(id)
@@ -186,6 +187,7 @@ create table public.parked_orders (
 create table public.discounts (
   id serial primary key,
   code text not null unique,
+  type text not null default 'percentage',
   percentage real not null,
   description text,
   is_active boolean not null default true

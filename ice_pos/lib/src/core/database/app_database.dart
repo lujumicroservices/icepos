@@ -35,11 +35,25 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (migrator, from, to) async {
+          if (from < 30) {
+            final hasEmpPrice = await customSelect(
+              "SELECT 1 FROM pragma_table_info('products') WHERE name='employee_price'",
+            ).get();
+            if (hasEmpPrice.isEmpty) {
+              await migrator.addColumn(products, products.employeePrice);
+            }
+            final hasDiscType = await customSelect(
+              "SELECT 1 FROM pragma_table_info('discounts') WHERE name='type'",
+            ).get();
+            if (hasDiscType.isEmpty) {
+              await migrator.addColumn(discounts, discounts.type);
+            }
+          }
           if (from < 29) {
             await migrator.addColumn(modifierOptions, modifierOptions.imageUrl);
           }

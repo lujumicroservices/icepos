@@ -23,7 +23,7 @@ import 'package:ice_pos/src/core/config/register_scope.dart';
 import 'package:ice_pos/src/core/config/store_scope.dart';
 import 'package:ice_pos/src/features/home/presentation/catalog_sync_progress_dialog.dart';
 import 'package:ice_pos/src/features/admin/presentation/bundle_management_screen.dart';
-import 'package:ice_pos/src/features/admin/presentation/discount_catalog_screen.dart';
+import 'package:ice_pos/src/features/admin/presentation/discount_management_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/category_management_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/operation_logs_screen.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_management_screen.dart';
@@ -199,13 +199,14 @@ class HomeDrawer extends ConsumerWidget {
             ),
           if (hasDriftDatabase || isSupabaseOnlyBackend)
             ListTile(
-              leading: const Icon(Icons.percent),
-              title: Text(l10n.discountCatalogTitle),
+              leading: const Icon(Icons.local_offer_outlined),
+              title: Text(l10n.discountManagement),
+              subtitle: Text(l10n.discounts),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute<void>(builder: (_) => const DiscountCatalogScreen()),
+                  MaterialPageRoute<void>(builder: (_) => const DiscountManagementScreen()),
                 );
               },
             ),

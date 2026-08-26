@@ -25,8 +25,10 @@ class CartItem {
         'id': product.id,
         'name': product.name,
         'price': product.price,
+        if (product.employeePrice != null) 'employeePrice': product.employeePrice,
         if (product.imageUrl != null) 'imageUrl': product.imageUrl,
         'isActive': product.isActive,
+        if (product.categoryId != null) 'categoryId': product.categoryId,
       },
       'quantity': quantity,
       'selectedModifiers': selectedModifiers
@@ -42,12 +44,21 @@ class CartItem {
     if (productJson == null) {
       throw FormatException('CartItem JSON missing required "product"');
     }
+    final empRaw = productJson['employeePrice'];
     final product = Product(
       id: _readInt(productJson, 'id'),
       name: _readString(productJson, 'name'),
       price: _readDouble(productJson, 'price'),
+      employeePrice: empRaw == null
+          ? null
+          : (empRaw is num ? empRaw.toDouble() : double.tryParse(empRaw.toString())),
       imageUrl: productJson['imageUrl'] as String?,
       isActive: productJson['isActive'] as bool? ?? true,
+      categoryId: productJson['categoryId'] is int
+          ? productJson['categoryId'] as int
+          : (productJson['categoryId'] != null
+              ? int.tryParse(productJson['categoryId'].toString())
+              : null),
     );
     final quantity = _readDouble(json, 'quantity');
     final modifiersJson = json['selectedModifiers'] as List<dynamic>? ?? [];
@@ -83,12 +94,21 @@ class CartItem {
     return v is String ? v : v.toString();
   }
 
+  /// Base unit price (regular or employee special).
+  double basePrice({bool useEmployeePrice = false}) {
+    if (useEmployeePrice) {
+      return product.employeePrice ?? product.price;
+    }
+    return product.price;
+  }
+
   /// Pricing: (1) No modifiers: quantity * price.
   /// (2) Boli-style (each modifier = one piece): quantity == selectedModifiers.length → sum over modifiers of (base + priceExtra).
   /// (3) Nieves-style (modifiers = flavor choices for one item): e.g. 3 sabores for 1 Cono Chico → quantity * price (no per-scoop charge).
-  double get subtotal {
+  double getSubtotal({bool useEmployeePrice = false}) {
+    final price = basePrice(useEmployeePrice: useEmployeePrice);
     if (selectedModifiers.isEmpty) {
-      return quantity * product.price;
+      return quantity * price;
     }
     final q = quantity;
     final n = selectedModifiers.length;
@@ -96,11 +116,11 @@ class CartItem {
       // Each modifier is one piece (Boli: 2 flavors = 2 pieces).
       return selectedModifiers.fold<double>(
         0.0,
-        (sum, m) => sum + product.price + m.priceExtra,
+        (sum, m) => sum + price + m.priceExtra,
       );
     }
     // Modifiers are choices for the item(s), not extra units (Nieves: 3 sabores = 1 cono at 49).
-    return q * product.price +
+    return q * price +
         selectedModifiers.fold<double>(0.0, (sum, m) => sum + m.priceExtra);
   }
 
@@ -130,6 +150,8 @@ class CartItem {
         item.selectedModifiers.fold<double>(0.0, (s, m) => s + m.priceExtra);
     return totalExtra * (count / q);
   }
+
+  double get subtotal => getSubtotal();
 
   CartItem copyWith({
     Product? product,

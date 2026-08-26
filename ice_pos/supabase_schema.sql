@@ -28,6 +28,7 @@ create table if not exists public.products (
   id serial primary key,
   name text not null,
   price real not null,
+  employee_price real,
   image_url text,
   is_active boolean not null default true,
   category_id int references public.categories(id)
@@ -106,9 +107,11 @@ create table if not exists public.parked_orders (
 );
 
 -- 12. Discounts
+-- type: 'percentage' | 'employee'
 create table if not exists public.discounts (
   id serial primary key,
   code text not null unique,
+  type text not null default 'percentage',
   percentage real not null,
   description text,
   is_active boolean not null default true

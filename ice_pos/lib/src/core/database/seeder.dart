@@ -413,6 +413,7 @@ class DatabaseSeeder {
       await db.into(db.discounts).insert(
         DiscountsCompanion.insert(
           code: 'SCHOOL_CAMPO_VERDE',
+          type: const Value('percentage'),
           percentage: 0.10,
           description: '10% off for Campo Verde School',
           isActive: const Value(true),

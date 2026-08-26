@@ -32,6 +32,8 @@ class Products extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text().withLength(min: 1, max: 100)();
   RealColumn get price => real()();
+  /// Precio especial para códigos de descuento tipo empleado.
+  RealColumn get employeePrice => real().nullable()();
   TextColumn get imageUrl => text().nullable()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
   IntColumn get categoryId => integer().nullable().references(Categories, #id)();
@@ -124,10 +126,14 @@ class ParkedOrders extends Table {
 }
 
 // 11. DISCOUNTS (QR-based codes for specific audiences)
+/// [type]: `percentage` = % off standalone; `employee` = usa [Products.employeePrice].
 class Discounts extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get code => text().unique()();
-  RealColumn get percentage => real()(); // 0.10 = 10%
+  /// `percentage` | `employee` (extensible para más tipos).
+  TextColumn get type =>
+      text().withDefault(const Constant('percentage'))();
+  RealColumn get percentage => real()(); // 0.10 = 10%; 0 si type=employee
   TextColumn get description => text()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
 }

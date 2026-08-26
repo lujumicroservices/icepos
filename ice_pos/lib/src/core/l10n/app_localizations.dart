@@ -510,6 +510,33 @@ class AppLocalizations {
   String get discountDeleteConfirmTitle => _('discountDeleteConfirmTitle');
   String get discountDeleteAction => _('discountDeleteAction');
   String get discountCatalogSaved => _('discountCatalogSaved');
+  String get discountManagement => _('discountManagement');
+  String get noDiscountsHint => _('noDiscountsHint');
+  String get newDiscount => _('newDiscount');
+  String get editDiscount => _('editDiscount');
+  String get discountType => _('discountType');
+  String get discountTypeEmployee => _('discountTypeEmployee');
+  String get discountTypePercentage => _('discountTypePercentage');
+  String get discountTypeEmployeeHint => _('discountTypeEmployeeHint');
+  String get discountTypePercentageHint => _('discountTypePercentageHint');
+  String get discountCodeRequired => _('discountCodeRequired');
+  String get invalidPercentage => _('invalidPercentage');
+  String get discountSaved => _('discountSaved');
+  String get deleteDiscount => _('deleteDiscount');
+  String get deleteDiscountConfirm => _('deleteDiscountConfirm');
+  String get importEmployeePrices => _('importEmployeePrices');
+  String get importEmployeePricesConfirm => _('importEmployeePricesConfirm');
+  String get importAction => _('importAction');
+  String importEmployeePricesDone(int count) =>
+      _('importEmployeePricesDone').replaceAll('{n}', '$count');
+  String get employeePrice => _('employeePrice');
+  String get employeePriceOptional => _('employeePriceOptional');
+  String get descriptionOptional => _('descriptionOptional');
+  String get active => _('active');
+  String get inactive => _('inactive');
+  String get delete => _('delete');
+  String get save => _('save');
+  String get employeeDiscountLabel => _('employeeDiscountLabel');
 
   // Reset / Vaciar
   String get clearLocalSalesConfirmTitle => _('clearLocalSalesConfirmTitle');
@@ -1122,6 +1149,35 @@ class AppLocalizations {
     'discountDeleteConfirmTitle': '¿Borrar este descuento?',
     'discountDeleteAction': 'Borrar',
     'discountCatalogSaved': 'Descuento guardado',
+    'discountManagement': 'Códigos de descuento',
+    'noDiscountsHint': 'No hay códigos. Toca + para agregar.',
+    'newDiscount': 'Nuevo código',
+    'editDiscount': 'Editar código',
+    'discountType': 'Tipo de descuento',
+    'discountTypeEmployee': 'Empleado',
+    'discountTypePercentage': 'Porcentaje',
+    'discountTypeEmployeeHint':
+        'Usa la lista de precios especiales de empleado en cada producto.',
+    'discountTypePercentageHint':
+        'Aplica un porcentaje de descuento sobre el subtotal (sin bundles).',
+    'discountCodeRequired': 'El código es obligatorio',
+    'invalidPercentage': 'Introduce un porcentaje entre 1 y 100',
+    'discountSaved': 'Código guardado',
+    'deleteDiscount': 'Eliminar código',
+    'deleteDiscountConfirm': '¿Eliminar el código',
+    'importEmployeePrices': 'Importar precios empleado',
+    'importEmployeePricesConfirm':
+        'Se actualizarán los precios especiales de empleado desde el archivo de precios. ¿Continuar?',
+    'importAction': 'Importar',
+    'importEmployeePricesDone': 'Precios empleado actualizados en {n} productos.',
+    'employeePrice': 'Precio empleado',
+    'employeePriceOptional': 'Precio empleado (opcional)',
+    'descriptionOptional': 'Descripción (opcional)',
+    'active': 'Activo',
+    'inactive': 'Inactivo',
+    'delete': 'Eliminar',
+    'save': 'Guardar',
+    'employeeDiscountLabel': 'Precio empleado',
     'clearLocalSalesConfirmTitle': 'Vaciar ventas locales',
     'clearLocalSalesConfirmBody': '¿Borrar todas las ventas guardadas en este dispositivo? El historial local quedará vacío. La nube no se modifica.',
     'clear': 'Vaciar',
@@ -1714,6 +1770,35 @@ class AppLocalizations {
     'discountDeleteConfirmTitle': 'Delete this discount?',
     'discountDeleteAction': 'Delete',
     'discountCatalogSaved': 'Discount saved',
+    'discountManagement': 'Discount codes',
+    'noDiscountsHint': 'No codes yet. Tap + to add.',
+    'newDiscount': 'New code',
+    'editDiscount': 'Edit code',
+    'discountType': 'Discount type',
+    'discountTypeEmployee': 'Employee',
+    'discountTypePercentage': 'Percentage',
+    'discountTypeEmployeeHint':
+        'Uses the special employee price list on each product.',
+    'discountTypePercentageHint':
+        'Applies a percentage off the standalone subtotal (excludes bundles).',
+    'discountCodeRequired': 'Code is required',
+    'invalidPercentage': 'Enter a percentage between 1 and 100',
+    'discountSaved': 'Code saved',
+    'deleteDiscount': 'Delete code',
+    'deleteDiscountConfirm': 'Delete code',
+    'importEmployeePrices': 'Import employee prices',
+    'importEmployeePricesConfirm':
+        'Update employee special prices from the price file. Continue?',
+    'importAction': 'Import',
+    'importEmployeePricesDone': 'Employee prices updated on {n} products.',
+    'employeePrice': 'Employee price',
+    'employeePriceOptional': 'Employee price (optional)',
+    'descriptionOptional': 'Description (optional)',
+    'active': 'Active',
+    'inactive': 'Inactive',
+    'delete': 'Delete',
+    'save': 'Save',
+    'employeeDiscountLabel': 'Employee price',
     'clearLocalSalesConfirmTitle': 'Clear local sales',
     'clearLocalSalesConfirmBody': 'Delete all sales on this device? Local history will be empty. Cloud is not modified.',
     'clear': 'Clear',

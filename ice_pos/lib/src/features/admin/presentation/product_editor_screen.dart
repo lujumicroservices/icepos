@@ -94,6 +94,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
   late TabController _tabController;
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  final _employeePriceController = TextEditingController();
   final _imageUrlController = TextEditingController();
 
   Uint8List? _pickedImageBytes;
@@ -117,6 +118,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
     _tabController.dispose();
     _nameController.dispose();
     _priceController.dispose();
+    _employeePriceController.dispose();
     _imageUrlController.dispose();
     super.dispose();
   }
@@ -133,6 +135,9 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
 
     _nameController.text = product.name;
     _priceController.text = product.price.toStringAsFixed(2);
+    _employeePriceController.text = product.employeePrice != null
+        ? product.employeePrice!.toStringAsFixed(2)
+        : '';
     _imageUrlController.text = product.imageUrl ?? '';
     _selectedCategoryId = product.categoryId;
 
@@ -240,6 +245,17 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
       );
       return;
     }
+    final empText = _employeePriceController.text.trim();
+    double? employeePrice;
+    if (empText.isNotEmpty) {
+      employeePrice = double.tryParse(empText);
+      if (employeePrice == null || employeePrice < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid employee price')),
+        );
+        return;
+      }
+    }
 
     setState(() => _isSaving = true);
     final hadPickedFile = _pickedImageBytes != null;
@@ -249,6 +265,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
             productId: widget.productId,
             name: name,
             price: price,
+            employeePrice: employeePrice,
             categoryId: _selectedCategoryId,
             imageUrl: hadPickedFile
                 ? null
@@ -357,6 +374,7 @@ class _ProductEditorScreenState extends ConsumerState<ProductEditorScreen>
           _BasicInfoTab(
             nameController: _nameController,
             priceController: _priceController,
+            employeePriceController: _employeePriceController,
             imageUrlController: _imageUrlController,
             pickedImageBytes: _pickedImageBytes,
             onImageUrlChanged: () => setState(() {
@@ -1188,6 +1206,7 @@ class _BasicInfoTab extends StatelessWidget {
   const _BasicInfoTab({
     required this.nameController,
     required this.priceController,
+    required this.employeePriceController,
     required this.imageUrlController,
     required this.pickedImageBytes,
     required this.onImageUrlChanged,
@@ -1201,6 +1220,7 @@ class _BasicInfoTab extends StatelessWidget {
 
   final TextEditingController nameController;
   final TextEditingController priceController;
+  final TextEditingController employeePriceController;
   final TextEditingController imageUrlController;
   final Uint8List? pickedImageBytes;
   final VoidCallback onImageUrlChanged;
@@ -1330,6 +1350,17 @@ class _BasicInfoTab extends StatelessWidget {
               labelText: 'Price',
               border: OutlineInputBorder(),
               prefixText: '\$ ',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: employeePriceController,
+            decoration: const InputDecoration(
+              labelText: 'Precio empleado (opcional)',
+              border: OutlineInputBorder(),
+              prefixText: '\$ ',
+              helperText: 'Usado con códigos de descuento tipo Empleado',
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),

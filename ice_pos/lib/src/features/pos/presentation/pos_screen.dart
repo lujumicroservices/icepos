@@ -8,6 +8,7 @@ import 'package:ice_pos/src/features/pos/data/pos_repository.dart' hide CartItem
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_state.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart';
+import 'package:ice_pos/src/features/pos/domain/discount_type.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_line.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_print_data.dart';
 import 'package:ice_pos/src/features/pos/domain/sale_payment.dart';
@@ -1892,9 +1893,17 @@ class _CartSummaryPanel extends ConsumerWidget {
             .fold<double>(0.0, (s, l) => s + l.amount) ??
         0.0;
     final standaloneSubtotal = receipt?.standaloneSubtotal ?? 0.0;
-    final discountAmount = cartState.appliedDiscount != null
-        ? standaloneSubtotal * cartState.appliedDiscount!.percentage
-        : 0.0;
+    final applied = cartState.appliedDiscount;
+    final isEmployeeDiscount =
+        applied != null && DiscountType.isEmployee(applied.type);
+    final discountAmount = applied == null
+        ? 0.0
+        : (isEmployeeDiscount
+            ? (receipt?.lines
+                    .where((l) => l.description == 'Precio empleado')
+                    .fold<double>(0.0, (s, l) => s - l.amount) ??
+                0.0)
+            : standaloneSubtotal * applied.percentage);
 
     final borderSide = BorderSide(
       color: Theme.of(context).dividerColor,
@@ -2031,7 +2040,9 @@ class _CartSummaryPanel extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '${cartState.appliedDiscount!.description.trim().isNotEmpty ? cartState.appliedDiscount!.description.trim() : l10n.discountPercent} (${(cartState.appliedDiscount!.percentage * 100).toStringAsFixed(0)}%)',
+                          isEmployeeDiscount
+                              ? l10n.employeeDiscountLabel
+                              : '${cartState.appliedDiscount!.description.trim().isNotEmpty ? cartState.appliedDiscount!.description.trim() : l10n.discountPercent} (${(cartState.appliedDiscount!.percentage * 100).toStringAsFixed(0)}%)',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: Colors.green.shade700,

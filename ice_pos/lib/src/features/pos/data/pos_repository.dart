@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:ice_pos/src/core/config/register_scope.dart';
 import 'package:ice_pos/src/core/config/store_scope.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
@@ -26,6 +27,7 @@ import 'package:ice_pos/src/features/pos/domain/modifier_option.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_print_data.dart';
 import 'package:ice_pos/src/features/pos/domain/sale_payment.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
+import 'package:ice_pos/src/features/pos/domain/discount_type.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'pos_repository.g.dart';
@@ -589,6 +591,7 @@ class PosRepository {
         id: p.id,
         name: p.name,
         price: p.price,
+        employeePrice: p.employeePrice,
         categoryId: p.categoryId,
         isActive: active,
         imageUrl: p.imageUrl,
@@ -663,6 +666,7 @@ class PosRepository {
     required int? productId,
     required String name,
     required double price,
+    double? employeePrice,
     int? categoryId,
     String? imageUrl,
     List<int>? newImageBytes,
@@ -692,6 +696,7 @@ class PosRepository {
               ProductsCompanion.insert(
                 name: name,
                 price: price,
+                employeePrice: Value(employeePrice),
                 categoryId: Value(categoryId),
                 imageUrl: newImageBytes != null
                     ? const Value.absent()
@@ -703,6 +708,7 @@ class PosRepository {
         final companion = ProductsCompanion(
           name: Value(name),
           price: Value(price),
+          employeePrice: Value(employeePrice),
           categoryId: Value(categoryId),
         );
         if (newImageBytes == null) {
@@ -1014,11 +1020,30 @@ class PosRepository {
         .get();
   }
 
-  /// Creates or updates a catalog discount. [percentage] is 0–1 (e.g. 0.1 = 10%).
+  Stream<List<Discount>> watchDiscounts() {
+    return (_db.select(_db.discounts)
+          ..orderBy([(d) => OrderingTerm.asc(d.code)]))
+        .watch();
+  }
+
+  Future<List<Discount>> getDiscounts() async {
+    return (_db.select(_db.discounts)
+          ..orderBy([(d) => OrderingTerm.asc(d.code)]))
+        .get();
+  }
+
+  Future<Discount?> getDiscount(int id) async {
+    return (_db.select(_db.discounts)..where((d) => d.id.equals(id)))
+        .getSingleOrNull();
+  }
+
+  /// Creates or updates a catalog discount. [type] is [DiscountType.percentage]
+  /// or [DiscountType.employee]. [percentage] is 0–1 (e.g. 0.1 = 10%).
   /// [code] is stored uppercase. Pushes to Supabase when cloud sync is enabled.
   Future<int> saveDiscountCatalog({
     int? id,
     required String code,
+    String type = DiscountType.percentage,
     required double percentage,
     required String description,
     bool isActive = true,
@@ -1028,16 +1053,26 @@ class PosRepository {
     if (trimmedCode.isEmpty) {
       throw ArgumentError('Discount code is required');
     }
-    if (percentage <= 0 || percentage > 1) {
+    final normalizedType =
+        DiscountType.isValid(type) ? type : DiscountType.percentage;
+    final pct = normalizedType == DiscountType.employee
+        ? 0.0
+        : percentage.clamp(0.0, 1.0);
+    if (normalizedType == DiscountType.percentage && (pct <= 0 || pct > 1)) {
       throw ArgumentError('percentage must be between 0 and 1');
     }
-    final desc = description.trim().isEmpty ? 'Discount' : description.trim();
+    final desc = description.trim().isEmpty
+        ? (normalizedType == DiscountType.employee
+            ? 'Precio empleado'
+            : 'Discount')
+        : description.trim();
 
     if (id == null) {
       final newId = await _db.into(_db.discounts).insert(
             DiscountsCompanion.insert(
               code: trimmedCode,
-              percentage: percentage,
+              type: Value(normalizedType),
+              percentage: pct,
               description: desc,
               isActive: Value(isActive),
             ),
@@ -1046,7 +1081,8 @@ class PosRepository {
         final err = await CloudSyncService.upsertDiscountToCloud(
           id: newId,
           code: trimmedCode,
-          percentage: percentage,
+          type: normalizedType,
+          percentage: pct,
           description: desc,
           isActive: isActive,
         );
@@ -1058,7 +1094,8 @@ class PosRepository {
     await (_db.update(_db.discounts)..where((d) => d.id.equals(id))).write(
       DiscountsCompanion(
         code: Value(trimmedCode),
-        percentage: Value(percentage),
+        type: Value(normalizedType),
+        percentage: Value(pct),
         description: Value(desc),
         isActive: Value(isActive),
       ),
@@ -1067,7 +1104,8 @@ class PosRepository {
       final err = await CloudSyncService.upsertDiscountToCloud(
         id: id,
         code: trimmedCode,
-        percentage: percentage,
+        type: normalizedType,
+        percentage: pct,
         description: desc,
         isActive: isActive,
       );
@@ -1075,6 +1113,24 @@ class PosRepository {
     }
     return id;
   }
+
+  /// Alias for [saveDiscountCatalog] used by the discount editor screen.
+  Future<int> saveDiscount({
+    int? id,
+    required String code,
+    required String type,
+    required double percentage,
+    required String description,
+    bool isActive = true,
+  }) =>
+      saveDiscountCatalog(
+        id: id,
+        code: code,
+        type: type,
+        percentage: percentage,
+        description: description,
+        isActive: isActive,
+      );
 
   /// Deletes a catalog discount locally and in Supabase when enabled.
   Future<void> deleteDiscountCatalog(int id) async {
@@ -1084,6 +1140,34 @@ class PosRepository {
       if (err != null) throw StateError(err);
     }
     await (_db.delete(_db.discounts)..where((d) => d.id.equals(id))).go();
+  }
+
+  Future<void> deleteDiscount(int id) => deleteDiscountCatalog(id);
+
+  /// Applies employee prices from [assets/data/precios_empleado.json].
+  /// Returns the number of products updated.
+  Future<int> applyEmployeePricesFromAsset() async {
+    final raw = await rootBundle.loadString('assets/data/precios_empleado.json');
+    final list = jsonDecode(raw) as List<dynamic>;
+    var updated = 0;
+    await _db.transaction(() async {
+      for (final entry in list) {
+        final map = entry as Map<String, dynamic>;
+        final id = map['id'];
+        final price = map['employeePrice'];
+        if (id == null || price == null) continue;
+        final productId = id is int ? id : int.tryParse(id.toString());
+        final empPrice = price is num
+            ? price.toDouble()
+            : double.tryParse(price.toString());
+        if (productId == null || empPrice == null) continue;
+        final n = await (_db.update(_db.products)
+              ..where((p) => p.id.equals(productId)))
+            .write(ProductsCompanion(employeePrice: Value(empPrice)));
+        updated += n;
+      }
+    });
+    return updated;
   }
 
   /// Saves a supply (insert if id is null, update otherwise). Returns the supply id.
@@ -1650,7 +1734,9 @@ class PosRepository {
     }
 
     var amount = totalAmount ?? items.fold<double>(0.0, (sum, item) => sum + item.subtotal);
-    if (totalAmount == null && discount != null) {
+    if (totalAmount == null &&
+        discount != null &&
+        !DiscountType.isEmployee(discount.type)) {
       amount = amount * (1 - discount.percentage);
     }
 

@@ -1,5 +1,6 @@
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/features/pos/domain/cart_item.dart';
+import 'package:ice_pos/src/features/pos/domain/discount_type.dart';
 import 'package:ice_pos/src/features/pos/domain/product_discount_rule.dart';
 import 'package:ice_pos/src/features/pos/domain/receipt_line.dart';
 
@@ -9,14 +10,17 @@ class _ReceiptUnit {
     required this.productName,
     required this.modifierDetails,
     required this.amount,
+    double? employeeAmount,
     this.modifierExtra = 0,
     this.lineQuantity = 1,
-  });
+  }) : employeeAmount = employeeAmount ?? amount;
 
   final int productId;
   final String productName;
   final List<String> modifierDetails;
   final double amount;
+  /// Same line total using employee base prices (for employee discount codes).
+  final double employeeAmount;
   /// Paid add-ons (e.g. leche de almendra) — billed on top of bundle price.
   final double modifierExtra;
   final int lineQuantity;
@@ -33,6 +37,7 @@ List<_ReceiptUnit> _expandCartItemsToUnits(
   final units = <_ReceiptUnit>[];
   for (final item in items) {
     final modDetails = _modifierDetailsForItem(item, supplyIdToName);
+    final empBase = item.basePrice(useEmployeePrice: true);
     if (item.selectedModifiers.isEmpty) {
       final qty = item.quantity;
       if (qty == qty.roundToDouble() && qty >= 1) {
@@ -43,6 +48,7 @@ List<_ReceiptUnit> _expandCartItemsToUnits(
               productName: item.product.name,
               modifierDetails: const [],
               amount: item.product.price,
+              employeeAmount: empBase,
             ),
           );
         }
@@ -53,6 +59,7 @@ List<_ReceiptUnit> _expandCartItemsToUnits(
             productName: item.product.name,
             modifierDetails: const [],
             amount: item.subtotal,
+            employeeAmount: item.getSubtotal(useEmployeePrice: true),
             lineQuantity: 1,
           ),
         );
@@ -71,6 +78,7 @@ List<_ReceiptUnit> _expandCartItemsToUnits(
             productName: item.product.name,
             modifierDetails: [modDetails[i]],
             amount: item.product.price + m.priceExtra,
+            employeeAmount: empBase + m.priceExtra,
             modifierExtra: m.priceExtra,
           ),
         );
@@ -88,6 +96,7 @@ List<_ReceiptUnit> _expandCartItemsToUnits(
         productName: item.product.name,
         modifierDetails: modDetails,
         amount: item.subtotal,
+        employeeAmount: item.getSubtotal(useEmployeePrice: true),
         modifierExtra: modifierExtra,
         lineQuantity: qty.round().clamp(1, 999),
       ),
@@ -133,6 +142,7 @@ void _consumeUnits(
           productName: u.productName,
           modifierDetails: u.modifierDetails,
           amount: u.amount * takeFraction,
+          employeeAmount: u.employeeAmount * takeFraction,
           modifierExtra: u.modifierExtra * takeFraction,
           lineQuantity: take.ceil().clamp(1, u.lineQuantity),
         ),
@@ -142,6 +152,7 @@ void _consumeUnits(
         productName: u.productName,
         modifierDetails: u.modifierDetails,
         amount: u.amount * keepFraction,
+        employeeAmount: u.employeeAmount * keepFraction,
         modifierExtra: u.modifierExtra * keepFraction,
         lineQuantity: keep,
       );
@@ -195,6 +206,8 @@ ReceiptResult computeReceipt(
 }) {
   final lines = <ReceiptLine>[];
   var standaloneSubtotal = 0.0;
+  var employeeStandaloneSubtotal = 0.0;
+  final isEmployeeDiscount = DiscountType.isEmployee(appliedDiscount?.type);
 
   if (items.isEmpty) {
     return ReceiptResult(
@@ -264,7 +277,9 @@ ReceiptResult computeReceipt(
     final sample = group.first;
     final lineQty = group.fold<int>(0, (s, u) => s + u.lineQuantity);
     final amount = group.fold<double>(0, (s, u) => s + u.amount);
+    final empAmount = group.fold<double>(0, (s, u) => s + u.employeeAmount);
     standaloneSubtotal += amount;
+    employeeStandaloneSubtotal += empAmount;
     lines.add(
       ReceiptLine(
         description: sample.productName,
@@ -276,27 +291,42 @@ ReceiptResult computeReceipt(
     );
   }
 
-  // Apply QR/code discount ONLY to leftover lines
+  // Apply code discount ONLY to leftover lines
   var total = lines.fold<double>(0.0, (s, l) => s + l.amount);
   if (appliedDiscount != null && standaloneSubtotal > 0) {
-    final discountAmount = standaloneSubtotal * appliedDiscount.percentage;
-    total -= discountAmount;
-    final label = appliedDiscount.description.trim().isNotEmpty
-        ? appliedDiscount.description.trim()
-        : 'Discount';
-    lines.add(ReceiptLine(
-      description:
-          '$label (${(appliedDiscount.percentage * 100).toStringAsFixed(0)}%)',
-      amount: -discountAmount,
-      isBundle: false,
-      quantity: 1,
-    ));
+    if (isEmployeeDiscount) {
+      final discountAmount = (standaloneSubtotal - employeeStandaloneSubtotal)
+          .clamp(0.0, standaloneSubtotal);
+      if (discountAmount > 0) {
+        total -= discountAmount;
+        lines.add(ReceiptLine(
+          description: 'Precio empleado',
+          amount: -discountAmount,
+          isBundle: false,
+          quantity: 1,
+        ));
+      }
+    } else {
+      final discountAmount = standaloneSubtotal * appliedDiscount.percentage;
+      total -= discountAmount;
+      final label = appliedDiscount.description.trim().isNotEmpty
+          ? appliedDiscount.description.trim()
+          : 'Discount';
+      lines.add(ReceiptLine(
+        description:
+            '$label (${(appliedDiscount.percentage * 100).toStringAsFixed(0)}%)',
+        amount: -discountAmount,
+        isBundle: false,
+        quantity: 1,
+      ));
+    }
   }
 
   // Apply product discounts: match by name (e.g. 20% on "nieve" → Cono Chico, Vaso Grande, etc.)
   final discountLinesToAdd = <ReceiptLine>[];
   for (final line in lines) {
     if (line.isBundle) continue;
+    if (line.amount < 0) continue; // skip discount lines
     final nameLower = line.description.toLowerCase();
     for (final rule in productDiscounts) {
       if (rule.nameContains.trim().isEmpty) continue;
