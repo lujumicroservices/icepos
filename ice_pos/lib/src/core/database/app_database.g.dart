@@ -1734,6 +1734,21 @@ class $ShiftsTable extends Shifts with TableInfo<$ShiftsTable, Shift> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0.0),
   );
+  static const VerificationMeta _needsCloudClosureSyncMeta =
+      const VerificationMeta('needsCloudClosureSync');
+  @override
+  late final GeneratedColumn<bool> needsCloudClosureSync =
+      GeneratedColumn<bool>(
+        'needs_cloud_closure_sync',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("needs_cloud_closure_sync" IN (0, 1))',
+        ),
+        defaultValue: const Constant(false),
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1742,6 +1757,7 @@ class $ShiftsTable extends Shifts with TableInfo<$ShiftsTable, Shift> {
     startTime,
     endTime,
     startingFund,
+    needsCloudClosureSync,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1797,6 +1813,15 @@ class $ShiftsTable extends Shifts with TableInfo<$ShiftsTable, Shift> {
         ),
       );
     }
+    if (data.containsKey('needs_cloud_closure_sync')) {
+      context.handle(
+        _needsCloudClosureSyncMeta,
+        needsCloudClosureSync.isAcceptableOrUnknown(
+          data['needs_cloud_closure_sync']!,
+          _needsCloudClosureSyncMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1830,6 +1855,10 @@ class $ShiftsTable extends Shifts with TableInfo<$ShiftsTable, Shift> {
         DriftSqlType.double,
         data['${effectivePrefix}starting_fund'],
       )!,
+      needsCloudClosureSync: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}needs_cloud_closure_sync'],
+      )!,
     );
   }
 
@@ -1850,6 +1879,9 @@ class Shift extends DataClass implements Insertable<Shift> {
   final DateTime startTime;
   final DateTime? endTime;
   final double startingFund;
+
+  /// True until [CloudSyncService.writeShiftClosureToCloud] succeeds after local close.
+  final bool needsCloudClosureSync;
   const Shift({
     required this.id,
     this.cloudShiftId,
@@ -1857,6 +1889,7 @@ class Shift extends DataClass implements Insertable<Shift> {
     required this.startTime,
     this.endTime,
     required this.startingFund,
+    required this.needsCloudClosureSync,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1873,6 +1906,7 @@ class Shift extends DataClass implements Insertable<Shift> {
       map['end_time'] = Variable<DateTime>(endTime);
     }
     map['starting_fund'] = Variable<double>(startingFund);
+    map['needs_cloud_closure_sync'] = Variable<bool>(needsCloudClosureSync);
     return map;
   }
 
@@ -1890,6 +1924,7 @@ class Shift extends DataClass implements Insertable<Shift> {
           ? const Value.absent()
           : Value(endTime),
       startingFund: Value(startingFund),
+      needsCloudClosureSync: Value(needsCloudClosureSync),
     );
   }
 
@@ -1905,6 +1940,9 @@ class Shift extends DataClass implements Insertable<Shift> {
       startTime: serializer.fromJson<DateTime>(json['startTime']),
       endTime: serializer.fromJson<DateTime?>(json['endTime']),
       startingFund: serializer.fromJson<double>(json['startingFund']),
+      needsCloudClosureSync: serializer.fromJson<bool>(
+        json['needsCloudClosureSync'],
+      ),
     );
   }
   @override
@@ -1917,6 +1955,7 @@ class Shift extends DataClass implements Insertable<Shift> {
       'startTime': serializer.toJson<DateTime>(startTime),
       'endTime': serializer.toJson<DateTime?>(endTime),
       'startingFund': serializer.toJson<double>(startingFund),
+      'needsCloudClosureSync': serializer.toJson<bool>(needsCloudClosureSync),
     };
   }
 
@@ -1927,6 +1966,7 @@ class Shift extends DataClass implements Insertable<Shift> {
     DateTime? startTime,
     Value<DateTime?> endTime = const Value.absent(),
     double? startingFund,
+    bool? needsCloudClosureSync,
   }) => Shift(
     id: id ?? this.id,
     cloudShiftId: cloudShiftId.present ? cloudShiftId.value : this.cloudShiftId,
@@ -1936,6 +1976,7 @@ class Shift extends DataClass implements Insertable<Shift> {
     startTime: startTime ?? this.startTime,
     endTime: endTime.present ? endTime.value : this.endTime,
     startingFund: startingFund ?? this.startingFund,
+    needsCloudClosureSync: needsCloudClosureSync ?? this.needsCloudClosureSync,
   );
   Shift copyWithCompanion(ShiftsCompanion data) {
     return Shift(
@@ -1951,6 +1992,9 @@ class Shift extends DataClass implements Insertable<Shift> {
       startingFund: data.startingFund.present
           ? data.startingFund.value
           : this.startingFund,
+      needsCloudClosureSync: data.needsCloudClosureSync.present
+          ? data.needsCloudClosureSync.value
+          : this.needsCloudClosureSync,
     );
   }
 
@@ -1962,7 +2006,8 @@ class Shift extends DataClass implements Insertable<Shift> {
           ..write('cloudRegisterId: $cloudRegisterId, ')
           ..write('startTime: $startTime, ')
           ..write('endTime: $endTime, ')
-          ..write('startingFund: $startingFund')
+          ..write('startingFund: $startingFund, ')
+          ..write('needsCloudClosureSync: $needsCloudClosureSync')
           ..write(')'))
         .toString();
   }
@@ -1975,6 +2020,7 @@ class Shift extends DataClass implements Insertable<Shift> {
     startTime,
     endTime,
     startingFund,
+    needsCloudClosureSync,
   );
   @override
   bool operator ==(Object other) =>
@@ -1985,7 +2031,8 @@ class Shift extends DataClass implements Insertable<Shift> {
           other.cloudRegisterId == this.cloudRegisterId &&
           other.startTime == this.startTime &&
           other.endTime == this.endTime &&
-          other.startingFund == this.startingFund);
+          other.startingFund == this.startingFund &&
+          other.needsCloudClosureSync == this.needsCloudClosureSync);
 }
 
 class ShiftsCompanion extends UpdateCompanion<Shift> {
@@ -1995,6 +2042,7 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
   final Value<DateTime> startTime;
   final Value<DateTime?> endTime;
   final Value<double> startingFund;
+  final Value<bool> needsCloudClosureSync;
   const ShiftsCompanion({
     this.id = const Value.absent(),
     this.cloudShiftId = const Value.absent(),
@@ -2002,6 +2050,7 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
     this.startTime = const Value.absent(),
     this.endTime = const Value.absent(),
     this.startingFund = const Value.absent(),
+    this.needsCloudClosureSync = const Value.absent(),
   });
   ShiftsCompanion.insert({
     this.id = const Value.absent(),
@@ -2010,6 +2059,7 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
     this.startTime = const Value.absent(),
     this.endTime = const Value.absent(),
     this.startingFund = const Value.absent(),
+    this.needsCloudClosureSync = const Value.absent(),
   });
   static Insertable<Shift> custom({
     Expression<int>? id,
@@ -2018,6 +2068,7 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
     Expression<DateTime>? startTime,
     Expression<DateTime>? endTime,
     Expression<double>? startingFund,
+    Expression<bool>? needsCloudClosureSync,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2026,6 +2077,8 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
       if (startTime != null) 'start_time': startTime,
       if (endTime != null) 'end_time': endTime,
       if (startingFund != null) 'starting_fund': startingFund,
+      if (needsCloudClosureSync != null)
+        'needs_cloud_closure_sync': needsCloudClosureSync,
     });
   }
 
@@ -2036,6 +2089,7 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
     Value<DateTime>? startTime,
     Value<DateTime?>? endTime,
     Value<double>? startingFund,
+    Value<bool>? needsCloudClosureSync,
   }) {
     return ShiftsCompanion(
       id: id ?? this.id,
@@ -2044,6 +2098,8 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       startingFund: startingFund ?? this.startingFund,
+      needsCloudClosureSync:
+          needsCloudClosureSync ?? this.needsCloudClosureSync,
     );
   }
 
@@ -2068,6 +2124,11 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
     if (startingFund.present) {
       map['starting_fund'] = Variable<double>(startingFund.value);
     }
+    if (needsCloudClosureSync.present) {
+      map['needs_cloud_closure_sync'] = Variable<bool>(
+        needsCloudClosureSync.value,
+      );
+    }
     return map;
   }
 
@@ -2079,7 +2140,8 @@ class ShiftsCompanion extends UpdateCompanion<Shift> {
           ..write('cloudRegisterId: $cloudRegisterId, ')
           ..write('startTime: $startTime, ')
           ..write('endTime: $endTime, ')
-          ..write('startingFund: $startingFund')
+          ..write('startingFund: $startingFund, ')
+          ..write('needsCloudClosureSync: $needsCloudClosureSync')
           ..write(')'))
         .toString();
   }
@@ -2182,6 +2244,17 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _clientSaleIdMeta = const VerificationMeta(
+    'clientSaleId',
+  );
+  @override
+  late final GeneratedColumn<String> clientSaleId = GeneratedColumn<String>(
+    'client_sale_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _cancelledAtMeta = const VerificationMeta(
     'cancelledAt',
   );
@@ -2217,6 +2290,7 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     changeGiven,
     paymentsJson,
     cloudSaleId,
+    clientSaleId,
     cancelledAt,
     shiftId,
   ];
@@ -2297,6 +2371,15 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
         ),
       );
     }
+    if (data.containsKey('client_sale_id')) {
+      context.handle(
+        _clientSaleIdMeta,
+        clientSaleId.isAcceptableOrUnknown(
+          data['client_sale_id']!,
+          _clientSaleIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('cancelled_at')) {
       context.handle(
         _cancelledAtMeta,
@@ -2355,6 +2438,10 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
         DriftSqlType.int,
         data['${effectivePrefix}cloud_sale_id'],
       ),
+      clientSaleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_sale_id'],
+      ),
       cancelledAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}cancelled_at'],
@@ -2388,6 +2475,9 @@ class Sale extends DataClass implements Insertable<Sale> {
   /// Id de la venta en Supabase (para poder cancelarla en la nube).
   final int? cloudSaleId;
 
+  /// Clave estable para sync idempotente (`deviceId:localSaleId`).
+  final String? clientSaleId;
+
   /// Borrado lógico: si no es null, la venta está cancelada (no se borra físicamente).
   final DateTime? cancelledAt;
 
@@ -2402,6 +2492,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     required this.changeGiven,
     this.paymentsJson,
     this.cloudSaleId,
+    this.clientSaleId,
     this.cancelledAt,
     required this.shiftId,
   });
@@ -2419,6 +2510,9 @@ class Sale extends DataClass implements Insertable<Sale> {
     }
     if (!nullToAbsent || cloudSaleId != null) {
       map['cloud_sale_id'] = Variable<int>(cloudSaleId);
+    }
+    if (!nullToAbsent || clientSaleId != null) {
+      map['client_sale_id'] = Variable<String>(clientSaleId);
     }
     if (!nullToAbsent || cancelledAt != null) {
       map['cancelled_at'] = Variable<DateTime>(cancelledAt);
@@ -2441,6 +2535,9 @@ class Sale extends DataClass implements Insertable<Sale> {
       cloudSaleId: cloudSaleId == null && nullToAbsent
           ? const Value.absent()
           : Value(cloudSaleId),
+      clientSaleId: clientSaleId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientSaleId),
       cancelledAt: cancelledAt == null && nullToAbsent
           ? const Value.absent()
           : Value(cancelledAt),
@@ -2462,6 +2559,7 @@ class Sale extends DataClass implements Insertable<Sale> {
       changeGiven: serializer.fromJson<double>(json['changeGiven']),
       paymentsJson: serializer.fromJson<String?>(json['paymentsJson']),
       cloudSaleId: serializer.fromJson<int?>(json['cloudSaleId']),
+      clientSaleId: serializer.fromJson<String?>(json['clientSaleId']),
       cancelledAt: serializer.fromJson<DateTime?>(json['cancelledAt']),
       shiftId: serializer.fromJson<int>(json['shiftId']),
     );
@@ -2478,6 +2576,7 @@ class Sale extends DataClass implements Insertable<Sale> {
       'changeGiven': serializer.toJson<double>(changeGiven),
       'paymentsJson': serializer.toJson<String?>(paymentsJson),
       'cloudSaleId': serializer.toJson<int?>(cloudSaleId),
+      'clientSaleId': serializer.toJson<String?>(clientSaleId),
       'cancelledAt': serializer.toJson<DateTime?>(cancelledAt),
       'shiftId': serializer.toJson<int>(shiftId),
     };
@@ -2492,6 +2591,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     double? changeGiven,
     Value<String?> paymentsJson = const Value.absent(),
     Value<int?> cloudSaleId = const Value.absent(),
+    Value<String?> clientSaleId = const Value.absent(),
     Value<DateTime?> cancelledAt = const Value.absent(),
     int? shiftId,
   }) => Sale(
@@ -2503,6 +2603,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     changeGiven: changeGiven ?? this.changeGiven,
     paymentsJson: paymentsJson.present ? paymentsJson.value : this.paymentsJson,
     cloudSaleId: cloudSaleId.present ? cloudSaleId.value : this.cloudSaleId,
+    clientSaleId: clientSaleId.present ? clientSaleId.value : this.clientSaleId,
     cancelledAt: cancelledAt.present ? cancelledAt.value : this.cancelledAt,
     shiftId: shiftId ?? this.shiftId,
   );
@@ -2528,6 +2629,9 @@ class Sale extends DataClass implements Insertable<Sale> {
       cloudSaleId: data.cloudSaleId.present
           ? data.cloudSaleId.value
           : this.cloudSaleId,
+      clientSaleId: data.clientSaleId.present
+          ? data.clientSaleId.value
+          : this.clientSaleId,
       cancelledAt: data.cancelledAt.present
           ? data.cancelledAt.value
           : this.cancelledAt,
@@ -2546,6 +2650,7 @@ class Sale extends DataClass implements Insertable<Sale> {
           ..write('changeGiven: $changeGiven, ')
           ..write('paymentsJson: $paymentsJson, ')
           ..write('cloudSaleId: $cloudSaleId, ')
+          ..write('clientSaleId: $clientSaleId, ')
           ..write('cancelledAt: $cancelledAt, ')
           ..write('shiftId: $shiftId')
           ..write(')'))
@@ -2562,6 +2667,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     changeGiven,
     paymentsJson,
     cloudSaleId,
+    clientSaleId,
     cancelledAt,
     shiftId,
   );
@@ -2577,6 +2683,7 @@ class Sale extends DataClass implements Insertable<Sale> {
           other.changeGiven == this.changeGiven &&
           other.paymentsJson == this.paymentsJson &&
           other.cloudSaleId == this.cloudSaleId &&
+          other.clientSaleId == this.clientSaleId &&
           other.cancelledAt == this.cancelledAt &&
           other.shiftId == this.shiftId);
 }
@@ -2590,6 +2697,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
   final Value<double> changeGiven;
   final Value<String?> paymentsJson;
   final Value<int?> cloudSaleId;
+  final Value<String?> clientSaleId;
   final Value<DateTime?> cancelledAt;
   final Value<int> shiftId;
   const SalesCompanion({
@@ -2601,6 +2709,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     this.changeGiven = const Value.absent(),
     this.paymentsJson = const Value.absent(),
     this.cloudSaleId = const Value.absent(),
+    this.clientSaleId = const Value.absent(),
     this.cancelledAt = const Value.absent(),
     this.shiftId = const Value.absent(),
   });
@@ -2613,6 +2722,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     this.changeGiven = const Value.absent(),
     this.paymentsJson = const Value.absent(),
     this.cloudSaleId = const Value.absent(),
+    this.clientSaleId = const Value.absent(),
     this.cancelledAt = const Value.absent(),
     required int shiftId,
   }) : totalAmount = Value(totalAmount),
@@ -2626,6 +2736,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     Expression<double>? changeGiven,
     Expression<String>? paymentsJson,
     Expression<int>? cloudSaleId,
+    Expression<String>? clientSaleId,
     Expression<DateTime>? cancelledAt,
     Expression<int>? shiftId,
   }) {
@@ -2638,6 +2749,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
       if (changeGiven != null) 'change_given': changeGiven,
       if (paymentsJson != null) 'payments_json': paymentsJson,
       if (cloudSaleId != null) 'cloud_sale_id': cloudSaleId,
+      if (clientSaleId != null) 'client_sale_id': clientSaleId,
       if (cancelledAt != null) 'cancelled_at': cancelledAt,
       if (shiftId != null) 'shift_id': shiftId,
     });
@@ -2652,6 +2764,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     Value<double>? changeGiven,
     Value<String?>? paymentsJson,
     Value<int?>? cloudSaleId,
+    Value<String?>? clientSaleId,
     Value<DateTime?>? cancelledAt,
     Value<int>? shiftId,
   }) {
@@ -2664,6 +2777,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
       changeGiven: changeGiven ?? this.changeGiven,
       paymentsJson: paymentsJson ?? this.paymentsJson,
       cloudSaleId: cloudSaleId ?? this.cloudSaleId,
+      clientSaleId: clientSaleId ?? this.clientSaleId,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       shiftId: shiftId ?? this.shiftId,
     );
@@ -2696,6 +2810,9 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     if (cloudSaleId.present) {
       map['cloud_sale_id'] = Variable<int>(cloudSaleId.value);
     }
+    if (clientSaleId.present) {
+      map['client_sale_id'] = Variable<String>(clientSaleId.value);
+    }
     if (cancelledAt.present) {
       map['cancelled_at'] = Variable<DateTime>(cancelledAt.value);
     }
@@ -2716,6 +2833,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
           ..write('changeGiven: $changeGiven, ')
           ..write('paymentsJson: $paymentsJson, ')
           ..write('cloudSaleId: $cloudSaleId, ')
+          ..write('clientSaleId: $clientSaleId, ')
           ..write('cancelledAt: $cancelledAt, ')
           ..write('shiftId: $shiftId')
           ..write(')'))
@@ -10701,6 +10819,7 @@ typedef $$ShiftsTableCreateCompanionBuilder =
       Value<DateTime> startTime,
       Value<DateTime?> endTime,
       Value<double> startingFund,
+      Value<bool> needsCloudClosureSync,
     });
 typedef $$ShiftsTableUpdateCompanionBuilder =
     ShiftsCompanion Function({
@@ -10710,6 +10829,7 @@ typedef $$ShiftsTableUpdateCompanionBuilder =
       Value<DateTime> startTime,
       Value<DateTime?> endTime,
       Value<double> startingFund,
+      Value<bool> needsCloudClosureSync,
     });
 
 final class $$ShiftsTableReferences
@@ -10826,6 +10946,11 @@ class $$ShiftsTableFilterComposer
 
   ColumnFilters<double> get startingFund => $composableBuilder(
     column: $table.startingFund,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get needsCloudClosureSync => $composableBuilder(
+    column: $table.needsCloudClosureSync,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10968,6 +11093,11 @@ class $$ShiftsTableOrderingComposer
     column: $table.startingFund,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get needsCloudClosureSync => $composableBuilder(
+    column: $table.needsCloudClosureSync,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ShiftsTableAnnotationComposer
@@ -11000,6 +11130,11 @@ class $$ShiftsTableAnnotationComposer
 
   GeneratedColumn<double> get startingFund => $composableBuilder(
     column: $table.startingFund,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get needsCloudClosureSync => $composableBuilder(
+    column: $table.needsCloudClosureSync,
     builder: (column) => column,
   );
 
@@ -11143,6 +11278,7 @@ class $$ShiftsTableTableManager
                 Value<DateTime> startTime = const Value.absent(),
                 Value<DateTime?> endTime = const Value.absent(),
                 Value<double> startingFund = const Value.absent(),
+                Value<bool> needsCloudClosureSync = const Value.absent(),
               }) => ShiftsCompanion(
                 id: id,
                 cloudShiftId: cloudShiftId,
@@ -11150,6 +11286,7 @@ class $$ShiftsTableTableManager
                 startTime: startTime,
                 endTime: endTime,
                 startingFund: startingFund,
+                needsCloudClosureSync: needsCloudClosureSync,
               ),
           createCompanionCallback:
               ({
@@ -11159,6 +11296,7 @@ class $$ShiftsTableTableManager
                 Value<DateTime> startTime = const Value.absent(),
                 Value<DateTime?> endTime = const Value.absent(),
                 Value<double> startingFund = const Value.absent(),
+                Value<bool> needsCloudClosureSync = const Value.absent(),
               }) => ShiftsCompanion.insert(
                 id: id,
                 cloudShiftId: cloudShiftId,
@@ -11166,6 +11304,7 @@ class $$ShiftsTableTableManager
                 startTime: startTime,
                 endTime: endTime,
                 startingFund: startingFund,
+                needsCloudClosureSync: needsCloudClosureSync,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -11304,6 +11443,7 @@ typedef $$SalesTableCreateCompanionBuilder =
       Value<double> changeGiven,
       Value<String?> paymentsJson,
       Value<int?> cloudSaleId,
+      Value<String?> clientSaleId,
       Value<DateTime?> cancelledAt,
       required int shiftId,
     });
@@ -11317,6 +11457,7 @@ typedef $$SalesTableUpdateCompanionBuilder =
       Value<double> changeGiven,
       Value<String?> paymentsJson,
       Value<int?> cloudSaleId,
+      Value<String?> clientSaleId,
       Value<DateTime?> cancelledAt,
       Value<int> shiftId,
     });
@@ -11407,6 +11548,11 @@ class $$SalesTableFilterComposer extends Composer<_$AppDatabase, $SalesTable> {
 
   ColumnFilters<int> get cloudSaleId => $composableBuilder(
     column: $table.cloudSaleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientSaleId => $composableBuilder(
+    column: $table.clientSaleId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11513,6 +11659,11 @@ class $$SalesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get clientSaleId => $composableBuilder(
+    column: $table.clientSaleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get cancelledAt => $composableBuilder(
     column: $table.cancelledAt,
     builder: (column) => ColumnOrderings(column),
@@ -11584,6 +11735,11 @@ class $$SalesTableAnnotationComposer
 
   GeneratedColumn<int> get cloudSaleId => $composableBuilder(
     column: $table.cloudSaleId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get clientSaleId => $composableBuilder(
+    column: $table.clientSaleId,
     builder: (column) => column,
   );
 
@@ -11677,6 +11833,7 @@ class $$SalesTableTableManager
                 Value<double> changeGiven = const Value.absent(),
                 Value<String?> paymentsJson = const Value.absent(),
                 Value<int?> cloudSaleId = const Value.absent(),
+                Value<String?> clientSaleId = const Value.absent(),
                 Value<DateTime?> cancelledAt = const Value.absent(),
                 Value<int> shiftId = const Value.absent(),
               }) => SalesCompanion(
@@ -11688,6 +11845,7 @@ class $$SalesTableTableManager
                 changeGiven: changeGiven,
                 paymentsJson: paymentsJson,
                 cloudSaleId: cloudSaleId,
+                clientSaleId: clientSaleId,
                 cancelledAt: cancelledAt,
                 shiftId: shiftId,
               ),
@@ -11701,6 +11859,7 @@ class $$SalesTableTableManager
                 Value<double> changeGiven = const Value.absent(),
                 Value<String?> paymentsJson = const Value.absent(),
                 Value<int?> cloudSaleId = const Value.absent(),
+                Value<String?> clientSaleId = const Value.absent(),
                 Value<DateTime?> cancelledAt = const Value.absent(),
                 required int shiftId,
               }) => SalesCompanion.insert(
@@ -11712,6 +11871,7 @@ class $$SalesTableTableManager
                 changeGiven: changeGiven,
                 paymentsJson: paymentsJson,
                 cloudSaleId: cloudSaleId,
+                clientSaleId: clientSaleId,
                 cancelledAt: cancelledAt,
                 shiftId: shiftId,
               ),

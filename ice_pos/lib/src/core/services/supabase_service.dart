@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -111,4 +113,33 @@ class SupabaseService {
 
   /// Cliente de Supabase para realizar operaciones.
   SupabaseClient get client => Supabase.instance.client;
+
+  static DateTime? _lastPingOkAt;
+  static const Duration _pingCacheTtl = Duration(seconds: 12);
+
+  /// Lightweight reachability check (not the same as Wi‑Fi up).
+  /// Caches a successful ping for [_pingCacheTtl] to avoid spamming.
+  static Future<bool> ping({
+    Duration timeout = const Duration(seconds: 3),
+    bool force = false,
+  }) async {
+    if (!isInitialized) return false;
+    final now = DateTime.now();
+    if (!force &&
+        _lastPingOkAt != null &&
+        now.difference(_lastPingOkAt!) < _pingCacheTtl) {
+      return true;
+    }
+    try {
+      await instance.client
+          .from('app_releases')
+          .select('id')
+          .limit(1)
+          .timeout(timeout);
+      _lastPingOkAt = DateTime.now();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

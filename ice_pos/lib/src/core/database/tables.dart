@@ -60,6 +60,8 @@ class Sales extends Table {
   TextColumn get paymentsJson => text().nullable()();
   /// Id de la venta en Supabase (para poder cancelarla en la nube).
   IntColumn get cloudSaleId => integer().nullable()();
+  /// Clave estable para sync idempotente (`deviceId:localSaleId`).
+  TextColumn get clientSaleId => text().named('client_sale_id').nullable()();
   /// Borrado lógico: si no es null, la venta está cancelada (no se borra físicamente).
   DateTimeColumn get cancelledAt => dateTime().nullable()();
   /// Turno local ([Shifts.id]); al sincronizar se envía como `sales.shift_id` = id nube del turno.
@@ -160,6 +162,10 @@ class Shifts extends Table {
   DateTimeColumn get startTime => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get endTime => dateTime().nullable()();
   RealColumn get startingFund => real().withDefault(const Constant(0.0))();
+  /// True until [CloudSyncService.writeShiftClosureToCloud] succeeds after local close.
+  BoolColumn get needsCloudClosureSync => boolean()
+      .named('needs_cloud_closure_sync')
+      .withDefault(const Constant(false))();
 }
 
 // 15. CASH MOVEMENTS (legacy; prefer Movements table for new flows)

@@ -8,6 +8,7 @@ import 'package:ice_pos/src/core/widgets/list_search_bar.dart';
 import 'package:ice_pos/src/core/services/offline_write_policy.dart';
 import 'package:ice_pos/src/features/admin/data/catalog_repository.dart';
 import 'package:ice_pos/src/features/admin/data/product_admin_repository.dart';
+import 'package:ice_pos/src/features/admin/data/product_catalog_export.dart';
 import 'package:ice_pos/src/features/pos/domain/category.dart' as domain_cat;
 import 'package:ice_pos/src/features/pos/presentation/pos_categories_refresh.dart';
 import 'package:ice_pos/src/features/admin/presentation/product_editor_screen.dart';
@@ -23,6 +24,52 @@ final _categoriesProvider = FutureProvider<List<domain_cat.Category>>((ref) {
 
 final _adminProductSearchQueryProvider = StateProvider<String>((ref) => '');
 
+Future<void> _exportProductsToExcel(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final products = ref.read(_allProductsStreamProvider).asData?.value;
+  final categories = ref.read(_categoriesProvider).asData?.value;
+  if (products == null || categories == null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Espera a que cargue el catálogo'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return;
+  }
+  try {
+    final csv = ProductCatalogExport.buildCsv(
+      products: products,
+      categories: categories,
+    );
+    await ProductCatalogExport.shareCsv(csv);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exportados ${products.length} productos. '
+            'Completa la columna precio_especial_empleado en Excel.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo exportar: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+}
 /// One section: category name, optional color, and products.
 class _CategorySection {
   const _CategorySection({
@@ -111,6 +158,13 @@ class ProductManagementScreen extends ConsumerWidget {
             fontSize: 20,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar Excel (CSV)',
+            icon: const Icon(Icons.file_download_outlined),
+            onPressed: () => _exportProductsToExcel(context, ref),
+          ),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

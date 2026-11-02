@@ -15,6 +15,8 @@ import 'package:ice_pos/src/core/services/app_update_service.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/connectivity_provider.dart';
 import 'package:ice_pos/src/core/services/connectivity_service.dart';
+import 'package:ice_pos/src/core/services/outbox_sync_service.dart';
+import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:ice_pos/src/core/services/recipe_json_import_service.dart';
 import 'package:ice_pos/src/core/services/recipe_report_save.dart';
 import 'package:ice_pos/src/core/utils/error_logger.dart';
@@ -145,6 +147,7 @@ class HomeDrawer extends ConsumerWidget {
       children.add(_buildCloudStatusCard(context, l10n));
       if (hasDriftDatabase && CloudSyncService.isEnabled) {
         children.add(_buildSyncFromCloudTile(context, ref, l10n));
+        children.add(_buildPendingOutboxTile(context, ref, l10n));
       }
 
       void addCatalogSalesOrgSupport() {
@@ -767,6 +770,76 @@ class HomeDrawer extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+
+  static Widget _buildPendingOutboxTile(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
+    final db = ref.watch(appDatabaseProvider);
+    if (db == null || !CloudSyncService.isEnabled) {
+      return const SizedBox.shrink();
+    }
+    return FutureBuilder<OutboxPendingCounts>(
+      future: OutboxSyncService.countPending(db),
+      builder: (context, snap) {
+        final counts = snap.data;
+        final total = counts?.total ?? 0;
+        return ListTile(
+          leading: Badge(
+            isLabelVisible: total > 0,
+            label: Text('$total'),
+            child: const Icon(Icons.cloud_upload_outlined),
+          ),
+          title: Text(l10n.retryPendingSync),
+          subtitle: Text(
+            total == 0
+                ? l10n.pendingSyncNone
+                : l10n.pendingSyncCount(total),
+          ),
+          onTap: () async {
+            Navigator.pop(context);
+            if (!ConnectivityService.instance.isConnected) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(l10n.offlineRequiresInternet),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
+            }
+            final reachable = await SupabaseService.ping(force: true);
+            if (!reachable) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(l10n.pendingSyncUnreachable),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
+            }
+            await OutboxSyncService.drain(db);
+            final after = await OutboxSyncService.countPending(db);
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  after.total == 0
+                      ? l10n.pendingSyncRetryOk
+                      : l10n.pendingSyncRetryStillPending,
+                ),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

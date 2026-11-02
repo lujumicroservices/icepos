@@ -25,5 +25,9 @@ No hace falta editar `.migration_seq` a mano salvo corrección tras un merge con
 | 033 | `033_staff_tasks.sql` | Tareas de personal (`staff_tasks`, `staff_task_responses`: hecho/omitido + comentario). |
 | 034 | `034_fcm_device_tokens.sql` | Tokens FCM para push en tablets Android/iOS. |
 | 035 | `035_staff_task_templates.sql` | Plantillas de tareas repetitivas (diario o por días de semana) que generan ocurrencias. |
+| 044 | `044_temperature_readings_anon_insert.sql` | INSERT anon/authenticated en `temperature_readings` (ESP32). |
+| 045 | `045_sales_client_sale_id.sql` | `sales.client_sale_id` único para sync de ventas idempotente. |
+| 046 | `046_sensor_readings_anon_select.sql` | SELECT anon/auth en `sensor_readings` (historial app). |
+| 047 | `047_temperature_alert_settings.sql` | Umbrales configurables + eventos anti-spam + `fcm_device_tokens.role`. |
 
 El esquema base (tablas nuevas) está en la raíz del proyecto: `supabase_schema.sql`.

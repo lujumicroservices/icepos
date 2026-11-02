@@ -6,10 +6,26 @@ import 'package:flutter/foundation.dart';
 import 'package:ice_pos/src/core/database/app_database.dart';
 import 'package:ice_pos/src/core/services/cloud_sync_service.dart';
 import 'package:ice_pos/src/core/services/connectivity_service.dart';
+import 'package:ice_pos/src/core/services/device_id_service.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 import 'package:ice_pos/src/core/services/sync_coordinator.dart';
 import 'package:ice_pos/src/features/pos/data/pos_repository.dart' show CartItem;
 import 'package:ice_pos/src/features/pos/domain/modifier_option.dart';
+
+/// Counts of local rows waiting to reach Supabase.
+class OutboxPendingCounts {
+  const OutboxPendingCounts({
+    required this.sales,
+    required this.movements,
+    required this.shiftClosures,
+  });
+
+  final int sales;
+  final int movements;
+  final int shiftClosures;
+
+  int get total => sales + movements + shiftClosures;
+}
 
 /// Replays local sales and movements that were created offline or failed to reach Supabase.
 class OutboxSyncService {
@@ -19,11 +35,35 @@ class OutboxSyncService {
   static Future<void> drain(AppDatabase db) async {
     if (!SupabaseService.isInitialized || !CloudSyncService.isEnabled) return;
     if (!ConnectivityService.instance.isConnected) return;
+    final reachable = await SupabaseService.ping();
+    if (!reachable) {
+      debugPrint('OutboxSyncService.drain: Supabase unreachable; skipping');
+      return;
+    }
 
     await SyncCoordinator.synchronized(() async {
       await _replayMovements(db);
       await _replaySales(db);
+      await _replayShiftClosures(db);
     });
+  }
+
+  static Future<OutboxPendingCounts> countPending(AppDatabase db) async {
+    final pendingSales = await (db.select(db.sales)
+          ..where((s) => s.cloudSaleId.isNull() & s.cancelledAt.isNull()))
+        .get();
+    final pendingMovements = await (db.select(db.movements)
+          ..where((m) => m.needsCloudSync.equals(true)))
+        .get();
+    final pendingClosures = await (db.select(db.shifts)
+          ..where((s) =>
+              s.needsCloudClosureSync.equals(true) & s.endTime.isNotNull()))
+        .get();
+    return OutboxPendingCounts(
+      sales: pendingSales.length,
+      movements: pendingMovements.length,
+      shiftClosures: pendingClosures.length,
+    );
   }
 
   static Future<void> _replayMovements(AppDatabase db) async {
@@ -43,15 +83,26 @@ class OutboxSyncService {
   }
 
   static Future<void> _replaySales(AppDatabase db) async {
-    final pending = await (db.select(db.sales)..where((s) => s.cloudSaleId.isNull())).get();
+    final pending =
+        await (db.select(db.sales)..where((s) => s.cloudSaleId.isNull())).get();
     for (final sale in pending) {
       if (sale.cancelledAt != null) continue;
-      final shift = await (db.select(db.shifts)..where((s) => s.id.equals(sale.shiftId)))
+      final shift = await (db.select(db.shifts)
+            ..where((s) => s.id.equals(sale.shiftId)))
           .getSingleOrNull();
       if (shift == null) continue;
 
       final cartItems = await _cartItemsForSale(db, sale.id);
       if (cartItems.isEmpty) continue;
+
+      var clientSaleId = sale.clientSaleId;
+      if (clientSaleId == null || clientSaleId.isEmpty) {
+        final device = await DeviceIdService.getDeviceInfo();
+        clientSaleId = '${device.deviceId}:${sale.id}';
+        await (db.update(db.sales)..where((s) => s.id.equals(sale.id))).write(
+              SalesCompanion(clientSaleId: Value(clientSaleId)),
+            );
+      }
 
       final cloudSid = CloudSyncService.supabaseShiftId(shift);
       final (err, cloudId) = await CloudSyncService.writeSaleToCloud(
@@ -62,6 +113,7 @@ class OutboxSyncService {
         changeGiven: sale.changeGiven,
         paymentsJson: sale.paymentsJson,
         cloudShiftId: cloudSid,
+        clientSaleId: clientSaleId,
       );
       if (err != null) {
         debugPrint('OutboxSyncService: sale ${sale.id} replay failed: $err');
@@ -71,6 +123,37 @@ class OutboxSyncService {
         await (db.update(db.sales)..where((s) => s.id.equals(sale.id))).write(
               SalesCompanion(cloudSaleId: Value(cloudId)),
             );
+      }
+    }
+  }
+
+  static Future<void> _replayShiftClosures(AppDatabase db) async {
+    final pending = await (db.select(db.shifts)
+          ..where((s) =>
+              s.needsCloudClosureSync.equals(true) & s.endTime.isNotNull()))
+        .get();
+    for (final shift in pending) {
+      final closure = await (db.select(db.shiftClosures)
+            ..where((c) => c.shiftId.equals(shift.id))
+            ..orderBy([(c) => OrderingTerm.desc(c.id)])
+            ..limit(1))
+          .getSingleOrNull();
+      if (closure == null) {
+        debugPrint(
+          'OutboxSyncService: shift ${shift.id} needs cloud closure but has no local closure row',
+        );
+        continue;
+      }
+      final err =
+          await CloudSyncService.writeShiftClosureToCloud(shift, closure);
+      if (err == null) {
+        await (db.update(db.shifts)..where((s) => s.id.equals(shift.id))).write(
+              const ShiftsCompanion(needsCloudClosureSync: Value(false)),
+            );
+      } else {
+        debugPrint(
+          'OutboxSyncService: shift closure ${shift.id} still pending: $err',
+        );
       }
     }
   }
@@ -99,7 +182,9 @@ WHERE si.sale_id = ?
         try {
           final list = jsonDecode(modsRaw) as List<dynamic>;
           mods = list
-              .map((e) => ModifierOptionDto.fromJson(e as Map<String, dynamic>).toModifierOption())
+              .map((e) =>
+                  ModifierOptionDto.fromJson(e as Map<String, dynamic>)
+                      .toModifierOption())
               .toList();
         } catch (_) {}
       }

@@ -47,6 +47,13 @@ class AppLocalizations {
   String get syncingFromCloud => _('syncingFromCloud');
   String get syncSuccess => _('syncSuccess');
   String get syncError => _('syncError');
+  String get retryPendingSync => _('retryPendingSync');
+  String get pendingSyncNone => _('pendingSyncNone');
+  String pendingSyncCount(int total) =>
+      _('pendingSyncCount').replaceAll('{n}', '$total');
+  String get pendingSyncRetryOk => _('pendingSyncRetryOk');
+  String get pendingSyncRetryStillPending => _('pendingSyncRetryStillPending');
+  String get pendingSyncUnreachable => _('pendingSyncUnreachable');
   String get syncStepStarting => _('syncStepStarting');
   String get syncStepDownloadingCategories => _('syncStepDownloadingCategories');
   String get syncStepDownloadingProducts => _('syncStepDownloadingProducts');
@@ -362,6 +369,25 @@ class AppLocalizations {
       _('temperatureLastReading')
           .replaceAll('{value}', value)
           .replaceAll('{at}', at);
+  String get temperatureAlertSettings => _('temperatureAlertSettings');
+  String get temperatureAlertSettingsEmpty => _('temperatureAlertSettingsEmpty');
+  String get temperatureAlertsTitle => _('temperatureAlertsTitle');
+  String get temperatureAlertSilence => _('temperatureAlertSilence');
+  String get temperatureAlertSaved => _('temperatureAlertSaved');
+  String temperatureAlertAboveMax(String sensor, String value, String max) =>
+      _('temperatureAlertAboveMax')
+          .replaceAll('{sensor}', sensor)
+          .replaceAll('{value}', value)
+          .replaceAll('{max}', max);
+  String temperatureAlertBelowMin(String sensor, String value, String min) =>
+      _('temperatureAlertBelowMin')
+          .replaceAll('{sensor}', sensor)
+          .replaceAll('{value}', value)
+          .replaceAll('{min}', min);
+  String temperatureAlertStale(String sensor, String minutes) =>
+      _('temperatureAlertStale')
+          .replaceAll('{sensor}', sensor)
+          .replaceAll('{minutes}', minutes);
   String get salesReports => _('salesReports');
   String get inventoryReports => _('inventoryReports');
   String get rayosXReport => _('rayosXReport');
@@ -683,6 +709,12 @@ class AppLocalizations {
     'syncingFromCloud': 'Sincronizando desde la nube...',
     'syncSuccess': 'Sincronización correcta. Datos locales actualizados desde la nube.',
     'syncError': 'Error al sincronizar',
+    'retryPendingSync': 'Reintentar sync pendientes',
+    'pendingSyncNone': 'No hay ventas, movimientos ni cierres pendientes de subir',
+    'pendingSyncCount': '{n} pendientes de subir a la nube',
+    'pendingSyncRetryOk': 'Pendientes sincronizados con la nube',
+    'pendingSyncRetryStillPending': 'Aún quedan pendientes; revisa la conexión',
+    'pendingSyncUnreachable': 'Supabase no responde; inténtalo más tarde',
     'syncStepStarting': 'Iniciando sincronización…',
     'syncStepDownloadingCategories': 'Descargando categorías…',
     'syncStepDownloadingProducts': 'Descargando productos e insumos…',
@@ -962,7 +994,19 @@ class AppLocalizations {
     'reportsSubtitle': 'Estadísticas de ventas e inventario',
     'temperatureHistory': 'Temperatura (congelador)',
     'temperatureHistorySubtitle':
-        'Historial desde la nube (tabla temperature_readings). Requiere Supabase configurado.',
+        'Historial desde la nube (tabla sensor_readings). Requiere Supabase configurado.',
+    'temperatureAlertSettings': 'Umbrales de alerta',
+    'temperatureAlertSettingsEmpty':
+        'No hay configuración de alertas. Aplica la migración 047 en Supabase.',
+    'temperatureAlertsTitle': 'Alertas activas',
+    'temperatureAlertSilence': 'Silenciar alarma',
+    'temperatureAlertSaved': 'Umbrales guardados',
+    'temperatureAlertAboveMax':
+        '{sensor}: {value} °C por encima del máximo ({max} °C)',
+    'temperatureAlertBelowMin':
+        '{sensor}: {value} °C por debajo del mínimo ({min} °C)',
+    'temperatureAlertStale':
+        '{sensor}: sin lectura reciente ({minutes} min)',
     'temperatureRange24h': '24 h',
     'temperatureRange7d': '7 días',
     'temperatureRange30d': '30 días',
@@ -1275,6 +1319,12 @@ class AppLocalizations {
     'syncingFromCloud': 'Syncing from cloud...',
     'syncSuccess': 'Sync complete. Local data updated from cloud.',
     'syncError': 'Sync error',
+    'retryPendingSync': 'Retry pending sync',
+    'pendingSyncNone': 'No pending sales, movements, or shift closures to upload',
+    'pendingSyncCount': '{n} pending uploads to the cloud',
+    'pendingSyncRetryOk': 'Pending items synced to the cloud',
+    'pendingSyncRetryStillPending': 'Some items are still pending; check connection',
+    'pendingSyncUnreachable': 'Supabase is unreachable; try again later',
     'syncStepStarting': 'Starting sync…',
     'syncStepDownloadingCategories': 'Downloading categories…',
     'syncStepDownloadingProducts': 'Downloading products and supplies…',
@@ -1554,7 +1604,19 @@ class AppLocalizations {
     'reportsSubtitle': 'Sales and inventory statistics',
     'temperatureHistory': 'Freezer temperature',
     'temperatureHistorySubtitle':
-        'History from cloud (temperature_readings table). Requires Supabase in .env.',
+        'History from cloud (sensor_readings table). Requires Supabase in .env.',
+    'temperatureAlertSettings': 'Alert thresholds',
+    'temperatureAlertSettingsEmpty':
+        'No alert settings found. Apply migration 047 in Supabase.',
+    'temperatureAlertsTitle': 'Active alerts',
+    'temperatureAlertSilence': 'Silence alarm',
+    'temperatureAlertSaved': 'Thresholds saved',
+    'temperatureAlertAboveMax':
+        '{sensor}: {value} °C above max ({max} °C)',
+    'temperatureAlertBelowMin':
+        '{sensor}: {value} °C below min ({min} °C)',
+    'temperatureAlertStale':
+        '{sensor}: no recent reading ({minutes} min)',
     'temperatureRange24h': '24 h',
     'temperatureRange7d': '7 days',
     'temperatureRange30d': '30 days',

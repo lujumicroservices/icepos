@@ -1,6 +1,6 @@
 import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 
-/// Friendly labels for known [sensor_id] suffixes from `temperature_readings`.
+/// Friendly labels for known [sensor_id] suffixes from `sensor_readings`.
 ///
 /// - IDs ending with `79d` → freezer 1 (right)
 /// - IDs ending with `0a6` (zero-a-six) → freezer 1 (left)

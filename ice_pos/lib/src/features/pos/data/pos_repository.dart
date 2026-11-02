@@ -1777,6 +1777,12 @@ class PosRepository {
               shiftId: shiftForSale.id,
             ),
           );
+      // client_sale_id needs the local id; set right after insert (same transaction).
+      final device = await DeviceIdService.getDeviceInfo();
+      final clientSaleId = '${device.deviceId}:$localSaleId';
+      await (_db.update(_db.sales)..where((s) => s.id.equals(localSaleId))).write(
+            SalesCompanion(clientSaleId: Value(clientSaleId)),
+          );
 
       for (final item in items) {
         String? modifiersJson;
@@ -1889,6 +1895,16 @@ class PosRepository {
   }) async {
     try {
       final cloudSid = CloudSyncService.supabaseShiftId(shiftForSale);
+      final localSale = await (_db.select(_db.sales)
+            ..where((s) => s.id.equals(localSaleId)))
+          .getSingleOrNull();
+      var clientSaleId = localSale?.clientSaleId;
+      if (clientSaleId == null || clientSaleId.isEmpty) {
+        final device = await DeviceIdService.getDeviceInfo();
+        clientSaleId = '${device.deviceId}:$localSaleId';
+        await (_db.update(_db.sales)..where((s) => s.id.equals(localSaleId)))
+            .write(SalesCompanion(clientSaleId: Value(clientSaleId)));
+      }
       final (err, cloudId) = await CloudSyncService.writeSaleToCloud(
         items,
         totalAmount: amount,
@@ -1897,6 +1913,7 @@ class PosRepository {
         changeGiven: changeGiven,
         paymentsJson: paymentsJson,
         cloudShiftId: cloudSid,
+        clientSaleId: clientSaleId,
       );
       if (err != null) {
         debugPrint('CloudSyncService.writeSaleToCloud (background): $err');
@@ -3115,6 +3132,9 @@ INSERT INTO shift_cash_adjustments (
       );
       if (err != null) {
         debugPrint('Cloud write shift closure: $err');
+        await (_db.update(_db.shifts)..where((s) => s.id.equals(shiftId))).write(
+              const ShiftsCompanion(needsCloudClosureSync: Value(true)),
+            );
         await CloudSyncService.logShiftCloseDiagnostic(
           event: 'shift_close_cloud_failed',
           shiftId: shiftId,
@@ -3132,6 +3152,9 @@ INSERT INTO shift_cash_adjustments (
           },
         );
       } else {
+        await (_db.update(_db.shifts)..where((s) => s.id.equals(shiftId))).write(
+              const ShiftsCompanion(needsCloudClosureSync: Value(false)),
+            );
         await CloudSyncService.logShiftCloseDiagnostic(
           event: 'shift_close_cloud_ok',
           shiftId: shiftId,
@@ -3139,6 +3162,11 @@ INSERT INTO shift_cash_adjustments (
         );
       }
     } else {
+      if (CloudSyncService.isEnabled) {
+        await (_db.update(_db.shifts)..where((s) => s.id.equals(shiftId))).write(
+              const ShiftsCompanion(needsCloudClosureSync: Value(true)),
+            );
+      }
       await CloudSyncService.logShiftCloseDiagnostic(
         event: 'shift_close_cloud_skipped',
         shiftId: shiftId,

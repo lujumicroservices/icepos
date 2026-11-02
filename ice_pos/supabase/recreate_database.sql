@@ -127,9 +127,12 @@ create table public.sales (
   device_id text,
   device_name text,
   cancelled_at timestamptz,
+  client_sale_id text,
   store_id int not null default 1 references public.stores(id)
 );
 comment on column public.sales.cancelled_at is 'Si no es null, la venta fue cancelada (borrado lógico).';
+comment on column public.sales.client_sale_id is 'Stable id from POS (deviceId:localSaleId) for idempotent sync.';
+create unique index sales_client_sale_id_uidx on public.sales (client_sale_id) where client_sale_id is not null;
 
 -- Sale items
 create table public.sale_items (

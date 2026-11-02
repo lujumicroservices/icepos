@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
 
-/// One row from `public.temperature_readings`.
+/// One row from `public.sensor_readings` (written by Azure telemetry ingest).
 class TemperatureReading {
   const TemperatureReading({
     required this.id,
@@ -10,26 +10,27 @@ class TemperatureReading {
     this.sensorId,
   });
 
-  final int id;
+  final String id;
   final double temperatureC;
+  /// Local wall time of the probe reading (`read_at`).
   final DateTime createdAt;
   final String? sensorId;
 
   static TemperatureReading? fromJson(Map<String, dynamic> row) {
-    final id = row['id'];
-    final idInt = id is int ? id : (id is num ? id.toInt() : int.tryParse('$id'));
-    if (idInt == null) return null;
+    final idRaw = row['id'];
+    final id = idRaw?.toString().trim() ?? '';
+    if (id.isEmpty) return null;
     final temp = row['temperature_c'];
     final t = temp is num ? temp.toDouble() : double.tryParse('$temp');
     if (t == null) return null;
-    final created = row['created_at'];
+    final created = row['read_at'] ?? row['received_at'];
     final dt = created is String
         ? DateTime.tryParse(created)
         : (created == null ? null : DateTime.tryParse(created.toString()));
     if (dt == null) return null;
     final sid = row['sensor_id'];
     return TemperatureReading(
-      id: idInt,
+      id: id,
       temperatureC: t,
       createdAt: dt.isUtc ? dt.toLocal() : dt,
       sensorId: sid is String ? (sid.isEmpty ? null : sid) : sid?.toString(),
@@ -37,7 +38,7 @@ class TemperatureReading {
   }
 }
 
-/// Reads freezer / sensor history from Supabase.
+/// Reads freezer / sensor history from Supabase `sensor_readings`.
 class TemperatureReadingsService {
   TemperatureReadingsService._();
 
@@ -61,15 +62,15 @@ class TemperatureReadingsService {
 
       while (out.length < maxRows) {
         dynamic q = client
-            .from('temperature_readings')
-            .select('id,temperature_c,created_at,sensor_id')
-            .gte('created_at', sinceUtc);
+            .from('sensor_readings')
+            .select('id,temperature_c,read_at,sensor_id')
+            .gte('read_at', sinceUtc);
         if (sensorId != null && sensorId.trim().isNotEmpty) {
           q = q.eq('sensor_id', sensorId.trim());
         }
         final end = offset + pageSize - 1;
         final dynamic res = await q
-            .order('created_at', ascending: true)
+            .order('read_at', ascending: true)
             .range(offset, end);
         final list = List<dynamic>.from(res as List);
         if (list.isEmpty) break;
@@ -96,15 +97,47 @@ class TemperatureReadingsService {
     }
   }
 
+  /// Latest reading per non-null sensor_id (for alert banners).
+  static Future<List<TemperatureReading>> fetchLatestPerSensor({
+    int sampleLimit = 500,
+  }) async {
+    if (!SupabaseService.isInitialized) return [];
+    try {
+      final client = SupabaseService.instance.client;
+      final res = await client
+          .from('sensor_readings')
+          .select('id,temperature_c,read_at,sensor_id')
+          .order('read_at', ascending: false)
+          .limit(sampleLimit);
+      final list = List<dynamic>.from(res as List);
+      final seen = <String>{};
+      final out = <TemperatureReading>[];
+      for (final raw in list) {
+        final m = Map<String, dynamic>.from(raw as Map);
+        final r = TemperatureReading.fromJson(m);
+        if (r == null) continue;
+        final sid = r.sensorId?.trim() ?? '';
+        if (sid.isEmpty || seen.contains(sid)) continue;
+        seen.add(sid);
+        out.add(r);
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('TemperatureReadingsService.fetchLatestPerSensor: $e');
+      debugPrint('$st');
+      return [];
+    }
+  }
+
   /// Distinct non-null sensor_id values (recent rows only).
   static Future<List<String>> fetchDistinctSensorIds({int sampleLimit = 2000}) async {
     if (!SupabaseService.isInitialized) return [];
     try {
       final client = SupabaseService.instance.client;
       final res = await client
-          .from('temperature_readings')
+          .from('sensor_readings')
           .select('sensor_id')
-          .order('created_at', ascending: false)
+          .order('read_at', ascending: false)
           .limit(sampleLimit);
       final list = List<dynamic>.from(res as List);
       final set = <String>{};

@@ -35,11 +35,15 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (migrator, from, to) async {
+          if (from < 30) {
+            await migrator.addColumn(sales, sales.clientSaleId);
+            await migrator.addColumn(shifts, shifts.needsCloudClosureSync);
+          }
           if (from < 29) {
             await migrator.addColumn(modifierOptions, modifierOptions.imageUrl);
           }

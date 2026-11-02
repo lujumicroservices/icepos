@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ice_pos/src/core/services/device_id_service.dart';
 import 'package:ice_pos/src/core/services/fcm_background_handler.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
+import 'package:ice_pos/src/core/services/temperature_alarm_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Registra token FCM en Supabase y muestra notificaciones en primer plano.
@@ -39,6 +40,10 @@ class FcmPushService {
         const InitializationSettings(android: androidInit),
         onDidReceiveNotificationResponse: (details) {
           final route = details.payload;
+          if (route == 'temperature_history' ||
+              (route != null && route.contains('temp'))) {
+            unawaited(TemperatureAlarmService.instance.stop());
+          }
           if (route != null && route.isNotEmpty) {
             onOpenRoute?.call(route);
           }
@@ -46,17 +51,17 @@ class FcmPushService {
       );
 
       if (Platform.isAndroid) {
-        await _local
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
-            ?.createNotificationChannel(
-              const AndroidNotificationChannel(
-                _channelId,
-                'ICE POS',
-                description: 'Tareas, aprobaciones y avisos',
-                importance: Importance.high,
-              ),
-            );
+        final androidPlugin = _local.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+        await androidPlugin?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _channelId,
+            'ICE POS',
+            description: 'Tareas, aprobaciones y avisos',
+            importance: Importance.high,
+          ),
+        );
+        await TemperatureAlarmService.instance.ensureChannel();
         final status = await Permission.notification.request();
         if (!status.isGranted) {
           debugPrint('FcmPushService: notification permission not granted');
@@ -78,7 +83,7 @@ class FcmPushService {
     }
   }
 
-  Future<void> registerTokenForCurrentUser() async {
+  Future<void> registerTokenForCurrentUser({String? role}) async {
     if (!_initialized || !SupabaseService.isInitialized) return;
     try {
       final fcmToken = await FirebaseMessaging.instance.getToken();
@@ -95,20 +100,30 @@ class FcmPushService {
         }
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final roleValue = role ??
+          prefs.getString('auth_role') ??
+          prefs.getString('user_role');
+
       final platform = Platform.isAndroid ? 'android' : 'ios';
+      final row = <String, dynamic>{
+        'token': fcmToken,
+        'store_id': storeId,
+        'device_id': device.deviceId,
+        'user_id': userId,
+        'platform': platform,
+        'is_active': true,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      if (roleValue != null && roleValue.isNotEmpty) {
+        row['role'] = roleValue;
+        await prefs.setString('auth_role', roleValue);
+      }
       await SupabaseService.instance.client.from('fcm_device_tokens').upsert(
-        {
-          'token': fcmToken,
-          'store_id': storeId,
-          'device_id': device.deviceId,
-          'user_id': userId,
-          'platform': platform,
-          'is_active': true,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        },
-        onConflict: 'token',
-      );
-      debugPrint('FcmPushService: token registered for store $storeId');
+            row,
+            onConflict: 'token',
+          );
+      debugPrint('FcmPushService: token registered for store $storeId role=$roleValue');
     } catch (e, st) {
       debugPrint('FcmPushService.registerToken: $e');
       debugPrint('$st');
@@ -116,9 +131,23 @@ class FcmPushService {
   }
 
   void _onForegroundMessage(RemoteMessage message) {
+    final type = message.data['type'] as String? ?? '';
     final n = message.notification;
-    if (n == null) return;
+    final title = n?.title ?? message.data['title'] ?? 'ICE POS';
+    final body = n?.body ?? message.data['body'] ?? '';
     final route = message.data['route'] as String? ?? '';
+
+    if (type == 'temp_alert') {
+      unawaited(
+        TemperatureAlarmService.instance.start(
+          title: title,
+          body: body.isEmpty ? 'Sensor fuera de rango' : body,
+        ),
+      );
+      return;
+    }
+
+    if (n == null) return;
     unawaited(
       _local.show(
         message.hashCode,
@@ -138,6 +167,9 @@ class FcmPushService {
   }
 
   void _onOpenedFromNotification(RemoteMessage message) {
+    if (message.data['type'] == 'temp_alert') {
+      unawaited(TemperatureAlarmService.instance.stop());
+    }
     _handleMessageRoute(message);
   }
 

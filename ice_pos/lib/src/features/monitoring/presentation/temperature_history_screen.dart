@@ -4,9 +4,14 @@ import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:ice_pos/src/core/auth/user_role_provider.dart';
+import 'package:ice_pos/src/core/l10n/app_localizations.dart';
 import 'package:ice_pos/src/core/l10n/locale_provider.dart';
 import 'package:ice_pos/src/core/services/supabase_service.dart';
+import 'package:ice_pos/src/core/services/temperature_alarm_service.dart';
+import 'package:ice_pos/src/core/services/temperature_alert_settings_service.dart';
 import 'package:ice_pos/src/core/services/temperature_readings_service.dart';
+import 'package:ice_pos/src/features/monitoring/presentation/temperature_alert_settings_screen.dart';
 import 'package:ice_pos/src/features/monitoring/presentation/temperature_sensor_labels.dart';
 
 enum TemperatureRange {
@@ -53,7 +58,26 @@ final _temperatureHistoryProvider =
   };
 });
 
-/// Gráfico de historial de temperatura (congelador) desde Supabase `temperature_readings`.
+final _temperatureLiveAlertsProvider =
+    FutureProvider.autoDispose<List<TemperatureAlert>>((ref) async {
+  final settings = await TemperatureAlertSettingsService.fetchAll();
+  final latest = await TemperatureReadingsService.fetchLatestPerSensor();
+  return TemperatureAlertSettingsService.evaluate(
+    settings: settings,
+    latest: latest
+        .where((r) => r.sensorId != null && r.sensorId!.isNotEmpty)
+        .map(
+          (r) => (
+            sensorId: r.sensorId!,
+            temperatureC: r.temperatureC,
+            readAt: r.createdAt,
+          ),
+        )
+        .toList(),
+  );
+});
+
+/// Gráfico de historial de temperatura (congelador) desde Supabase `sensor_readings`.
 class TemperatureHistoryScreen extends ConsumerWidget {
   const TemperatureHistoryScreen({super.key});
 
@@ -63,6 +87,7 @@ class TemperatureHistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = ref.watch(appLocalizationsProvider);
     final scheme = Theme.of(context).colorScheme;
+    final isAdmin = ref.watch(userRoleProvider) == UserRole.admin;
 
     if (!SupabaseService.isInitialized) {
       return Scaffold(
@@ -83,15 +108,37 @@ class TemperatureHistoryScreen extends ConsumerWidget {
     final range = ref.watch(_temperatureRangeProvider);
     final freezerFilter = ref.watch(_temperatureFreezerFilterProvider);
     final historyAsync = ref.watch(_temperatureHistoryProvider);
+    final alertsAsync = ref.watch(_temperatureLiveAlertsProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.temperatureHistory),
         actions: [
+          if (TemperatureAlarmService.instance.isActive)
+            IconButton(
+              tooltip: l10n.temperatureAlertSilence,
+              icon: const Icon(Icons.notifications_off),
+              onPressed: () async {
+                await TemperatureAlarmService.instance.stop();
+              },
+            ),
+          if (isAdmin)
+            IconButton(
+              tooltip: l10n.temperatureAlertSettings,
+              icon: const Icon(Icons.tune),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TemperatureAlertSettingsScreen(),
+                  ),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
               ref.invalidate(_temperatureHistoryProvider);
+              ref.invalidate(_temperatureLiveAlertsProvider);
             },
           ),
         ],
@@ -105,6 +152,17 @@ class TemperatureHistoryScreen extends ConsumerWidget {
               fontSize: 14,
               color: scheme.onSurfaceVariant,
             ),
+          ),
+          alertsAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (alerts) {
+              if (alerts.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: _AlertsBanner(alerts: alerts),
+              );
+            },
           ),
           const SizedBox(height: 16),
           SegmentedButton<TemperatureRange>(
@@ -584,5 +642,83 @@ class _TemperatureLineChart extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _AlertsBanner extends ConsumerWidget {
+  const _AlertsBanner({required this.alerts});
+
+  final List<TemperatureAlert> alerts;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = ref.watch(appLocalizationsProvider);
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.errorContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: scheme.onErrorContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.temperatureAlertsTitle,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => TemperatureAlarmService.instance.stop(),
+                  child: Text(l10n.temperatureAlertSilence),
+                ),
+              ],
+            ),
+            for (final a in alerts)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  _alertText(l10n, a),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: scheme.onErrorContainer,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _alertText(AppLocalizations l10n, TemperatureAlert a) {
+    final label = TemperatureSensorLabels.displayName(a.sensorId, l10n);
+    final v = a.temperatureC?.toStringAsFixed(1) ?? '—';
+    switch (a.kind) {
+      case TemperatureAlertKind.aboveMax:
+        return l10n.temperatureAlertAboveMax(
+          label,
+          v,
+          a.setting.maxC.toStringAsFixed(1),
+        );
+      case TemperatureAlertKind.belowMin:
+        return l10n.temperatureAlertBelowMin(
+          label,
+          v,
+          a.setting.minC.toStringAsFixed(1),
+        );
+      case TemperatureAlertKind.stale:
+        final age = a.readAt == null
+            ? '?'
+            : DateTime.now().difference(a.readAt!).inMinutes.toString();
+        return l10n.temperatureAlertStale(label, age);
+    }
   }
 }

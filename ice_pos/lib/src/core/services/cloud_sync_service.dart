@@ -160,6 +160,13 @@ class CloudSyncService {
     if (db == null) return Future.value(null);
     return SyncCoordinator.synchronized(() async {
       try {
+        final reachable = await SupabaseService.ping();
+        if (!reachable) {
+          const msg =
+              'Sin respuesta de Supabase. Revisa la conexión e inténtalo de nuevo.';
+          lastSyncError = msg;
+          return msg;
+        }
         return await _syncFromCloudImpl(db, onProgress: onProgress).timeout(
           _syncOverallTimeout,
           onTimeout: () {
@@ -480,9 +487,9 @@ class CloudSyncService {
   /// Writes sale + sale_items + supply deductions + inventory_logs to Supabase.
   /// Returns (error, cloudSaleId): on success (null, id), on failure (message, null). When cloud disabled, (null, null).
   ///
-  /// Order: validate maps → insert [sales] → batch insert [sale_items] → cloud inventory.
-  /// Previously inventory ran before sale_items; if line inserts failed, a header-only sale
-  /// could remain in the cloud. Sale is deleted if sale_items insert fails.
+  /// Order: validate maps → lookup [clientSaleId] → insert [sales] → batch insert [sale_items] → cloud inventory.
+  /// Retries retryable network errors (same pattern as [writeMovementToCloud]).
+  /// If [clientSaleId] already exists in the cloud, returns that id without re-inserting items/inventory.
   static Future<(String? error, int? cloudSaleId)> writeSaleToCloud(
     List<CartItem> items, {
     required double totalAmount,
@@ -492,221 +499,320 @@ class CloudSyncService {
     String? paymentsJson,
     /// `shifts.id` en Supabase (opcional; agrega ventas al corte por turno).
     int? cloudShiftId,
+    /// Stable idempotency key (`deviceId:localSaleId`).
+    String? clientSaleId,
   }) async {
     if (!SupabaseService.isInitialized || items.isEmpty) return (null, null);
-    try {
-      final client = SupabaseService.instance.client;
-      final (productMap, supplyMap) = await _loadIdMaps();
-      if (productMap.isEmpty) {
-        return ('Falta el mapa de productos con la nube. Comprueba la conexión; los datos se sincronizan automáticamente. Si este es el primer dispositivo, carga el menú desde JSON en el menú (≡).', null);
-      }
 
-      for (final cartItem in items) {
-        final cloudProductId = productMap[cartItem.productId];
-        if (cloudProductId == null) {
-          return ('Producto (id ${cartItem.productId}) no está en la nube. Espera a que la sincronización automática actualice los datos o comprueba la conexión.', null);
-        }
-        for (final mod in cartItem.selectedModifiers) {
-          if (supplyMap[mod.supplyId] == null) {
-            return ('Insumo (id ${mod.supplyId}) no está en la nube. Espera a que la sincronización automática actualice los datos.', null);
-          }
-        }
-      }
+    final (productMap, supplyMap) = await _loadIdMaps();
+    if (productMap.isEmpty) {
+      return (
+        'Falta el mapa de productos con la nube. Comprueba la conexión; los datos se sincronizan automáticamente. Si este es el primer dispositivo, carga el menú desde JSON en el menú (≡).',
+        null,
+      );
+    }
 
-      final device = await DeviceIdService.getDeviceInfo();
-      final storeId = await StoreScope.getActiveStoreId();
-      Map<String, dynamic> saleRow = {
-        'total_amount': totalAmount,
-        'payment_method': paymentMethod,
-        'amount_tendered': amountTendered,
-        'change_given': changeGiven,
-        'device_id': device.deviceId,
-        'device_name': device.deviceName,
-        'store_id': storeId,
-        if (cloudShiftId != null) 'shift_id': cloudShiftId,
-      };
-      if (paymentsJson != null) {
-        try {
-          saleRow['payments_json'] = jsonDecode(paymentsJson);
-        } catch (_) {}
+    for (final cartItem in items) {
+      final cloudProductId = productMap[cartItem.productId];
+      if (cloudProductId == null) {
+        return (
+          'Producto (id ${cartItem.productId}) no está en la nube. Espera a que la sincronización automática actualice los datos o comprueba la conexión.',
+          null,
+        );
       }
-      dynamic saleRes;
-      try {
-        saleRes = await client.from('sales').insert(saleRow).select('id').single();
-      } catch (e) {
-        final msg = e.toString();
-        if (msg.contains('shift_id')) {
-          saleRow.remove('shift_id');
-          try {
-            saleRes = await client.from('sales').insert(saleRow).select('id').single();
-          } catch (e2) {
-            rethrow;
-          }
-        } else if (msg.contains('device_id') || msg.contains('device_name') || msg.contains('does not exist')) {
-          saleRow = {
-            'total_amount': totalAmount,
-            'payment_method': paymentMethod,
-            'amount_tendered': amountTendered,
-            'change_given': changeGiven,
-            'store_id': storeId,
-            if (cloudShiftId != null && !msg.contains('shift_id')) 'shift_id': cloudShiftId,
-          };
-          try {
-            saleRes = await client.from('sales').insert(saleRow).select('id').single();
-          } catch (e2) {
-            final m2 = e2.toString();
-            if (m2.contains('shift_id')) {
-              saleRow.remove('shift_id');
-              saleRes = await client.from('sales').insert(saleRow).select('id').single();
-            } else if (m2.contains('store_id') || m2.contains('does not exist')) {
-              saleRow.remove('store_id');
-              saleRes = await client.from('sales').insert(saleRow).select('id').single();
-            } else {
-              rethrow;
-            }
-          }
-        } else if (msg.contains('store_id') || msg.contains('does not exist')) {
-          saleRow.remove('store_id');
-          saleRes = await client.from('sales').insert(saleRow).select('id').single();
-        } else {
-          rethrow;
-        }
-      }
-      final saleId = _int(_map(saleRes)['id']);
-      if (saleId == null) return ('Error al crear venta', null);
-
-      final itemRows = <Map<String, dynamic>>[];
-      for (final item in items) {
-        final cloudProductId = productMap[item.productId]!;
-        itemRows.add({
-          'sale_id': saleId,
-          'product_id': cloudProductId,
-          'quantity': item.quantity,
-          'unit_price': item.unitPrice,
-        });
-      }
-      try {
-        await client.from('sale_items').insert(itemRows);
-      } catch (e) {
-        try {
-          await client.from('sales').delete().eq('id', saleId);
-        } catch (_) {}
-        rethrow;
-      }
-      // Guardrail: verify sale_items actually persisted for this sale.
-      // If mismatch, fail hard so PosRepository logs a visible critical error.
-      try {
-        final rows = await client
-            .from('sale_items')
-            .select('id')
-            .eq('sale_id', saleId);
-        final insertedCount = _list(rows).length;
-        if (insertedCount != itemRows.length) {
-          try {
-            await client.from('sales').delete().eq('id', saleId);
-          } catch (_) {}
+      for (final mod in cartItem.selectedModifiers) {
+        if (supplyMap[mod.supplyId] == null) {
           return (
-            'Venta nube inconsistente: sale_items esperados=${itemRows.length}, insertados=$insertedCount (sale_id=$saleId).',
+            'Insumo (id ${mod.supplyId}) no está en la nube. Espera a que la sincronización automática actualice los datos.',
             null,
           );
         }
+      }
+    }
+
+    const maxAttempts = 4;
+    Object? lastErr;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await _writeSaleToCloudAttempt(
+          items,
+          productMap: productMap,
+          supplyMap: supplyMap,
+          totalAmount: totalAmount,
+          paymentMethod: paymentMethod,
+          amountTendered: amountTendered,
+          changeGiven: changeGiven,
+          paymentsJson: paymentsJson,
+          cloudShiftId: cloudShiftId,
+          clientSaleId: clientSaleId,
+        );
+      } catch (e, st) {
+        lastErr = e;
+        debugPrint('CloudSyncService.writeSaleToCloud attempt $attempt: $e');
+        if (attempt < maxAttempts && _isRetryableNetworkError(e)) {
+          await Future<void>.delayed(Duration(milliseconds: 350 * attempt));
+          continue;
+        }
+        debugPrint('$st');
+        return (e.toString(), null);
+      }
+    }
+    return (lastErr?.toString() ?? 'Error al crear venta', null);
+  }
+
+  static Future<(String? error, int? cloudSaleId)> _writeSaleToCloudAttempt(
+    List<CartItem> items, {
+    required Map<int, int> productMap,
+    required Map<int, int> supplyMap,
+    required double totalAmount,
+    required String paymentMethod,
+    required double amountTendered,
+    required double changeGiven,
+    String? paymentsJson,
+    int? cloudShiftId,
+    String? clientSaleId,
+  }) async {
+    final client = SupabaseService.instance.client;
+    final trimmedClientSaleId = clientSaleId?.trim();
+    final hasClientSaleId =
+        trimmedClientSaleId != null && trimmedClientSaleId.isNotEmpty;
+
+    if (hasClientSaleId) {
+      try {
+        final existing = await client
+            .from('sales')
+            .select('id')
+            .eq('client_sale_id', trimmedClientSaleId)
+            .maybeSingle();
+        if (existing != null) {
+          final existingId = _int(_map(existing)['id']);
+          if (existingId != null) return (null, existingId);
+        }
       } catch (e) {
+        final msg = e.toString();
+        // Older projects may not have the column yet; continue without lookup.
+        if (!msg.contains('client_sale_id') && !msg.contains('does not exist')) {
+          rethrow;
+        }
+      }
+    }
+
+    final device = await DeviceIdService.getDeviceInfo();
+    final storeId = await StoreScope.getActiveStoreId();
+    Map<String, dynamic> saleRow = {
+      'total_amount': totalAmount,
+      'payment_method': paymentMethod,
+      'amount_tendered': amountTendered,
+      'change_given': changeGiven,
+      'device_id': device.deviceId,
+      'device_name': device.deviceName,
+      'store_id': storeId,
+      if (cloudShiftId != null) 'shift_id': cloudShiftId,
+      if (hasClientSaleId) 'client_sale_id': trimmedClientSaleId,
+    };
+    if (paymentsJson != null) {
+      try {
+        saleRow['payments_json'] = jsonDecode(paymentsJson);
+      } catch (_) {}
+    }
+    dynamic saleRes;
+    try {
+      saleRes = await client.from('sales').insert(saleRow).select('id').single();
+    } catch (e) {
+      final msg = e.toString();
+      // Race: another attempt already inserted this client_sale_id.
+      if (hasClientSaleId &&
+          (msg.contains('client_sale_id') ||
+              msg.contains('duplicate') ||
+              msg.contains('unique'))) {
+        try {
+          final existing = await client
+              .from('sales')
+              .select('id')
+              .eq('client_sale_id', trimmedClientSaleId)
+              .maybeSingle();
+          final existingId =
+              existing == null ? null : _int(_map(existing)['id']);
+          if (existingId != null) return (null, existingId);
+        } catch (_) {}
+      }
+      if (msg.contains('client_sale_id') && msg.contains('does not exist')) {
+        saleRow.remove('client_sale_id');
+        saleRes = await client.from('sales').insert(saleRow).select('id').single();
+      } else if (msg.contains('shift_id')) {
+        saleRow.remove('shift_id');
+        saleRes = await client.from('sales').insert(saleRow).select('id').single();
+      } else if (msg.contains('device_id') ||
+          msg.contains('device_name') ||
+          msg.contains('does not exist')) {
+        saleRow = {
+          'total_amount': totalAmount,
+          'payment_method': paymentMethod,
+          'amount_tendered': amountTendered,
+          'change_given': changeGiven,
+          'store_id': storeId,
+          if (cloudShiftId != null && !msg.contains('shift_id'))
+            'shift_id': cloudShiftId,
+          if (hasClientSaleId) 'client_sale_id': trimmedClientSaleId,
+        };
+        try {
+          saleRes =
+              await client.from('sales').insert(saleRow).select('id').single();
+        } catch (e2) {
+          final m2 = e2.toString();
+          if (m2.contains('client_sale_id') && m2.contains('does not exist')) {
+            saleRow.remove('client_sale_id');
+            saleRes =
+                await client.from('sales').insert(saleRow).select('id').single();
+          } else if (m2.contains('shift_id')) {
+            saleRow.remove('shift_id');
+            saleRes =
+                await client.from('sales').insert(saleRow).select('id').single();
+          } else if (m2.contains('store_id') || m2.contains('does not exist')) {
+            saleRow.remove('store_id');
+            saleRes =
+                await client.from('sales').insert(saleRow).select('id').single();
+          } else {
+            rethrow;
+          }
+        }
+      } else if (msg.contains('store_id') || msg.contains('does not exist')) {
+        saleRow.remove('store_id');
+        saleRes = await client.from('sales').insert(saleRow).select('id').single();
+      } else {
+        rethrow;
+      }
+    }
+    final saleId = _int(_map(saleRes)['id']);
+    if (saleId == null) return ('Error al crear venta', null);
+
+    final itemRows = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final cloudProductId = productMap[item.productId]!;
+      itemRows.add({
+        'sale_id': saleId,
+        'product_id': cloudProductId,
+        'quantity': item.quantity,
+        'unit_price': item.unitPrice,
+      });
+    }
+    try {
+      await client.from('sale_items').insert(itemRows);
+    } catch (e) {
+      try {
+        await client.from('sales').delete().eq('id', saleId);
+      } catch (_) {}
+      rethrow;
+    }
+    // Guardrail: verify sale_items actually persisted for this sale.
+    try {
+      final rows =
+          await client.from('sale_items').select('id').eq('sale_id', saleId);
+      final insertedCount = _list(rows).length;
+      if (insertedCount != itemRows.length) {
         try {
           await client.from('sales').delete().eq('id', saleId);
         } catch (_) {}
-        return ('No se pudo verificar sale_items en nube para sale_id=$saleId: $e', null);
-      }
-
-      // Batch inventory deduction: aggregate quantities first to minimize roundtrips.
-      final soldQtyByCloudProductId = <int, double>{};
-      for (final item in items) {
-        final cloudProductId = productMap[item.productId]!;
-        soldQtyByCloudProductId.update(
-          cloudProductId,
-          (current) => current + item.quantity,
-          ifAbsent: () => item.quantity,
+        return (
+          'Venta nube inconsistente: sale_items esperados=${itemRows.length}, insertados=$insertedCount (sale_id=$saleId).',
+          null,
         );
       }
-
-      final deductionBySupplyId = <int, double>{};
-      if (soldQtyByCloudProductId.isNotEmpty) {
-        final cloudProductIds = soldQtyByCloudProductId.keys.toList(growable: false);
-        final recipeRows = await client
-            .from('recipes')
-            .select('product_id,supply_id,quantity_required')
-            .inFilter('product_id', cloudProductIds);
-        for (final r in _list(recipeRows)) {
-          final row = _map(r);
-          final cloudProductId = _int(row['product_id']);
-          final supplyId = _int(row['supply_id']);
-          if (cloudProductId == null || supplyId == null) continue;
-          final soldQty = soldQtyByCloudProductId[cloudProductId];
-          if (soldQty == null || soldQty <= 0) continue;
-          final qtyRequired = _double(row['quantity_required']);
-          final deduction = qtyRequired * soldQty;
-          if (deduction == 0) continue;
-          deductionBySupplyId.update(
-            supplyId,
-            (current) => current + deduction,
-            ifAbsent: () => deduction,
-          );
-        }
-      }
-
-      for (final item in items) {
-        for (final mod in item.selectedModifiers) {
-          final cloudSupplyId = supplyMap[mod.supplyId]!;
-          final deduction = mod.quantityDeducted * item.quantity;
-          if (deduction == 0) continue;
-          deductionBySupplyId.update(
-            cloudSupplyId,
-            (current) => current + deduction,
-            ifAbsent: () => deduction,
-          );
-        }
-      }
-
-      if (deductionBySupplyId.isNotEmpty) {
-        final supplyIds = deductionBySupplyId.keys.toList(growable: false);
-        final supplyRows = await client
-            .from('supplies')
-            .select('id,current_stock')
-            .inFilter('id', supplyIds);
-        final currentStockBySupplyId = <int, double>{};
-        for (final row in _list(supplyRows)) {
-          final mapped = _map(row);
-          final id = _int(mapped['id']);
-          if (id == null) continue;
-          currentStockBySupplyId[id] = _double(mapped['current_stock']);
-        }
-
-        for (final entry in deductionBySupplyId.entries) {
-          final supplyId = entry.key;
-          final currentStock = currentStockBySupplyId[supplyId] ?? 0.0;
-          await client
-              .from('supplies')
-              .update({'current_stock': currentStock - entry.value})
-              .eq('id', supplyId);
-        }
-
-        final inventoryLogsRows = deductionBySupplyId.entries
-            .map(
-              (entry) => <String, dynamic>{
-                'supply_id': entry.key,
-                'change_amount': -entry.value,
-                'reason': 'SALE',
-              },
-            )
-            .toList(growable: false);
-        await client.from('inventory_logs').insert(inventoryLogsRows);
-      }
-
-      return (null, saleId);
-    } catch (e, st) {
-      debugPrint('CloudSyncService.writeSaleToCloud: $e');
-      debugPrint('$st');
-      return (e.toString(), null);
+    } catch (e) {
+      try {
+        await client.from('sales').delete().eq('id', saleId);
+      } catch (_) {}
+      return (
+        'No se pudo verificar sale_items en nube para sale_id=$saleId: $e',
+        null,
+      );
     }
+
+    final soldQtyByCloudProductId = <int, double>{};
+    for (final item in items) {
+      final cloudProductId = productMap[item.productId]!;
+      soldQtyByCloudProductId.update(
+        cloudProductId,
+        (current) => current + item.quantity,
+        ifAbsent: () => item.quantity,
+      );
+    }
+
+    final deductionBySupplyId = <int, double>{};
+    if (soldQtyByCloudProductId.isNotEmpty) {
+      final cloudProductIds =
+          soldQtyByCloudProductId.keys.toList(growable: false);
+      final recipeRows = await client
+          .from('recipes')
+          .select('product_id,supply_id,quantity_required')
+          .inFilter('product_id', cloudProductIds);
+      for (final r in _list(recipeRows)) {
+        final row = _map(r);
+        final cloudProductId = _int(row['product_id']);
+        final supplyId = _int(row['supply_id']);
+        if (cloudProductId == null || supplyId == null) continue;
+        final soldQty = soldQtyByCloudProductId[cloudProductId];
+        if (soldQty == null || soldQty <= 0) continue;
+        final qtyRequired = _double(row['quantity_required']);
+        final deduction = qtyRequired * soldQty;
+        if (deduction == 0) continue;
+        deductionBySupplyId.update(
+          supplyId,
+          (current) => current + deduction,
+          ifAbsent: () => deduction,
+        );
+      }
+    }
+
+    for (final item in items) {
+      for (final mod in item.selectedModifiers) {
+        final cloudSupplyId = supplyMap[mod.supplyId]!;
+        final deduction = mod.quantityDeducted * item.quantity;
+        if (deduction == 0) continue;
+        deductionBySupplyId.update(
+          cloudSupplyId,
+          (current) => current + deduction,
+          ifAbsent: () => deduction,
+        );
+      }
+    }
+
+    if (deductionBySupplyId.isNotEmpty) {
+      final supplyIds = deductionBySupplyId.keys.toList(growable: false);
+      final supplyRows = await client
+          .from('supplies')
+          .select('id,current_stock')
+          .inFilter('id', supplyIds);
+      final currentStockBySupplyId = <int, double>{};
+      for (final row in _list(supplyRows)) {
+        final mapped = _map(row);
+        final id = _int(mapped['id']);
+        if (id == null) continue;
+        currentStockBySupplyId[id] = _double(mapped['current_stock']);
+      }
+
+      for (final entry in deductionBySupplyId.entries) {
+        final supplyId = entry.key;
+        final currentStock = currentStockBySupplyId[supplyId] ?? 0.0;
+        await client
+            .from('supplies')
+            .update({'current_stock': currentStock - entry.value})
+            .eq('id', supplyId);
+      }
+
+      final inventoryLogsRows = deductionBySupplyId.entries
+          .map(
+            (entry) => <String, dynamic>{
+              'supply_id': entry.key,
+              'change_amount': -entry.value,
+              'reason': 'SALE',
+            },
+          )
+          .toList(growable: false);
+      await client.from('inventory_logs').insert(inventoryLogsRows);
+    }
+
+    return (null, saleId);
   }
 
   /// Marca la venta como cancelada en Supabase (borrado lógico). No borra sale_items.
@@ -1888,6 +1994,7 @@ class CloudSyncService {
   }
 
   /// Envía el cierre de caja a la nube (al cerrar turno). Actualiza shift con end_time e inserta shift_closures.
+  /// Idempotent: if a device closure already exists for the cloud shift id, skips insert.
   static Future<String?> writeShiftClosureToCloud(Shift shiftWithEndTime, ShiftClosure closure) async {
     if (!SupabaseService.isInitialized) return null;
     try {
@@ -1916,6 +2023,20 @@ class CloudSyncService {
           rethrow;
         }
       }
+
+      // Avoid duplicate shift_closures rows on outbox replay.
+      try {
+        final existing = await client
+            .from('shift_closures')
+            .select('id')
+            .eq('shift_id', cloudSid)
+            .eq('closure_kind', 'device')
+            .limit(1);
+        if (_list(existing).isNotEmpty) return null;
+      } catch (_) {
+        // If select fails (schema), fall through to insert.
+      }
+
       await client.from('shift_closures').insert({
         'shift_id': cloudSid,
         'closing_time': closure.closingTime.toUtc().toIso8601String(),

@@ -53,7 +53,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           final r = role;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(userRoleProvider.notifier).setRoleFromAuth(r);
-            unawaited(FcmPushService.instance.registerTokenForCurrentUser());
+            unawaited(FcmPushService.instance.registerTokenForCurrentUser(
+              role: r.name,
+            ));
           });
         }
         if (role == null) {

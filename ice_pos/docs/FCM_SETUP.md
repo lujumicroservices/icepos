@@ -77,6 +77,9 @@ cd c:\Users\jvald\code\icepos
 | Nueva tarea / recordatorio | `notify-staff-task` | Sí |
 | Recordatorios programados (`notify_at`) | `notify-due-staff-tasks` | Sí |
 | Aprobación cajero pendiente | `notify-pending-approval` | Sí |
+| Alerta temperatura (admins, canal `ice_pos_temp_alarm`) | `evaluate-temperature-alerts` | FCM admins |
+
+Cron activo: `evaluate-temperature-alerts-5min` vía **pg_cron** cada **5 minutos** (`*/5 * * * *`) → `POST /functions/v1/evaluate-temperature-alerts`.
 
 ## iOS (opcional)
 

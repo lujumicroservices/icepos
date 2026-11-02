@@ -104,6 +104,10 @@ unlinked_spec.ds
 **/linux/flutter/generated_plugin_registrant.h
 **/linux/flutter/generated_plugins.cmake
 
+# Local secrets (never commit)
+.env
+**/.env
+
 # Coverage
 coverage/
 
